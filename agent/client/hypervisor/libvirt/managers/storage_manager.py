@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.hypervisor.libvirt.config import LibvirtConfig
 from agent.client.hypervisor.models.disk import (
     Disk, DiskCreate, DiskUpdate, DiskAttach, DiskDetach, DiskQuery,
     DiskFormat, DiskType, DiskStatus, BusType
@@ -25,6 +26,7 @@ class StorageManager(LibvirtClient):
         super().__init__(connection_uri)
         self.logger = logger
         self.cli = CLIControl()
+        self.libvirt_config = LibvirtConfig()
         self._validate_qemu_img()
 
     def _validate_qemu_img(self):
@@ -550,12 +552,7 @@ class StorageManager(LibvirtClient):
                 elif isinstance(query.search_path, list):
                     search_dirs.extend(query.search_path)
             else:
-                search_dirs = [
-                    "/var/lib/libvirt/images",
-                    "/var/lib/libvirt/volumes",
-                    "/opt/vm_disks",
-                    os.path.expanduser("~/vm_disks")
-                ]
+                search_dirs = self.libvirt_config.search_dirs
 
             # Ищем диски в директориях
             for dir_path in search_dirs:
@@ -587,9 +584,9 @@ class StorageManager(LibvirtClient):
 
     def _is_disk_file(self, file_path: str) -> bool:
         """Проверить, является ли файл виртуальным диском"""
-        disk_extensions = {'.qcow2', '.raw', '.img', '.vmdk', '.vdi', '.vhd', '.vhdx'}
+
         file_ext = os.path.splitext(file_path)[1].lower()
-        return os.path.isfile(file_path) and file_ext in disk_extensions
+        return os.path.isfile(file_path) and file_ext in self.libvirt_config.disk_extensions
 
     def _filter_disk(self, disk: Disk, query: DiskQuery | None) -> bool:
         """Применить фильтры к диску"""
