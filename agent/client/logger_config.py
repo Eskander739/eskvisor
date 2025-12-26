@@ -5,8 +5,10 @@ import os
 from datetime import datetime
 from typing import Optional
 
+from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 
-class StorageLogger:
+
+class DefaultLogger:
     """
     Конфигурация системы логирования для StorageManager
     """
@@ -55,30 +57,31 @@ class StorageLogger:
         except Exception as e:
             print(f"Ошибка при настройке файлового логирования: {e}")
 
-    def info(self, message: str, **kwargs):
+    def info(self, message: str, *args, **kwargs):
         """Логирование информационного сообщения"""
-        self.logger.info(message, **kwargs)
+        self.logger.info(message, *args, **kwargs)
 
-    def warning(self, message: str, **kwargs):
+    def warning(self, message: str, *args, **kwargs):
         """Логирование предупреждения"""
-        self.logger.warning(message, **kwargs)
+        self.logger.warning(message, *args, **kwargs)
 
-    def error(self, message: str, **kwargs):
+    def error(self, message: str, *args, **kwargs):
         """Логирование ошибки"""
-        self.logger.error(message, **kwargs)
+        self.logger.error(message, *args, **kwargs)
 
-    def debug(self, message: str, **kwargs):
+    def debug(self, message: str, *args, **kwargs):
         """Логирование отладочной информации"""
-        self.logger.debug(message, **kwargs)
+        self.logger.debug(message, *args, **kwargs)
 
-    def critical(self, message: str, **kwargs):
+    def critical(self, message: str, *args, **kwargs):
         """Логирование критической ошибки"""
-        self.logger.critical(message, **kwargs)
+        self.logger.critical(message, *args, **kwargs)
 
-    def exception(self, message: str, exc_info: bool = True, **kwargs):
+    def exception(self, message: str, exc_info: bool = True, *args, **kwargs):
         """Логирование исключения с трассировкой"""
-        self.logger.exception(message, exc_info=exc_info, **kwargs)
+        self.logger.exception(message, exc_info=exc_info, *args, **kwargs)
+
 
 
 # Глобальный экземпляр логгера
-logger = StorageLogger()
+logger = DefaultLogger()
