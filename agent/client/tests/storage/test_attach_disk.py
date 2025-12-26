@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from agent.client.hypervisor.models.disk import DiskCreate, DiskFormat, DiskStatus
+from agent.client.hypervisor.models.disk import DiskCreate, DiskFormat, DiskStatus, DiskAttach
 
 
 @pytest.mark.tags("VD‑02", "Подключение диска к ВМ")
@@ -31,7 +31,7 @@ def test_vd_02_attach_disk(storage_session, setup_test_environment):
 
     assert vm_disk.status.value == DiskStatus.DETACHED.value
 
-    storage_session.attach_disk_to_vm("test-vm-01", attach_disk_path)
+    storage_session.attach_disk_to_vm(DiskAttach(vm_name="test-vm-01", path=attach_disk_path))
 
     vm_disk = storage_session.get_disk_info(attach_disk_path)
 

@@ -298,7 +298,7 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка при клонировании диска: {e}")
             return None
 
-    def attach_disk_to_vm(self, disk_attach: DiskAttach | None = None) -> Disk | None:
+    def attach_disk_to_vm(self, disk_attach: DiskAttach | None = None) -> bool | None:
         """
         Добавить диск к виртуальной машине
 
@@ -311,6 +311,10 @@ class StorageManager(LibvirtClient):
         try:
             if not self.conn:
                 self.logger.error("Отсутствует подключение к libvirt")
+                return None
+
+            if not disk_attach:
+                self.logger.error("Не предоставлена модель подключения диска")
                 return None
 
             self.logger.info(f"Попытка подключения диска {disk_attach.path} к ВМ {disk_attach.vm_name}")
@@ -326,45 +330,121 @@ class StorageManager(LibvirtClient):
                 return None
 
             # Создаем конфигурацию подключения
-            if not disk_attach:
-                # Автоматически определяем параметры
-                target_dev = self._find_free_disk_device(vm)
-                bus_type = BusType.VIRTIO
-                cache_mode = "writethrough"
-                self.logger.debug(f"Автоматическая конфигурация: target_dev={target_dev}, bus_type={bus_type}")
-            else:
-                target_dev = disk_attach.target_dev
-                bus_type = disk_attach.bus_type
-                cache_mode = disk_attach.cache_mode.value if disk_attach.cache_mode else "writethrough"
-                self.logger.debug(f"Ручная конфигурация: target_dev={target_dev}, bus_type={bus_type}")
+            target_dev = disk_attach.target_dev or self._find_free_disk_device(vm)
+            bus_type = disk_attach.bus_type or BusType.VIRTIO
+            cache_mode = disk_attach.cache_mode.value if disk_attach.cache_mode else "writethrough"
 
-            # Создаем XML для устройства диска
+            self.logger.debug(f"Конфигурация: target_dev={target_dev}, bus_type={bus_type}, cache_mode={cache_mode}")
+
+            # Получаем текущую конфигурацию ВМ для поиска свободного адреса
+            xml_desc = vm.XMLDesc()
+
+            # Ищем свободный адрес для виртуального PCI устройства
+            # Начинаем с более высоких слотов, чтобы избежать конфликтов
+            used_slots = self._get_used_pci_slots(xml_desc)
+            free_slot = self._find_free_pci_slot(used_slots)
+
+            # Создаем XML для устройства диска с безопасным адресом
             disk_xml = f'''
             <disk type='file' device='disk'>
                 <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
                 <source file='{disk_attach.path}'/>
                 <target dev='{target_dev}' bus='{bus_type.value}'/>
-                <address type='pci' domain='0x0000' bus='0x00' slot='0x0a' function='0x0'/>
+                <address type='pci' domain='0x0000' bus='0x00' slot='0x{free_slot:02x}' function='0x0'/>
             </disk>
             '''
 
             self.logger.debug(f"XML для подключения диска:\n{disk_xml}")
 
-            # Присоединяем диск к ВМ
-            vm.attachDevice(disk_xml)
-            self.logger.info(f"Диск {disk_attach.path} успешно добавлен к ВМ {disk_attach.vm_name} как {target_dev}")
+            # Пробуем присоединить диск к ВМ
+            try:
+                vm.attachDevice(disk_xml)
+                self.logger.info(
+                    f"Диск {disk_attach.path} успешно добавлен к ВМ {disk_attach.vm_name} как {target_dev}")
 
-            # Обновляем информацию о диске
-            disk_info.vm_name = disk_attach.vm_name
-            disk_info.status = DiskStatus.ATTACHED
-            disk_info.target_dev = target_dev
-            disk_info.bus_type = bus_type
+            except Exception as e:
+                # Если ошибка связана с hotplug, пробуем без указания адреса
+                if "горячего" in str(e) or "hotplug" in str(e).lower() or "PCI" in str(e):
+                    self.logger.warning(f"Ошибка горячего подключения PCI: {e}")
+                    self.logger.info("Пробуем подключение без указания адреса...")
 
-            return disk_info
+                    # Попробуем альтернативный подход без указания адреса
+                    # Пусть libvirt сам назначит адрес
+                    disk_xml_simple = f'''
+                    <disk type='file' device='disk'>
+                        <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
+                        <source file='{disk_attach.path}'/>
+                        <target dev='{target_dev}' bus='{bus_type.value}'/>
+                    </disk>
+                    '''
+
+                    self.logger.debug(f"Попытка подключения без указания адреса:\n{disk_xml_simple}")
+                    vm.attachDevice(disk_xml_simple)
+                    self.logger.info(f"Диск подключен без указания PCI адреса")
+                else:
+                    # Другая ошибка - пробрасываем ее
+                    raise
+
+            return True
 
         except Exception as e:
-            self.logger.exception(f"Ошибка при добавлении диска к ВМ {disk_attach.vm_name}: {e}")
+            self.logger.exception(
+                f"Ошибка при добавлении диска к ВМ {disk_attach.vm_name if disk_attach else 'unknown'}: {e}")
             return None
+
+    def _get_used_pci_slots(self, xml_desc: str) -> set[int]:
+        """Получить список используемых PCI слотов из XML ВМ"""
+        used_slots = set()
+
+        try:
+            # Ищем все адреса PCI в XML
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(xml_desc)
+
+            # Ищем все элементы с атрибутом type='pci'
+            for elem in root.findall(".//*[@type='pci']"):
+                slot_attr = elem.get("slot")
+                if slot_attr:
+                    try:
+                        # Преобразуем шестнадцатеричное значение в десятичное
+                        slot = int(slot_attr, 16)
+                        used_slots.add(slot)
+                    except ValueError:
+                        continue
+
+            # Также ищем вручную через регулярные выражения для надежности
+            import re
+            slot_pattern = r"slot='0x([0-9a-fA-F]+)'"
+            matches = re.findall(slot_pattern, xml_desc)
+            for match in matches:
+                try:
+                    slot = int(match, 16)
+                    used_slots.add(slot)
+                except ValueError:
+                    continue
+
+            self.logger.debug(f"Используемые PCI слоты: {sorted(used_slots)}")
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при получении PCI слотов: {e}")
+
+        return used_slots
+
+    def _find_free_pci_slot(self, used_slots: set[int], start_slot: int = 10) -> int:
+        """Найти свободный PCI слот"""
+        # Ищем свободный слот начиная с указанного
+        slot = start_slot
+        while slot in used_slots:
+            slot += 1
+
+        # Проверяем, что слот в допустимом диапазоне (обычно до 31)
+        if slot > 31:
+            slot = 10  # Начинаем заново с минимального
+            while slot in used_slots and slot <= 31:
+                slot += 1
+
+        self.logger.debug(f"Найден свободный PCI слот: {slot} (0x{slot:02x})")
+        return slot
 
     def detach_disk_from_vm(self, detach_disk: DiskDetach) -> bool:
         """

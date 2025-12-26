@@ -207,6 +207,6 @@ class VmManager(LibvirtClient):
 if __name__ == "__main__":
     with VmManager() as vms:
         # print(vms.shutdown_vm("test-vm-01", force=True))
-        # print(vms.start_vm(name="test-vm-01"))
-        print(vms.shutdown_vm(name="test-vm-01"))
+        print(vms.start_vm(name="test-vm-01"))
+        # print(vms.shutdown_vm(name="test-vm-01", force=True))
         print(vms.list_vms())
