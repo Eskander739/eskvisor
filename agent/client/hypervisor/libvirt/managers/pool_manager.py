@@ -229,3 +229,7 @@ class PoolManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка остановки пула хранения '{pool_name}': {e}")
             return False
+
+if __name__ == "__main__":
+    with PoolManager() as mngr:
+        print(mngr.list_storage_pools())

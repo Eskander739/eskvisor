@@ -1,7 +1,7 @@
 import subprocess
 import os
 
-from agent.client import DIRECTORIES_FOR_SEARCH, QEMU_EMULATORS
+from agent.client.constants import DIRECTORIES_FOR_SEARCH, QEMU_EMULATORS
 
 
 class CLIControl:

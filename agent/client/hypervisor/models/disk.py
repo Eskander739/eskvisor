@@ -1,5 +1,7 @@
+import random
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
@@ -111,6 +113,7 @@ class DiskType(Enum):
     NETWORK = "network" # Сетевой/удаленный диск
     EPHEMERAL = "ephemeral" # Временный/эфемерный диск
     PERSISTENT = "persistent" # Постоянное хранилище
+    EXTERNAL_DISK = "external_disk" # Внешний диск
 
 
 class Disk(BaseModel):
@@ -252,8 +255,9 @@ class Disk(BaseModel):
 # Дополнительная модель для создания диска (без опциональных полей)
 class DiskCreate(BaseModel):
     """Модель для создания нового диска"""
-    name: str = Field(..., min_length=1, max_length=255)
-    pool: str = Field(..., description="Пул для создания диска")
+    name: str = Field(f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255)
+    path: str = f"/var/lib/libvirt/images/{f'disk-{str(random.randint(100000, 999999))}'}.{DiskFormat.QCOW2.value}"
+    pool: str | None = Field(None, description="Пул для создания диска")
     size_gb: float = Field(..., gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(None, max_length=500)
@@ -272,6 +276,7 @@ class DiskUpdate(BaseModel):
 class DiskAttach(BaseModel):
     """Модель для подключения диска к виртуальной машине"""
     vm_name: str = Field(..., description="Имя виртуальной машины")
+    path: str | None = None
     target_dev: str = Field(default="vdb", pattern=r"^[vs]d[a-z]+$")
     bus_type: BusType = Field(default=BusType.VIRTIO)
     cache_mode: CacheMode = Field(default=CacheMode.WRITEBACK)
@@ -289,6 +294,7 @@ class DiskQuery(BaseModel):
     """Модель для запроса списка дисков"""
     pool: str | None = Field(None, description="Фильтр по пулу")
     vm_name: str | None = Field(None, description="Фильтр по виртуальной машине")
+    search_path: list[str] | str | None = Field(None, description="Фильтр по директориям")
     format: DiskFormat | None = Field(None, description="Фильтр по формату")
     min_size_gb: float | None = Field(None, ge=0, description="Минимальный размер")
     max_size_gb: float | None = Field(None, ge=0, description="Максимальный размер")

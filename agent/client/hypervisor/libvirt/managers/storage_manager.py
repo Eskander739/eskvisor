@@ -1,23 +1,65 @@
-import libvirt
-import os
 import re
+import os
+import shutil
+import json
+import subprocess
 from datetime import datetime
+from pathlib import Path
 
+from agent.client.cli import CLIControl
+from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.models.disk import (
     Disk, DiskCreate, DiskUpdate, DiskAttach, DiskDetach, DiskQuery,
     DiskFormat, DiskType, DiskStatus, BusType
 )
-from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.logger_config import logger
 
 
 class StorageManager(LibvirtClient):
     """
-    Управление хранилищами виртуальных дисков
+    Управление хранилищами виртуальных дисков через qemu-img
     """
+
+    def __init__(self, connection_uri: str = "qemu:///system"):
+        """Инициализация StorageManager с логированием"""
+        super().__init__(connection_uri)
+        self.logger = logger
+        self.cli = CLIControl()
+        self._validate_qemu_img()
+
+    def _validate_qemu_img(self):
+        """Проверить наличие qemu-img"""
+        try:
+            result = subprocess.run(["qemu-img", "--version"],
+                                    capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError("qemu-img не найден или не работает")
+            self.logger.info(f"qemu-img доступен: {result.stdout.splitlines()[0]}")
+        except Exception as e:
+            self.logger.error(f"Ошибка проверки qemu-img: {e}")
+            raise
+
+    def _execute_qemu_img(self, command: list[str], check: bool = True) -> dict:
+        """Выполнить команду qemu-img и получить результат"""
+        try:
+            self.logger.debug(f"Выполнение qemu-img: {' '.join(command)}")
+            result = subprocess.run(command, capture_output=True, text=True)
+
+            if check and result.returncode != 0:
+                raise RuntimeError(f"qemu-img ошибка: {result.stderr}")
+
+            return {
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode
+            }
+        except Exception as e:
+            self.logger.error(f"Ошибка выполнения qemu-img: {e}")
+            raise
 
     def create_disk(self, disk_create: DiskCreate) -> Disk | None:
         """
-        Создать новый виртуальный диск в указанном пуле хранилищ
+        Создать новый виртуальный диск через qemu-img
 
         Args:
             disk_create: Модель для создания диска
@@ -26,200 +68,320 @@ class StorageManager(LibvirtClient):
             Disk: Созданный диск или None при ошибке
         """
         try:
-            pool = self.conn.storagePoolLookupByName(disk_create.pool)
+            self.logger.info(f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB")
 
-            # Получаем информацию о пуле
-            pool_info = pool.info()
-            if pool_info.state != libvirt.VIR_STORAGE_POOL_RUNNING:
-                pool.create()
+            # Определяем путь для диска
+            if disk_create.path:
+                disk_path = disk_create.path
+            else:
+                # Генерация пути по умолчанию
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                disk_name = f"{disk_create.name}_{timestamp}.{disk_create.format.value}"
+                disk_path = f"/var/lib/libvirt/images/{disk_name}"
 
-            # Создаем XML для диска
-            size_bytes = int(disk_create.size_gb * 1024 * 1024 * 1024)
+            # Проверяем и создаем директорию
+            disk_dir = os.path.dirname(disk_path)
+            Path(disk_dir).mkdir(parents=True, exist_ok=True)
 
-            xml_desc = f'''
-            <volume>
-                <name>{disk_create.name}</name>
-                <capacity unit="bytes">{size_bytes}</capacity>
-                <target>
-                    <format type='{disk_create.format.value}'/>
-                    <permissions>
-                        <mode>0644</mode>
-                    </permissions>
-                </target>
-                <backingStore/>
-            </volume>
-            '''
+            # Формируем команду создания диска
+            cmd = ["qemu-img", "create", "-f", disk_create.format.value]
 
-            # Создаем том
-            vol = pool.createXML(xml_desc, 0)
+            # Добавляем опции для sparse дисков
+            if disk_create.sparse:
+                cmd.extend(["-o", "preallocation=off"])
+            else:
+                cmd.extend(["-o", "preallocation=full"])
 
-            # Если не sparse и формат raw, заполняем диск нулями
-            if not disk_create.sparse and disk_create.format == DiskFormat.RAW:
-                stream = self.conn.newStream()
-                vol.download(stream, 0, 0, 0)
-                # Записываем нули
-                zero_data = b'\0' * 1024 * 1024  # 1MB блоки
-                for _ in range(int(disk_create.size_gb * 1024)):  # size_gb в MB
-                    stream.send(zero_data)
-                stream.finish()
+            cmd.extend([disk_path, f"{disk_create.size_gb}G"])
 
-            # Получаем информацию о созданном диске
-            return self.get_disk_info(disk_create.pool, disk_create.name)
+            # Выполняем создание диска
+            self._execute_qemu_img(cmd)
 
-        except libvirt.libvirtError as e:
-            print(f"Ошибка при создании диска: {e}")
+            self.logger.info(f"Диск создан: {disk_path}")
+            return self.get_disk_info(path=disk_path)
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при создании диска: {e}")
             return None
 
-    def delete_disk(self, pool_name: str, disk_name: str) -> bool:
+    def delete_disk(self, path: str) -> bool:
         """
         Удалить виртуальный диск
 
         Args:
-            pool_name: Имя пула хранилищ
-            disk_name: Имя удаляемого диска
+            path: Путь к файлу диска
 
         Returns:
             bool: Успешность операции
         """
         try:
-            pool = self.conn.storagePoolLookupByName(pool_name)
-            vol = pool.storageVolLookupByName(disk_name)
+            self.logger.info(f"Удаление диска: {path}")
 
-            # Проверяем, не используется ли диск в активных ВМ
-            # (это можно расширить при необходимости)
+            if not os.path.exists(path):
+                self.logger.warning(f"Файл {path} не существует")
+                return False
 
-            # Удаляем диск
-            vol.delete(0)
+            # Проверяем, не используется ли диск
+            if self._is_disk_in_use(path):
+                self.logger.warning(f"Диск {path} используется и не может быть удален")
+                return False
+
+            # Просто удаляем файл
+            os.remove(path)
+            self.logger.info(f"Диск удален: {path}")
             return True
 
-        except libvirt.libvirtError as e:
-            print(f"Ошибка при удалении диска: {e}")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при удалении диска: {e}")
             return False
 
-    def edit_disk(self, pool_name: str, disk_name: str, disk_update: DiskUpdate) -> Disk | None:
+    def _is_disk_in_use(self, disk_path: str) -> bool:
+        """Проверить, используется ли диск (упрощенная версия)"""
+        try:
+            # В реальном приложении здесь должна быть проверка через libvirt
+            # или мониторинг процессов
+            self.logger.debug(f"Проверка использования диска: {disk_path}")
+
+            # Проверяем, открыт ли файл каким-либо процессом
+            # Это упрощенная проверка для Linux
+            if os.name == 'posix':
+                cmd = ["lsof", disk_path]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    self.logger.warning(f"Диск {disk_path} используется процессом")
+                    return True
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при проверке использования диска: {e}")
+            return True  # В случае ошибки считаем, что диск используется
+
+    def edit_disk(self, path: str, disk_update: DiskUpdate) -> Disk | None:
         """
         Изменить параметры виртуального диска
 
         Args:
-            pool_name: Имя пула хранилищ
-            disk_name: Имя изменяемого диска
+            path: Путь к файлу диска
             disk_update: Модель обновления диска
 
         Returns:
             Disk: Обновленный диск или None при ошибке
         """
-        try:
-            pool = self.conn.storagePoolLookupByName(pool_name)
-            vol = pool.storageVolLookupByName(disk_name)
-
-            changes = []
-
-            # Изменение размера (только увеличение)
-            if disk_update.new_size_gb is not None:
-                vol_info = vol.info()
-                current_size_gb = vol_info[1] / (1024 ** 3)
-
-                if disk_update.new_size_gb > current_size_gb:
-                    new_size_bytes = int(disk_update.new_size_gb * 1024 * 1024 * 1024)
-                    vol.resize(new_size_bytes, 0)
-                    changes.append(f"размер изменен на {disk_update.new_size_gb}GB")
-                else:
-                    print("Предупреждение: уменьшение размера диска не поддерживается напрямую")
-
-            # Переименование
-            if disk_update.name is not None and disk_update.name != disk_name:
-                xml_desc = vol.XMLDesc()
-                # Обновляем имя в XML
-                new_xml = xml_desc.replace(f"<name>{disk_name}</name>", f"<name>{disk_update.name}</name>")
-
-                # Создаем новый том с новым именем
-                new_vol = pool.createXML(new_xml, 0)
-
-                # Удаляем старый том
-                vol.delete(0)
-
-                changes.append(f"имя изменено на {disk_update.name}")
-                disk_name = disk_update.name
-
-            if changes:
-                print(f"Диск изменен: {', '.join(changes)}")
-                return self.get_disk_info(pool_name, disk_name)
-            else:
-                print("Не указано изменений")
-                return self.get_disk_info(pool_name, disk_name)
-
-        except libvirt.libvirtError as e:
-            print(f"Ошибка при изменении диска: {e}")
+        if not disk_update:
+            self.logger.error("Не предоставлена модель обновления диска")
             return None
 
-    def attach_disk_to_vm(self, pool_name: str, disk_name: str, disk_attach: DiskAttach) -> Disk | None:
+        try:
+            self.logger.info(f"Изменение диска: {path}")
+
+            original_path = path
+            changes = []
+
+            # Переименование
+            if disk_update.name is not None:
+                new_path = os.path.join(os.path.dirname(path), disk_update.name)
+                self.logger.info(f"Переименование {path} в {new_path}")
+                shutil.move(path, new_path)
+                changes.append(f"имя изменено на {disk_update.name}")
+                path = new_path
+
+            # Изменение размера
+            if disk_update.new_size_gb is not None:
+                # Получаем текущий размер
+                disk_info = self.get_disk_info(path=path)
+                if not disk_info:
+                    raise RuntimeError("Не удалось получить информацию о диске")
+
+                current_size_gb = disk_info.get_effective_size_gb()
+                self.logger.info(f"Текущий размер: {current_size_gb}GB, новый: {disk_update.new_size_gb}GB")
+
+                # Изменяем размер через qemu-img
+                cmd = ["qemu-img", "resize", path, f"{disk_update.new_size_gb}G"]
+
+                # Для уменьшения размера нужен флаг --shrink
+                if disk_update.new_size_gb < current_size_gb:
+                    cmd.append("--shrink")
+
+                self._execute_qemu_img(cmd)
+                changes.append(f"размер изменен на {disk_update.new_size_gb}GB")
+
+            # Конвертация формата
+            if disk_update.format is not None:
+                disk_info = self.get_disk_info(path=path)
+                if disk_info and disk_info.format != disk_update.format:
+                    new_path = f"{os.path.splitext(path)[0]}.{disk_update.format.value}"
+                    self.logger.info(f"Конвертация {path} в {disk_update.format.value}")
+
+                    if self.convert_disk_format(path, new_path, disk_update.format):
+                        if path != original_path:
+                            os.remove(path)
+                        path = new_path
+                        changes.append(f"формат изменен на {disk_update.format.value}")
+
+            if changes:
+                self.logger.info(f"Диск изменен: {', '.join(changes)}")
+                return self.get_disk_info(path=path)
+            else:
+                self.logger.info("Не указано изменений для диска")
+                return self.get_disk_info(path=path)
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при изменении диска {path}: {e}")
+            return None
+
+    def clone_disk(self, source_path: str, target_path: str,
+                   target_format: DiskFormat | None = None,
+                   sparse: bool = True) -> Disk | None:
+        """
+        Клонировать виртуальный диск
+
+        Args:
+            source_path: Путь к исходному диску
+            target_path: Путь для клонированного диска
+            target_format: Формат клонированного диска (если None, сохраняет исходный формат)
+            sparse: Создать разреженный клон
+
+        Returns:
+            Disk: Клонированный диск или None при ошибке
+        """
+        try:
+            self.logger.info(f"Клонирование диска: {source_path} -> {target_path}")
+
+            # Проверяем существование исходного диска
+            if not os.path.exists(source_path):
+                self.logger.error(f"Исходный диск {source_path} не существует")
+                return None
+
+            # Проверяем, что директория для сохранения существует
+            target_dir = os.path.dirname(target_path)
+            Path(target_dir).mkdir(parents=True, exist_ok=True)
+
+            # Получаем информацию об исходном диске
+            source_info = self.get_disk_info(source_path)
+            if not source_info:
+                self.logger.error(f"Не удалось получить информацию об исходном диске {source_path}")
+                return None
+
+            # Определяем формат клона
+            if target_format is None:
+                target_format = source_info.format
+
+            # Формируем команду клонирования через qemu-img convert
+            cmd = ["qemu-img", "convert"]
+
+            # Добавляем опции для sparse дисков
+            if sparse:
+                cmd.extend(["-S", "0"])
+            else:
+                cmd.extend(["-S", "4k"])
+
+            # Формат назначения
+            cmd.extend(["-O", target_format.value])
+
+            # Источник и назначение
+            cmd.extend([source_path, target_path])
+
+            self.logger.debug(f"Выполнение команды клонирования: {' '.join(cmd)}")
+
+            # Выполняем клонирование
+            self._execute_qemu_img(cmd)
+
+            self.logger.info(f"Диск успешно клонирован: {target_path}")
+
+            # Получаем информацию о клонированном диске
+            return self.get_disk_info(path=target_path)
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при клонировании диска: {e}")
+            return None
+
+    def attach_disk_to_vm(self, disk_attach: DiskAttach | None = None) -> Disk | None:
         """
         Добавить диск к виртуальной машине
 
         Args:
-            pool_name: Имя пула хранилищ
-            disk_name: Имя диска для добавления
-            disk_attach: Модель для подключения диска
+            disk_attach: Модель для подключения диска (опционально)
 
         Returns:
             Disk: Подключенный диск или None при ошибке
         """
         try:
-            # Находим ВМ
-            vm = self.conn.lookupByName(disk_attach.vm_name)
-
-            # Находим диск в пуле
-            pool = self.conn.storagePoolLookupByName(pool_name)
-            vol = pool.storageVolLookupByName(disk_name)
-
-            # Получаем информацию о диске
-            disk_info = self.get_disk_info(pool_name, disk_name)
-            if not disk_info:
+            if not self.conn:
+                self.logger.error("Отсутствует подключение к libvirt")
                 return None
 
-            # Получаем путь к диску
-            disk_path = vol.path()
+            self.logger.info(f"Попытка подключения диска {disk_attach.path} к ВМ {disk_attach.vm_name}")
+
+            # Находим ВМ
+            vm = self.conn.lookupByName(disk_attach.vm_name)
+            self.logger.debug(f"ВМ {disk_attach.vm_name} найдена")
+
+            # Получаем информацию о диске
+            disk_info = self.get_disk_info(path=disk_attach.path)
+            if not disk_info:
+                self.logger.error(f"Не удалось получить информацию о диске {disk_attach.path}")
+                return None
+
+            # Создаем конфигурацию подключения
+            if not disk_attach:
+                # Автоматически определяем параметры
+                target_dev = self._find_free_disk_device(vm)
+                bus_type = BusType.VIRTIO
+                cache_mode = "writethrough"
+                self.logger.debug(f"Автоматическая конфигурация: target_dev={target_dev}, bus_type={bus_type}")
+            else:
+                target_dev = disk_attach.target_dev
+                bus_type = disk_attach.bus_type
+                cache_mode = disk_attach.cache_mode.value if disk_attach.cache_mode else "writethrough"
+                self.logger.debug(f"Ручная конфигурация: target_dev={target_dev}, bus_type={bus_type}")
 
             # Создаем XML для устройства диска
             disk_xml = f'''
             <disk type='file' device='disk'>
-                <driver name='qemu' type='{disk_info.format.value}'/>
-                <source file='{disk_path}'/>
-                <target dev='{disk_attach.target_dev}' bus='{disk_attach.bus_type.value}'/>
+                <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
+                <source file='{disk_attach.path}'/>
+                <target dev='{target_dev}' bus='{bus_type.value}'/>
                 <address type='pci' domain='0x0000' bus='0x00' slot='0x0a' function='0x0'/>
             </disk>
             '''
 
+            self.logger.debug(f"XML для подключения диска:\n{disk_xml}")
+
             # Присоединяем диск к ВМ
             vm.attachDevice(disk_xml)
-
-            print(f"Диск {disk_name} успешно добавлен к ВМ {disk_attach.vm_name} как {disk_attach.target_dev}")
+            self.logger.info(f"Диск {disk_attach.path} успешно добавлен к ВМ {disk_attach.vm_name} как {target_dev}")
 
             # Обновляем информацию о диске
             disk_info.vm_name = disk_attach.vm_name
             disk_info.status = DiskStatus.ATTACHED
-            disk_info.target_dev = disk_attach.target_dev
-            disk_info.bus_type = disk_attach.bus_type
-            disk_info.cache_mode = disk_attach.cache_mode
+            disk_info.target_dev = target_dev
+            disk_info.bus_type = bus_type
 
             return disk_info
 
-        except libvirt.libvirtError as e:
-            print(f"Ошибка при добавлении диска к ВМ: {e}")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при добавлении диска к ВМ {disk_attach.vm_name}: {e}")
             return None
 
-    def detach_disk_from_vm(self, disk_detach: DiskDetach) -> bool:
+    def detach_disk_from_vm(self, detach_disk: DiskDetach) -> bool:
         """
         Отключить диск от виртуальной машины
 
         Args:
-            disk_detach: Модель для отключения диска
+            detach_disk: данные для отключения диска
 
         Returns:
             bool: Успешность операции
         """
         try:
-            vm = self.conn.lookupByName(disk_detach.vm_name)
+            if not self.conn:
+                self.logger.error("Отсутствует подключение к libvirt")
+                return False
+
+            self.logger.info(f"Попытка отключения диска {detach_disk.target_dev} от ВМ {detach_disk.vm_name}")
+
+            vm = self.conn.lookupByName(detach_disk.vm_name)
 
             # Получаем текущую конфигурацию ВМ
             xml_desc = vm.XMLDesc()
@@ -230,7 +392,7 @@ class StorageManager(LibvirtClient):
             disk_end = -1
 
             for i, line in enumerate(lines):
-                if f"<target dev='{disk_detach.target_dev}'" in line:
+                if f"<target dev='{detach_disk.target_dev}'" in line:
                     # Ищем начало блока диска
                     for j in range(i, -1, -1):
                         if '<disk ' in lines[j]:
@@ -246,72 +408,123 @@ class StorageManager(LibvirtClient):
             if disk_start != -1 and disk_end != -1:
                 # Извлекаем XML диска
                 disk_xml = '\n'.join(lines[disk_start:disk_end + 1])
+                self.logger.debug(f"Найден XML диска:\n{disk_xml}")
 
                 # Отключаем диск
                 vm.detachDevice(disk_xml)
 
-                print(f"Диск {disk_detach.target_dev} успешно отключен от ВМ {disk_detach.vm_name}")
+                self.logger.info(f"Диск {detach_disk.target_dev} успешно отключен от ВМ {detach_disk.vm_name}")
                 return True
             else:
-                print(f"Устройство {disk_detach.target_dev} не найдено в конфигурации ВМ")
+                self.logger.error(
+                    f"Устройство {detach_disk.target_dev} не найдено в конфигурации ВМ {detach_disk.vm_name}")
                 return False
 
-        except libvirt.libvirtError as e:
-            print(f"Ошибка при отключении диска от ВМ: {e}")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при отключении диска от ВМ {detach_disk.vm_name}: {e}")
             return False
 
-    def get_disk_info(self, pool_name: str, disk_name: str) -> Disk | None:
+    def _find_free_disk_device(self, vm) -> str:
+        """Найти свободное устройство диска в ВМ"""
+        try:
+            xml_desc = vm.XMLDesc()
+            used_devices = set()
+
+            # Ищем используемые устройства
+            lines = xml_desc.split('\n')
+            for line in lines:
+                if "target dev=" in line:
+                    match = re.search(r"dev=['\"]([vs]d[a-z]+)['\"]", line)
+                    if match:
+                        used_devices.add(match.group(1))
+
+            self.logger.debug(f"Используемые устройства в ВМ {vm.name()}: {used_devices}")
+
+            # Находим первое свободное устройство
+            for letter in "bcdefghijklmnopqrstuvwxyz":
+                dev_vd = f"vd{letter}"
+                dev_sd = f"sd{letter}"
+                if dev_vd not in used_devices:
+                    self.logger.debug(f"Найдено свободное устройство: {dev_vd}")
+                    return dev_vd
+                if dev_sd not in used_devices:
+                    self.logger.debug(f"Найдено свободное устройство: {dev_sd}")
+                    return dev_sd
+
+            # Если все устройства заняты, используем следующее
+            next_device = f"vd{chr(ord('a') + len(used_devices))}"
+            self.logger.warning(f"Все стандартные устройства заняты, используем {next_device}")
+            return next_device
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при поиске свободного устройства: {e}")
+            return "vdb"
+
+    def get_disk_info(self, path: str) -> Disk | None:
         """
-        Получить информацию о диске
+        Получить информацию о диске через qemu-img info
 
         Args:
-            pool_name: Имя пула хранилищ
-            disk_name: Имя диска
+            path: Путь к файлу диска
 
         Returns:
             Disk: Информация о диске или None при ошибке
         """
         try:
-            pool = self.conn.storagePoolLookupByName(pool_name)
-            vol = pool.storageVolLookupByName(disk_name)
+            if not os.path.exists(path):
+                self.logger.error(f"Файл {path} не существует")
+                return None
 
-            vol_info = vol.info()
-            vol_xml = vol.XMLDesc()
+            # Получаем информацию через qemu-img
+            cmd = ["qemu-img", "info", "--output=json", path]
+            result = self._execute_qemu_img(cmd, check=False)
+
+            if result["returncode"] != 0:
+                self.logger.error(f"Ошибка получения информации о диске: {result['stderr']}")
+                return None
+
+            info = json.loads(result["stdout"])
 
             # Определяем формат диска
-            disk_format = DiskFormat.UNKNOWN
-            if 'type=\'qcow2\'' in vol_xml:
-                disk_format = DiskFormat.QCOW2
-            elif 'type=\'raw\'' in vol_xml:
-                disk_format = DiskFormat.RAW
+            try:
+                disk_format = DiskFormat(info["format"])
+            except ValueError:
+                disk_format = DiskFormat.UNKNOWN
 
-            # Парсим даты из XML
-            created = None
-            modified = None
+            # Определяем тип диска
+            disk_type = DiskType.EXTERNAL_DISK
 
-            # Ищем timestamp в XML
-            timestamp_match = re.search(r'<timestamp>(\d+)</timestamp>', vol_xml)
-            if timestamp_match:
-                timestamp = int(timestamp_match.group(1))
-                created = datetime.fromtimestamp(timestamp)
+            # Проверяем, используется ли диск
+            status = DiskStatus.DETACHED
+            if self._is_disk_in_use(path):
+                status = DiskStatus.ATTACHED
+                disk_type = DiskType.VM_ATTACHED
 
             # Создаем объект Disk
             disk = Disk(
-                name=disk_name,
-                path=vol.path(),
-                type=DiskType.POOL_DISK,
+                name=os.path.basename(path),
+                path=path,
+                type=disk_type,
                 format=disk_format,
-                capacity_bytes=vol_info[1],
-                allocation_bytes=vol_info[2],
-                pool=pool_name,
-                status=DiskStatus.DETACHED,
-                created=created
+                capacity_bytes=info.get("virtual-size", 0),
+                allocation_bytes=info.get("actual-size", 0),
+                status=status,
+                created=datetime.fromtimestamp(os.path.getctime(path))
             )
 
+            # Добавляем дополнительную информацию из qemu-img
+            # if "snapshots" in info:
+            #     disk.snapshot_count = len(info["snapshots"])
+
+            # if "format-specific" in info:
+            #     disk.format_specific = info["format-specific"]
+
+            self.logger.debug(
+                f"Информация о диске {path}: формат={disk_format}, размер={disk.get_effective_size_gb():.2f}GB")
             return disk
 
-        except libvirt.libvirtError as e:
-            print(f"Ошибка при получении информации о диске: {e}")
+        except Exception as e:
+            self.logger.exception(f"Ошибка при получении информации о диске {path}: {e}")
             return None
 
     def list_disks(self, query: DiskQuery | None = None) -> list[Disk]:
@@ -324,274 +537,59 @@ class StorageManager(LibvirtClient):
         Returns:
             list[Disk]: Список дисков
         """
-        disks = []
+        current_disks = []
         try:
-            # Сначала соберем все диски из пулов хранилищ
-            pool_disks = self._get_pool_disks(query)
-            disks.extend(pool_disks)
+            self.logger.info(f"Получение списка дисков с фильтрацией: {query}")
 
-            # Затем получим информацию о дисках, подключенных к ВМ
-            attached_disks = self._get_attached_disks(query, pool_disks)
-            disks.extend(attached_disks)
+            # Стандартные директории для поиска дисков
+            search_dirs = []
 
-            # Применяем фильтр по подключенным дискам
-            if query and query.attached_only is not None:
-                if query.attached_only:
-                    disks = [d for d in disks if d.status == DiskStatus.ATTACHED]
-                else:
-                    disks = [d for d in disks if d.status != DiskStatus.ATTACHED]
+            if query and query.search_path:
+                if isinstance(query.search_path, str):
+                    search_dirs.append(query.search_path)
+                elif isinstance(query.search_path, list):
+                    search_dirs.extend(query.search_path)
+            else:
+                search_dirs = [
+                    "/var/lib/libvirt/images",
+                    "/var/lib/libvirt/volumes",
+                    "/opt/vm_disks",
+                    os.path.expanduser("~/vm_disks")
+                ]
 
-            return disks
+            # Ищем диски в директориях
+            for dir_path in search_dirs:
+                if os.path.exists(dir_path) and os.path.isdir(dir_path):
+                    self.logger.debug(f"Поиск дисков в: {dir_path}")
 
-        except libvirt.libvirtError as e:
-            print(f"Ошибка при получении списка дисков: {e}")
+                    for root, dirs, files in os.walk(dir_path):
+                        for file_name in files:
+                            file_path = os.path.join(root, file_name)
+
+                            # Проверяем расширение файла
+                            if self._is_disk_file(file_path):
+                                try:
+                                    disk_info = self.get_disk_info(file_path)
+                                    if disk_info:
+                                        # Применяем фильтры
+                                        if self._filter_disk(disk_info, query):
+                                            current_disks.append(disk_info)
+                                except Exception as e:
+                                    self.logger.debug(f"Ошибка при обработке {file_name}: {e}")
+                                    continue
+
+            self.logger.info(f"Найдено дисков: {len(current_disks)}")
+            return current_disks
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при получении списка дисков: {e}")
             return []
 
-    def _get_pool_disks(self, query: DiskQuery | None) -> list[Disk]:
-        """Получить диски из пулов хранилищ"""
-        disks = []
-
-        if query and query.pool:
-            # Конкретный пул
-            try:
-                pools = [self.conn.storagePoolLookupByName(query.pool)]
-            except libvirt.libvirtError:
-                pools = []
-        else:
-            # Все пулы
-            pools = self.conn.listAllStoragePools()
-
-        for pool in pools:
-            try:
-                pool_info = pool.info()
-                if pool_info.state != libvirt.VIR_STORAGE_POOL_RUNNING:
-                    try:
-                        pool.create(0)
-                    except:
-                        continue
-
-                pool_name = pool.name()
-
-                volumes = pool.listAllVolumes()
-                for vol in volumes:
-                    try:
-                        disk = self._volume_to_disk(vol, pool_name)
-                        if disk and self._filter_disk(disk, query):
-                            disks.append(disk)
-                    except libvirt.libvirtError:
-                        continue
-
-            except libvirt.libvirtError:
-                continue
-
-        return disks
-
-    def _get_attached_disks(self, query: DiskQuery | None, pool_disks: list[Disk]) -> list[Disk]:
-        """Получить информацию о дисках, подключенных к ВМ"""
-        attached_disks = []
-
-        try:
-            # Получаем все ВМ
-            vm_ids = self.conn.listDomainsID()
-            all_vms = []
-
-            # Активные ВМ
-            for vm_id in vm_ids:
-                vm = self.conn.lookupByID(vm_id)
-                all_vms.append(vm)
-
-            # Неактивные ВМ
-            for vm_name in self.conn.listDefinedDomains():
-                vm = self.conn.lookupByName(vm_name)
-                all_vms.append(vm)
-
-            # Сопоставляем диски из ВМ с дисками из пулов
-            for vm in all_vms:
-                try:
-                    vm_name = vm.name()
-
-                    # Проверяем фильтр по ВМ
-                    if query and query.vm_name and query.vm_name != vm_name:
-                        continue
-
-                    # Получаем XML конфигурации ВМ
-                    xml_desc = vm.XMLDesc()
-
-                    # Ищем все диски в XML ВМ
-                    disk_blocks = self._extract_disk_blocks_from_vm_xml(xml_desc)
-
-                    for disk_block in disk_blocks:
-                        disk_path = disk_block.get('source_file')
-                        target_dev = disk_block.get('target_dev')
-                        bus_type_str = disk_block.get('bus_type')
-                        driver_type = disk_block.get('driver_type')
-
-                        if not disk_path:
-                            continue
-
-                        # Ищем диск в списке дисков из пулов
-                        found_disk = None
-                        for pool_disk in pool_disks:
-                            if pool_disk.path == disk_path:
-                                found_disk = pool_disk
-                                break
-
-                        if found_disk:
-                            # Обновляем информацию о подключенном диске
-                            found_disk.vm_name = vm_name
-                            found_disk.status = DiskStatus.ATTACHED
-                            found_disk.target_dev = target_dev
-
-                            # Преобразуем строковый bus_type в enum
-                            if bus_type_str:
-                                try:
-                                    found_disk.bus_type = BusType(bus_type_str)
-                                except ValueError:
-                                    found_disk.bus_type = None
-                        else:
-                            # Диск не найден в пулах, создаем новый объект
-                            disk = self._create_disk_from_vm_attachment(
-                                disk_path, vm_name, target_dev, bus_type_str, driver_type
-                            )
-                            if disk and self._filter_disk(disk, query):
-                                attached_disks.append(disk)
-
-                except libvirt.libvirtError:
-                    continue
-
-        except libvirt.libvirtError:
-            pass
-
-        return attached_disks
-
-    def _extract_disk_blocks_from_vm_xml(self, xml_desc: str) -> list[dict]:
-        """Извлечь информацию о дисках из XML ВМ"""
-        disk_blocks = []
-
-        # Парсим XML для поиска блоков дисков
-        lines = xml_desc.split('\n')
-        i = 0
-
-        while i < len(lines):
-            if '<disk ' in lines[i]:
-                disk_block = {}
-                j = i
-
-                # Читаем до закрывающего тега </disk>
-                while j < len(lines) and '</disk>' not in lines[j]:
-                    line = lines[j]
-
-                    # Извлекаем путь к файлу диска
-                    if 'file=' in line:
-                        match = re.search(r"file=['\"]([^'\"]+)['\"]", line)
-                        if match:
-                            disk_block['source_file'] = match.group(1)
-
-                    # Извлекаем целевое устройство
-                    if 'target dev=' in line:
-                        match = re.search(r"dev=['\"]([^'\"]+)['\"]", line)
-                        if match:
-                            disk_block['target_dev'] = match.group(1)
-
-                    # Извлекаем тип шины
-                    if 'bus=' in line:
-                        match = re.search(r"bus=['\"]([^'\"]+)['\"]", line)
-                        if match:
-                            disk_block['bus_type'] = match.group(1)
-
-                    # Извлекаем тип драйвера
-                    if 'type=' in line and 'driver' in line:
-                        match = re.search(r"type=['\"]([^'\"]+)['\"]", line)
-                        if match:
-                            disk_block['driver_type'] = match.group(1)
-
-                    j += 1
-
-                if disk_block:
-                    disk_blocks.append(disk_block)
-
-                i = j + 1
-            else:
-                i += 1
-
-        return disk_blocks
-
-    def _create_disk_from_vm_attachment(self, disk_path: str, vm_name: str,
-                                        target_dev: str, bus_type_str: str,
-                                        driver_type: str) -> Disk | None:
-        """Создать объект Disk для диска, подключенного к ВМ, но не найденного в пулах"""
-        try:
-            # Определяем формат диска
-            disk_format = DiskFormat.UNKNOWN
-            if driver_type == 'qcow2':
-                disk_format = DiskFormat.QCOW2
-            elif driver_type == 'raw':
-                disk_format = DiskFormat.RAW
-
-            # Если не удалось определить по driver_type, пробуем по расширению
-            if disk_format == DiskFormat.UNKNOWN:
-                if disk_path.endswith('.qcow2'):
-                    disk_format = DiskFormat.QCOW2
-                elif disk_path.endswith('.raw') or disk_path.endswith('.img'):
-                    disk_format = DiskFormat.RAW
-
-            # Получаем размер файла
-            size_bytes = 0
-            if os.path.exists(disk_path):
-                size_bytes = os.path.getsize(disk_path)
-
-            # Преобразуем bus_type
-            bus_type = None
-            if bus_type_str:
-                try:
-                    bus_type = BusType(bus_type_str)
-                except ValueError:
-                    bus_type = None
-
-            disk = Disk(
-                name=os.path.basename(disk_path),
-                path=disk_path,
-                type=DiskType.VM_ATTACHED,
-                format=disk_format,
-                capacity_bytes=size_bytes,
-                vm_name=vm_name,
-                status=DiskStatus.ATTACHED,
-                target_dev=target_dev,
-                bus_type=bus_type
-            )
-
-            return disk
-        except Exception as e:
-            print(f"Ошибка при создании диска из подключения ВМ: {e}")
-            return None
-
-    def _volume_to_disk(self, vol, pool_name: str) -> Disk | None:
-        """Преобразовать libvirt volume в объект Disk"""
-        try:
-            vol_info = vol.info()
-            vol_xml = vol.XMLDesc()
-
-            # Определяем формат диска
-            disk_format = DiskFormat.UNKNOWN
-            if 'type=\'qcow2\'' in vol_xml:
-                disk_format = DiskFormat.QCOW2
-            elif 'type=\'raw\'' in vol_xml:
-                disk_format = DiskFormat.RAW
-
-            disk = Disk(
-                name=vol.name(),
-                path=vol.path(),
-                type=DiskType.POOL_DISK,
-                format=disk_format,
-                capacity_bytes=vol_info[1],
-                allocation_bytes=vol_info[2],
-                pool=pool_name,
-                status=DiskStatus.DETACHED
-            )
-
-            return disk
-        except libvirt.libvirtError:
-            return None
+    def _is_disk_file(self, file_path: str) -> bool:
+        """Проверить, является ли файл виртуальным диском"""
+        disk_extensions = {'.qcow2', '.raw', '.img', '.vmdk', '.vdi', '.vhd', '.vhdx'}
+        file_ext = os.path.splitext(file_path)[1].lower()
+        return os.path.isfile(file_path) and file_ext in disk_extensions
 
     def _filter_disk(self, disk: Disk, query: DiskQuery | None) -> bool:
         """Применить фильтры к диску"""
@@ -609,70 +607,377 @@ class StorageManager(LibvirtClient):
         if query.max_size_gb is not None and size_gb > query.max_size_gb:
             return False
 
-        # Фильтр по ВМ (для подключенных дисков)
+        # Фильтр по ВМ
         if query.vm_name and disk.vm_name != query.vm_name:
             return False
 
-        # Фильтр по пулу (для дисков в пулах)
-        if query.pool and disk.pool != query.pool:
-            return False
+        # Фильтр по подключенным дискам
+        if query.attached_only is not None:
+            if query.attached_only and disk.status != DiskStatus.ATTACHED:
+                return False
+            elif not query.attached_only and disk.status == DiskStatus.ATTACHED:
+                return False
 
         return True
 
+    def convert_disk_format(self, source_path: str, target_path: str,
+                            target_format: DiskFormat, sparse: bool = True) -> bool:
+        """
+        Конвертировать диск из одного формата в другой
+
+        Args:
+            source_path: Путь к исходному диску
+            target_path: Путь для сохранения конвертированного диска
+            target_format: Целевой формат диска
+            sparse: Создать разреженный диск
+
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            if not os.path.exists(source_path):
+                self.logger.error(f"Исходный файл {source_path} не существует")
+                return False
+
+            # Проверяем, что директория для сохранения существует
+            target_dir = os.path.dirname(target_path)
+            Path(target_dir).mkdir(parents=True, exist_ok=True)
+
+            # Формируем команду конвертации
+            cmd = ["qemu-img", "convert", "-O", target_format.value]
+
+            if sparse:
+                cmd.extend(["-S", "0"])
+            else:
+                cmd.extend(["-S", "4k"])
+
+            cmd.extend([source_path, target_path])
+
+            self.logger.info(f"Конвертация диска: {source_path} -> {target_path} ({target_format.value})")
+            self._execute_qemu_img(cmd)
+
+            self.logger.info("Конвертация успешно завершена")
+            return True
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при конвертации диска: {e}")
+            return False
+
+    def create_snapshot(self, disk_path: str, snapshot_name: str) -> bool:
+        """
+        Создать снапшот диска
+
+        Args:
+            disk_path: Путь к диску
+            snapshot_name: Имя снапшота
+
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            self.logger.info(f"Создание снапшота {snapshot_name} для диска {disk_path}")
+
+            # Проверяем формат диска (снапшоты поддерживаются только для qcow2)
+            disk_info = self.get_disk_info(disk_path)
+            if disk_info.format != DiskFormat.QCOW2:
+                self.logger.error("Снапшоты поддерживаются только для формата QCOW2")
+                return False
+
+            cmd = ["qemu-img", "snapshot", "-c", snapshot_name, disk_path]
+            self._execute_qemu_img(cmd)
+
+            self.logger.info(f"Снапшот {snapshot_name} создан")
+            return True
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при создании снапшота: {e}")
+            return False
+
+    def delete_snapshot(self, disk_path: str, snapshot_name: str) -> bool:
+        """
+        Удалить снапшот диска
+
+        Args:
+            disk_path: Путь к диску
+            snapshot_name: Имя снапшота
+
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            self.logger.info(f"Удаление снапшота {snapshot_name} с диска {disk_path}")
+
+            cmd = ["qemu-img", "snapshot", "-d", snapshot_name, disk_path]
+            result = self._execute_qemu_img(cmd, check=False)
+
+            if result["returncode"] != 0:
+                self.logger.error(f"Ошибка удаления снапшота: {result['stderr']}")
+                return False
+
+            self.logger.info(f"Снапшот {snapshot_name} удален")
+            return True
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при удалении снапшота: {e}")
+            return False
+
+    def list_snapshots(self, disk_path: str) -> list[dict]:
+        """
+        Получить список снапшотов диска
+
+        Args:
+            disk_path: Путь к диску
+
+        Returns:
+            list[dict]: Список снапшотов
+        """
+        try:
+            self.logger.debug(f"Получение списка снапшотов для диска {disk_path}")
+
+            cmd = ["qemu-img", "snapshot", "-l", disk_path]
+            result = self._execute_qemu_img(cmd, check=False)
+
+            if result["returncode"] != 0:
+                return []
+
+            snapshots = []
+            lines = result["stdout"].strip().split('\n')
+
+            # Пропускаем заголовок
+            for line in lines[1:]:
+                parts = line.split()
+                if len(parts) >= 3:
+                    snapshot = {
+                        "id": parts[0],
+                        "name": parts[1],
+                        "date": parts[2] + " " + parts[3] if len(parts) > 3 else parts[2]
+                    }
+                    snapshots.append(snapshot)
+
+            return snapshots
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при получении списка снапшотов: {e}")
+            return []
+
+    def check_disk(self, disk_path: str) -> dict:
+        """
+        Проверить целостность диска
+
+        Args:
+            disk_path: Путь к диску
+
+        Returns:
+            dict: Результаты проверки
+        """
+        try:
+            self.logger.info(f"Проверка целостности диска: {disk_path}")
+
+            cmd = ["qemu-img", "check", disk_path]
+            result = self._execute_qemu_img(cmd, check=False)
+
+            check_result = {
+                "path": disk_path,
+                "success": result["returncode"] == 0,
+                "output": result["stdout"],
+                "errors": result["stderr"]
+            }
+
+            if check_result["success"]:
+                self.logger.info(f"Диск {disk_path} проверен успешно")
+            else:
+                self.logger.warning(f"Найдены ошибки в диске {disk_path}: {result['stderr']}")
+
+            return check_result
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при проверке диска: {e}")
+            return {"path": disk_path, "success": False, "error": str(e)}
+
+    def benchmark_disk(self, disk_path: str) -> dict:
+        """
+        Запустить бенчмарк диска
+
+        Args:
+            disk_path: Путь к диску
+
+        Returns:
+            dict: Результаты бенчмарка
+        """
+        try:
+            self.logger.info(f"Запуск бенчмарка диска: {disk_path}")
+
+            # Создаем временный файл для бенчмарка
+            temp_file = f"{disk_path}.benchmark.tmp"
+
+            # Измеряем скорость записи
+            write_cmd = [
+                "qemu-img", "bench", "-w", "-t", "none",
+                "-f", "raw", "-c", "1000", temp_file
+            ]
+
+            write_result = self._execute_qemu_img(write_cmd, check=False)
+
+            # Измеряем скорость чтения
+            read_cmd = [
+                "qemu-img", "bench", "-r", "-t", "none",
+                "-f", "raw", "-c", "1000", temp_file
+            ]
+
+            read_result = self._execute_qemu_img(read_cmd, check=False)
+
+            # Удаляем временный файл
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+
+            # Анализируем результаты
+            benchmark_result = {
+                "path": disk_path,
+                "write_speed": self._parse_benchmark_output(write_result["stdout"]),
+                "read_speed": self._parse_benchmark_output(read_result["stdout"])
+            }
+
+            self.logger.info(
+                f"Бенчмарк завершен: запись={benchmark_result['write_speed']}, чтение={benchmark_result['read_speed']}")
+            return benchmark_result
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при запуске бенчмарка: {e}")
+            return {"path": disk_path, "error": str(e)}
+
+    def _parse_benchmark_output(self, output: str) -> str:
+        """Парсить вывод бенчмарка"""
+        lines = output.strip().split('\n')
+        for line in lines:
+            if "throughput" in line.lower():
+                return line.strip()
+        return "N/A"
+
+    def discover_disks(self, search_path: str | None = None) -> list[Disk]:
+        """
+        Обнаружить диски в файловой системе
+
+        Args:
+            search_path: Путь для поиска дисков
+
+        Returns:
+            list[Disk]: Список обнаруженных дисков
+        """
+        return self.list_disks(DiskQuery(search_path=search_path))
+
+    def find_disk_by_path_pattern(self, pattern: str) -> list[Disk]:
+        """
+        Найти диски по шаблону пути
+
+        Args:
+            pattern: Регулярное выражение для поиска в путях
+
+        Returns:
+            list[Disk]: Найденные диски
+        """
+        current_disks = []
+        try:
+            self.logger.info(f"Поиск дисков по шаблону: {pattern}")
+
+            regex = re.compile(pattern, re.IGNORECASE)
+            all_disks = self.list_disks()
+
+            for disk in all_disks:
+                if regex.search(disk.path):
+                    current_disks.append(disk)
+
+            self.logger.info(f"Найдено {len(current_disks)} дисков по шаблону {pattern}")
+            return current_disks
+
+        except re.error as e:
+            self.logger.error(f"Неверное регулярное выражение {pattern}: {e}")
+            return []
+        except Exception as e:
+            self.logger.exception(f"Ошибка при поиске дисков по шаблону {pattern}: {e}")
+            return []
+
+    def get_storage_summary(self, directory: str = "/var/lib/libvirt/images") -> dict:
+        """
+        Получить сводку по хранилищу в директории
+
+        Args:
+            directory: Директория для анализа
+
+        Returns:
+            dict: Сводка по хранилищу
+        """
+        try:
+            self.logger.info(f"Анализ хранилища в директории: {directory}")
+
+            if not os.path.exists(directory):
+                return {"error": f"Директория {directory} не существует"}
+
+            disks = self.list_disks(DiskQuery(search_path=directory))
+
+            total_size = sum(d.capacity_bytes for d in disks)
+            total_allocated = sum(d.allocation_bytes for d in disks)
+
+            # Статистика по форматам
+            format_stats = {}
+            for disk in disks:
+                fmt = disk.format.value if disk.format else 'unknown'
+                format_stats[fmt] = format_stats.get(fmt, 0) + 1
+
+            summary = {
+                "directory": directory,
+                "total_disks": len(disks),
+                "total_size_gb": round(total_size / (1024 ** 3), 2),
+                "total_allocated_gb": round(total_allocated / (1024 ** 3), 2),
+                "free_space_gb": round((total_size - total_allocated) / (1024 ** 3), 2),
+                "usage_percentage": round((total_allocated / total_size * 100), 1) if total_size > 0 else 0,
+                "format_distribution": format_stats,
+                "attached_disks": len([d for d in disks if d.status == DiskStatus.ATTACHED]),
+                "detached_disks": len([d for d in disks if d.status == DiskStatus.DETACHED])
+            }
+
+            self.logger.info(f"Сводка хранилища: {summary['total_disks']} дисков, {summary['total_size_gb']}GB всего")
+            return summary
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при анализе хранилища: {e}")
+            return {"error": str(e)}
+
 
 if __name__ == "__main__":
+    # Пример использования
     manager = StorageManager()
 
-    # Пример использования новых методов
-
-    # Создать диск
+    # # Создание диска
     # disk_create = DiskCreate(
-    #     name="vm-disk.qcow2",
-    #     pool="default-pool",
-    #     size_gb=1,
+    #     name="test-disk",
+    #     size_gb=10,
     #     format=DiskFormat.QCOW2,
     #     sparse=True
     # )
-    # created_disk = manager.create_disk(disk_create)
-    # print(f"Создан диск: {created_disk.name if created_disk else 'Ошибка'}")
+    #
+    # disk = manager.create_disk(disk_create)
+    # if disk:
+    #     logger.info(f"Создан диск: {disk.name}, путь: {disk.path}")
 
-    # Получение списка дисков
-    with StorageManager() as mng:
-        # Без фильтров
-        all_disks = mng.list_disks()
-        print(f"Всего дисков: {len(all_disks)}")
+    # Получение информации о диске
+    # if disk:
+    #     info = manager.get_disk_info(disk.path)
+    #     logger.info(f"Информация о диске: {info}")
 
-        # Выводим информацию о каждом диске
-        for disk in all_disks:
-            print(f"Диск: {disk.name}, Тип: {disk.type}, "
-                  f"Статус: {disk.status}, ВМ: {disk.vm_name}")
+    # Список всех дисков
+    disks = manager.list_disks()
+    logger.info(f"Всего дисков: {len(disks)}")
 
-        # С фильтром
-        query = DiskQuery(
-            pool="default-pool",
-            min_size_gb=1,
-            format=DiskFormat.QCOW2
-        )
-        filtered_disks = mng.list_disks(query)
-        print(f"\nОтфильтрованных дисков: {len(filtered_disks)}")
-
-        # Только подключенные диски
-        attached_query = DiskQuery(attached_only=True)
-        attached_disks = mng.list_disks(attached_query)
-        print(f"Подключенных дисков: {len(attached_disks)}")
-
-    # # Подключить диск к ВМ
-    # attach_cmd = DiskAttach(
-    #     vm_name="my-vm",
-    #     target_dev="vdb",
-    #     bus_type=BusType.VIRTIO,
-    #     cache_mode=CacheMode.WRITEBACK
-    # )
-    # attached_disk = manager.attach_disk_to_vm("default-pool", "vm-disk.qcow2", attach_cmd)
-
-    # # Отключить диск от ВМ
-    # detach_cmd = DiskDetach(
-    #     vm_name="my-vm",
-    #     target_dev="vdb"
-    # )
-    # manager.detach_disk_from_vm(detach_cmd)
+    # # Конвертация диска
+    # if disk:
+    #     new_path = disk.path.replace(".qcow2", ".raw")
+    #     manager.convert_disk_format(disk.path, new_path, DiskFormat.RAW)
+    #
+    # # Проверка диска
+    # if disk:
+    #     check_result = manager.check_disk(disk.path)
+    #     logger.info(f"Результат проверки: {check_result}")
+    #
+    # # Сводка хранилища
+    # summary = manager.get_storage_summary()
+    # logger.info(f"Сводка хранилища: {summary}")
