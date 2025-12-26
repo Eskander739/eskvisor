@@ -1,4 +1,4 @@
-../eska_virt/.idea
+../eskvisor/.idea
 .pytest_cache/
 .pyc
 **/__pycache__/
