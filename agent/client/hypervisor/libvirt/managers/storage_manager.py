@@ -561,7 +561,7 @@ class StorageManager(LibvirtClient):
 
                     for root, dirs, files in os.walk(dir_path):
                         for file_name in files:
-                            file_path = os.path.join(root, file_name)
+                            file_path = str(os.path.join(root, file_name))
 
                             # Проверяем расширение файла
                             if self._is_disk_file(file_path):
@@ -842,7 +842,9 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка при запуске бенчмарка: {e}")
             return {"path": disk_path, "error": str(e)}
 
-    def _parse_benchmark_output(self, output: str) -> str:
+
+    @staticmethod
+    def _parse_benchmark_output(output: str) -> str:
         """Парсить вывод бенчмарка"""
         lines = output.strip().split('\n')
         for line in lines:
