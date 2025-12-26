@@ -1,0 +1,11 @@
+<interface type='network'>
+  <mac address='52:54:00:00:00:01'/>
+  <source network='default'/>
+  <model type='virtio'/>
+  <driver name='vhost' txmode='iothread' ioeventfd='on' event_idx='on' queues='4'/>
+  <bandwidth>
+    <inbound average='2000' peak='3000' burst='5120'/>
+    <outbound average='1000' peak='1500'/>
+  </bandwidth>
+  <boot order='2'/>
+</interface>
