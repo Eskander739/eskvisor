@@ -1,0 +1,18 @@
+# Создать пользователя
+sudo adduser eskvisor
+
+# Дать права sudo (требует ввода пароля)
+sudo usermod -aG sudo eskvisor  # Для Ubuntu/Debian
+# ИЛИ
+sudo usermod -aG wheel eskvisor  # Для CentOS/RHEL
+
+sudo usermod -a -G libvirt eskvisor
+sudo usermod -a -G kvm eskvisor
+sudo usermod -aG qemu eskvisor
+sudo passwd eskvisor
+# Указываем пароль: P@$$w0rd12A
+
+# sudo chmod 777 /run/user/1000/
+# chmod 777 /run/user/1000/libvirt/virtqemud-sock
+# Для работы без пароля (менее безопасно)
+echo "eskvisor ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/eskvisor

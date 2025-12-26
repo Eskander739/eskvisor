@@ -1027,12 +1027,12 @@ if __name__ == "__main__":
     manager = StorageManager()
 
     # # Создание диска
-    # disk_create = DiskCreate(
-    #     name="test-disk",
-    #     size_gb=10,
-    #     format=DiskFormat.QCOW2,
-    #     sparse=True
-    # )
+    disk_create = DiskCreate(
+        name="test-disk-2",
+        size_gb=0.5,
+        format=DiskFormat.QCOW2,
+        sparse=True
+    )
     #
     # disk = manager.create_disk(disk_create)
     # if disk:
@@ -1046,6 +1046,8 @@ if __name__ == "__main__":
     # Список всех дисков
     disks = manager.list_disks()
     logger.info(f"Всего дисков: {len(disks)}")
+    for disk_current in disks:
+        print(disks)
 
     # # Конвертация диска
     # if disk:

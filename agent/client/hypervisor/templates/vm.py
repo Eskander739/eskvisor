@@ -28,7 +28,22 @@ simple_config = VMCreateRequest(
     ],
     os_variant="ubuntu22.04"
 )
-
+simple_config_without_net = VMCreateRequest(
+    name="test-vm-03",
+    description="Тестовая ВМ",
+    memory_mb=2048,
+    vcpus=2,
+    disks=[
+        VMDisk(
+            path="/var/lib/libvirt/images/disk-859480.qcow2",
+            # path="/var/lib/libvirt/images/test-vm-01.qcow2",
+            size_gb=20,
+            bus=DiskBus.VIRTIO,
+            format=DiskFormat.QCOW2
+        )
+    ],
+    os_variant="ubuntu22.04"
+)
 # 2. Создание ВМ Windows
 windows_config = VMCreateRequest(
     name="windows-vm-01",

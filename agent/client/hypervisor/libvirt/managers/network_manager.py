@@ -1,6 +1,7 @@
 from xml.etree import ElementTree as ET
 import ipaddress
 
+from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, NetworkForward, \
     NetworkBridge, NetworkDHCPRange
@@ -25,8 +26,9 @@ class NetworkManager(LibvirtClient):
         "no-forward": "Сеть без форвардинга - только внутренняя коммуникация"
     }
 
-    def __init__(self, connection_uri: str = "qemu:///system"):
-        super().__init__(connection_uri)
+    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None, password: str | None = None):
+        super().__init__(connection_uri, username, password)
+        self.cli = CLIControl()
 
     def list_networks(self) -> list[str]:
         """Получение списка сетей"""
@@ -561,75 +563,23 @@ class NetworkManager(LibvirtClient):
 
         return summary
 
-    def add_virtual_network_to_libvirt_net(self, params: NetworkParameters) -> bool:
+    def is_network_visible(self, network_name: str) -> bool:
         """
-        Добавление виртуальной сети в libvirt.
-
-        Args:
-            params: Параметры сети для создания
-
-        Returns:
-            bool: True если сеть успешно добавлена, False в случае ошибки
+        Проверяет, видна ли сеть в 'virsh net-list --all'
         """
         try:
-            self.logger.info(f"Добавление виртуальной сети '{params.name}'")
-
-            # Проверяем, не существует ли уже сеть с таким именем
-            existing_networks = self.list_networks()
-            if params.name in existing_networks:
-                self.logger.warning(f"Сеть '{params.name}' уже существует")
-                # Можно вернуть True, если считаем, что сеть уже "добавлена"
-                # Или False, если это ошибка. Здесь возвращаем True для идемпотентности.
-                return True
-
-            # Генерируем XML конфигурацию
-            xml_config = self._generate_network_xml(params)
-
-            # Определяем тип сети для информативного логирования
-            network_type_info = self._determine_network_type(params)
-
-            # Добавляем сеть в libvirt
-            network = self.conn.networkDefineXML(xml_config)
-
-            # Настраиваем дополнительные параметры если нужно
-            if params.uuid:
-                network.setUUID(params.uuid)
-
-            # По умолчанию выключаем автозапуск, но можно настроить через params
-            autostart = getattr(params, 'autostart', False)
-            network.setAutostart(autostart)
-
-            # Автоматически запускаем сеть после добавления
-            auto_start = getattr(params, 'auto_start', True)
-            if auto_start:
-                network.create()
-                self.logger.info(f"Сеть '{params.name}' запущена после добавления")
-
-            self.logger.info(
-                f"Виртуальная сеть '{params.name}' успешно добавлена\n"
-                f"  Тип: {network_type_info.type}\n"
-                f"  Мост: {params.bridge.name if params.bridge else 'Нет'}\n"
-                f"  IPv4: {'Да' if params.ipv4 and params.ipv4_address else 'Нет'}\n"
-                f"  DHCP: {'Да' if params.dhcp_ranges or params.dhcp_hosts else 'Нет'}\n"
-                f"  Автозапуск: {autostart}\n"
-                f"  Статус: {'Активна' if auto_start else 'Неактивна'}"
-            )
-
-            return True
-
+            result = self.cli.virsh_net_data("--all")
+            return network_name in result
         except self.libvirtError as e:
-            self.logger.error(f"Ошибка добавления виртуальной сети '{params.name}': {e}")
-            return False
-        except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при добавлении сети '{params.name}': {e}")
+            self.logger.error(f"Ошибка проверки видимости сети '{network_name}': {e}")
             return False
 
 
 if __name__ == "__main__":
     # Пример использования
-    with NetworkManager() as nm:
+    with NetworkManager().with_default_user() as nm:
         print("=== Сводка по сетям ===")
-        nm.add_virtual_network_to_libvirt_net(NetworkParameters(name="default"))
+        print("СЕТЬ ВИДНА ?: ", nm.is_network_visible("test-nat-network"))
         summary = nm.get_network_summary()
         print(f"Всего сетей: {summary['total']}")
         print(f"Активных: {summary['active']}, Неактивных: {summary['inactive']}")
@@ -655,16 +605,16 @@ if __name__ == "__main__":
         # print("\n=== Пример создания различных типов сетей ===")
         #
         # 1. NAT сеть
-        nat_params = NetworkParameters(
-            name="test-nat-network",
-            forward=NetworkForward(mode="nat"),
-            bridge=NetworkBridge(name="virbr-test-nat"),
-            ipv4_address="192.168.100.0/24",
-            dhcp_ranges=[
-                NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
-            ]
-        )
-        nm.create_network(nat_params)
+        # nat_params = NetworkParameters(
+        #     name="test-nat-network",
+        #     forward=NetworkForward(mode="nat"),
+        #     bridge=NetworkBridge(name="virbr-test-nat"),
+        #     ipv4_address="192.168.100.0/24",
+        #     dhcp_ranges=[
+        #         NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
+        #     ]
+        # )
+        # nm.create_network(nat_params)
 
         # # 2. Изолированная сеть
         # isolated_params = NetworkParameters(

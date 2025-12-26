@@ -1,3 +1,5 @@
+import getpass
+import shlex
 import subprocess
 import os
 
@@ -6,6 +8,29 @@ from agent.client.constants import DIRECTORIES_FOR_SEARCH, QEMU_EMULATORS
 
 class CLIControl:
 
+
+
+    def virsh_net_data(self, params: str | None = None):
+        """
+        Получение информации о сети
+
+        --inactive - список неактивных сетей
+        --all - список неактивных и активных сетей
+        --persistent - список постоянных сетей
+        --transient - список временных сетей
+        --autostart - список сетей с включёнными функциями автозапуска
+        --no-autostart - список сетей с отключёнными функциями автозапуска
+        --uuid - показать только UUID
+        --name - список имён сетей
+        --table - показать таблицу (по умолчанию)
+        --title - show network title
+
+        """
+        if params is None:
+            params = ""
+        result = self.execute(f"virsh net-list {params}")
+
+        return result
 
     @staticmethod
     def is_directory(path_str: str) -> bool:
@@ -135,11 +160,78 @@ class CLIControl:
 
             return emulators[0]
 
-
     @staticmethod
-    def execute(command: list | str, shell: bool = True):
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=shell)
-        return result.stdout.decode("utf-8")
+    def execute(command: list[str] | str, shell: bool = True, by_user: str | None = "eskvisor",
+                use_sudo: bool = True, password: str | None = None) -> str:
+        """
+        Выполняет команду в shell с возможностью запуска от другого пользователя.
+
+        Args:
+            command: Команда для выполнения (строка или список)
+            shell: Использовать ли shell
+            by_user: Имя пользователя, от которого выполнить команду
+            use_sudo: Использовать sudo (если не root)
+            password: Пароль для sudo (не рекомендуется передавать явно)
+
+        Returns:
+            Вывод команды в виде строки
+        """
+        current_user = getpass.getuser()
+
+        # Преобразуем команду
+        if isinstance(command, list):
+            cmd_to_run = command
+        else:
+            cmd_to_run = command if shell else shlex.split(command)
+
+        # Проверяем, нужно ли выполнять от другого пользователя
+        if by_user and by_user != current_user:
+            # Формируем команду для запуска от другого пользователя
+            if os.geteuid() == 0:
+                # Мы уже root - используем sudo -u
+                prefix = ["sudo", "-u", by_user]
+            elif use_sudo:
+                # Используем sudo с паролем если нужно
+                prefix = ["sudo", "-u", by_user]
+                if password:
+                    # Внимание: передача пароля командной строке небезопасна!
+                    prefix = ["sudo", "-S", "-u", by_user]
+            else:
+                raise PermissionError(
+                    f"Недостаточно прав для выполнения от пользователя '{by_user}'. "
+                    f"Требуются права root или используйте use_sudo=True"
+                )
+
+            # Формируем финальную команду
+            if isinstance(cmd_to_run, str) and shell:
+                final_command = f"{' '.join(prefix)} {cmd_to_run}"
+            else:
+                final_command = prefix + (cmd_to_run if isinstance(cmd_to_run, list) else [cmd_to_run])
+        else:
+            final_command = cmd_to_run
+
+        try:
+            # Подготовка параметров для subprocess
+            kwargs = {
+                'stdout': subprocess.PIPE,
+                'stderr': subprocess.STDOUT,
+                'shell': shell,
+                'text': True,
+                'encoding': 'utf-8'
+            }
+
+            # Если нужно передать пароль для sudo
+            if password and use_sudo:
+                kwargs['input'] = password + '\n'
+                kwargs['universal_newlines'] = True
+
+            result = subprocess.run(final_command, **kwargs)
+            return result.stdout
+
+        except subprocess.CalledProcessError as e:
+            return f"Ошибка выполнения (код {e.returncode}): {e.output}"
+        except Exception as e:
+            return f"Ошибка: {str(e)}"
 
 
 if __name__ == "__main__":

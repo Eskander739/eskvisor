@@ -17,7 +17,7 @@ from agent.client.hypervisor.libvirt.models.network import VMNetwork
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.hypervisor.models.general import VMState
 from agent.client.hypervisor.models.vm import VirtualMachine
-from agent.client.hypervisor.templates.vm import simple_config
+from agent.client.hypervisor.templates.vm import simple_config, simple_config_without_net
 from agent.client.logger_config import DefaultLogger
 
 
@@ -28,11 +28,11 @@ class VmManager(LibvirtClient):
 
     libvirtError = None
 
-    def __init__(self, connection_uri: str = "qemu:///system"):
+    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None, password: str | None = None):
         self.cli = CLIControl()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger()
-        super().__init__(connection_uri)
+        super().__init__(connection_uri, username, password)
 
     def create_vm(self, config: VMCreateRequest, dry_run: bool = False) -> dict[str, Any]:
         """
@@ -662,6 +662,7 @@ class VmManager(LibvirtClient):
                     vms.append(self._get_vm_info(domain))
             else:
                 domains = self.conn.listAllDomains(0)
+                print("domains: ", domains)
                 for domain in domains:
                     vms.append(self._get_vm_info(domain))
 
@@ -1025,10 +1026,10 @@ if __name__ == "__main__":
 
 
     # Инициализация менеджера
-    with VmManager() as vm_manager:
-        # Пример создания ВМ
-        result = vm_manager.create_vm(simple_config)
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+    with VmManager().with_default_user() as vm_manager:
+        # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
+        # result = vm_manager.create_vm(simple_config_without_net)
+        # print(json.dumps(result, indent=2, ensure_ascii=False))
         #
         # # Пример использования шаблона
         # template_result = vm_manager.create_vm_from_template(
