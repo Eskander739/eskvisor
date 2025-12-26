@@ -11,6 +11,7 @@ class VMCreateRequest(BaseModel):
     """Модель запроса на создание ВМ через virt-install"""
     # Основные параметры
     name: str
+    install_method: str | None = "import"  # "import", "pxe", "boot", "cdrom", "location"
     description: str | None = None
     architecture: Architecture = Architecture.X86_64
     emulator_type: EmulatorType = EmulatorType.KVM

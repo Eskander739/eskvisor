@@ -30,10 +30,10 @@ class NetworkForward(BaseModel):
     dev: str | None = None
     interface: str | None = None
 
-    @model_validator(mode="after")
+    @model_validator(mode="before")
     def validate_mode(cls, v):
         valid_modes = ["nat", "route", "bridge", "private", "vepa", "passthrough"]
-        if v not in valid_modes:
+        if v.get("mode") not in valid_modes:
             raise ValueError(f"Недопустимый режим форвардинга: {v}. Допустимые: {valid_modes}")
         return v
 
@@ -41,7 +41,7 @@ class NetworkForward(BaseModel):
 class NetworkBridge(BaseModel):
     name: str | None = None
     stp: str | None = Field(default="on", pattern="^(on|off)$")
-    delay: str | None = Field(default=0.0, ge=0.0)
+    delay: str | None = Field(default=0, ge=0)
     zone: str | None = None
 
 
@@ -107,16 +107,19 @@ class NetworkParameters(BaseModel):
     @field_validator("forward")
     def validate_forward_mode(cls, v, values):
         """Валидация режимов форвардинга"""
-        if v and "isolated" in values and values["isolated"]:
+        values_data = values.data
+        if v and values_data.get("isolated"):
             raise ValueError("Сеть с forward параметром не может быть изолированной (isolated=True)")
         return v
 
     @field_validator("bridge")
     def validate_bridge_for_routed(cls, v, values):
         """Валидация: routed сети не используют bridge"""
-        if v and "forward" in values and values["forward"]:
-            if values["forward"].mode == "route":
-                raise ValueError("Routed сети (forward.mode='route') не используют bridge")
+        values_data = values.data
+        if values_data.get("forward"):
+            if v and values_data.get("forward"):
+                if values_data.get("forward") == "route":
+                    raise ValueError("Routed сети (forward.mode='route') не используют bridge")
         return v
 
 

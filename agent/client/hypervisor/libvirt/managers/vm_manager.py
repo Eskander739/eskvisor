@@ -34,6 +34,191 @@ class VmManager(LibvirtClient):
         self.logger = DefaultLogger()
         super().__init__(connection_uri)
 
+    def create_vm(self, config: VMCreateRequest, dry_run: bool = False) -> dict[str, Any]:
+        """
+        Создание виртуальной машины через virt-install
+
+        Args:
+            config: Конфигурация ВМ
+            dry_run: Только проверить команду, не выполнять
+
+        Returns:
+            Словарь с результатом выполнения
+        """
+        try:
+            # Логируем начало создания
+            # self.logger.info(config.name, config)
+
+            # Проверяем, существует ли ВМ с таким именем
+            existing_vm = self.get_vm_by_name(config.name)
+            if existing_vm:
+                return {
+                    "success": False,
+                    "error": f"ВМ с именем '{config.name}' уже существует",
+                    "command": None
+                }
+
+            # Создаем директории для дисков если нужно
+            for disk in config.disks:
+                disk_path = Path(disk.path)
+                if not disk_path.exists() and disk_path.parent:
+                    disk_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.logger.info(f"Создана директория: {disk_path.parent}")
+
+            # Проверяем, указан ли источник установки
+            # Если нет, добавляем флаг --import для существующего образа
+            if not (config.cdrom or config.location):
+                # Проверяем, существует ли основной диск
+                if config.disks:
+                    main_disk = config.disks[0]
+                    disk_path = Path(main_disk.path)
+                    if disk_path.exists():
+                        # Если диск существует, используем --import
+                        config.install_method = "import"
+                    else:
+                        # Если диск не существует, нужен источник установки
+                        # Создаем пустой диск и используем --import для создания пустой ВМ
+                        # или можно установить значение по умолчанию
+                        self.logger.warning(
+                            f"Диск {main_disk.path} не существует. Используем --import для создания пустой ВМ")
+
+            # Строим команду virt-install с дополнительной проверкой
+            command = self._build_virt_install_command(config)
+            self.logger.info(f"Команда virt-install: {command}")
+
+            if dry_run:
+                return {
+                    "success": True,
+                    "message": "DRY RUN: команда сгенерирована успешно",
+                    "command": command,
+                    "vm_name": config.name
+                }
+
+            # Выполняем команду
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 минут таймаут
+            )
+
+            if result.returncode == 0:
+                # Ждем немного, чтобы ВМ появилась в libvirt
+                import time
+                time.sleep(2)
+
+                # Получаем информацию о созданной ВМ
+                vm_info = self.get_vm_by_name(config.name)
+
+                if vm_info:
+                    self.logger.info(f"ВМ '{config.name}' создана успешно")
+
+                    # Устанавливаем автостарт если нужно
+                    if config.autostart:
+                        self._set_autostart(config.name, True)
+
+                    return {
+                        "success": True,
+                        "message": f"ВМ '{config.name}' создана успешно",
+                        "command": command,
+                        "vm_info": vm_info.dict() if hasattr(vm_info, 'dict') else str(vm_info),
+                        "stdout": result.stdout,
+                        "stderr": result.stderr
+                    }
+                else:
+                    self.logger.error(f"ВМ создана, но не найдена в libvirt")
+                    return {
+                        "success": False,
+                        "error": "ВМ создана, но не найдена в libvirt",
+                        "command": command,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr
+                    }
+            else:
+                # Анализируем ошибку и пытаемся исправить
+                error_msg = result.stderr
+
+                # Если ошибка связана с отсутствием метода установки
+                if "Необходимо определить метод установки" in error_msg or "install method must be specified" in error_msg.lower():
+                    self.logger.warning("Обнаружена ошибка метода установки. Пробуем с флагом --import...")
+
+                    # Добавляем флаг --import и пробуем снова
+                    import_command = command + " --import"
+                    self.logger.info(f"Повторная попытка с командой: {import_command}")
+
+                    import_result = subprocess.run(
+                        import_command,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=300
+                    )
+
+                    if import_result.returncode == 0:
+                        vm_info = self.get_vm_by_name(config.name)
+
+                        if vm_info:
+                            self.logger.info(f"ВМ '{config.name}' создана успешно с флагом --import")
+
+                            if config.autostart:
+                                self._set_autostart(config.name, True)
+
+                            return {
+                                "success": True,
+                                "message": f"ВМ '{config.name}' создана успешно с флагом --import",
+                                "command": import_command,
+                                "vm_info": vm_info.dict() if hasattr(vm_info, 'dict') else str(vm_info),
+                                "stdout": import_result.stdout,
+                                "stderr": import_result.stderr,
+                                "note": "Использован флаг --import для создания пустой ВМ"
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "error": "ВМ создана с --import, но не найдена в libvirt",
+                                "command": import_command,
+                                "stdout": import_result.stdout,
+                                "stderr": import_result.stderr
+                            }
+                    else:
+                        error_msg = f"Ошибка создания ВМ с --import: {import_result.stderr}"
+                        self.logger.error(error_msg)
+                        return {
+                            "success": False,
+                            "error": error_msg,
+                            "command": import_command,
+                            "stdout": import_result.stdout,
+                            "stderr": import_result.stderr
+                        }
+                else:
+                    error_msg = f"Ошибка создания ВМ: {result.stderr}"
+                    self.logger.error(error_msg)
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "command": command,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr
+                    }
+
+        except subprocess.TimeoutExpired:
+            error_msg = f"Таймаут при создании ВМ '{config.name}'"
+            self.logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg,
+                "command": command if 'command' in locals() else None
+            }
+        except Exception as e:
+            error_msg = f"Неожиданная ошибка при создании ВМ: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "error": error_msg,
+                "command": command if 'command' in locals() else None
+            }
+
     def _build_virt_install_command(self, config: VMCreateRequest) -> str:
         """
         Построение команды virt-install из конфигурации
@@ -66,7 +251,6 @@ class VmManager(LibvirtClient):
         cmd_parts.extend(["--arch", config.architecture.value])
 
         # Тип ОС и вариант
-        cmd_parts.extend(["--os-type", config.os_type.value])
         if config.os_variant:
             cmd_parts.extend(["--os-variant", config.os_variant])
 
@@ -217,6 +401,16 @@ class VmManager(LibvirtClient):
         elif config.location:
             cmd_parts.extend(["--location", config.location])
 
+        # Если нет источника установки, но есть атрибут install_method
+        elif hasattr(config, 'install_method') and config.install_method:
+            if config.install_method == "import":
+                cmd_parts.append("--import")
+            elif config.install_method == "pxe":
+                cmd_parts.append("--pxe")
+            elif config.install_method == "boot":
+                # Уже обрабатывается в boot_devices
+                pass
+
         # Дополнительные аргументы
         if config.extra_args:
             cmd_parts.extend(["--extra-args", f"'{config.extra_args}'"])
@@ -228,118 +422,6 @@ class VmManager(LibvirtClient):
         cmd_parts.append("--noautoconsole")
 
         return " ".join(cmd_parts)
-
-    def create_vm(self, config: VMCreateRequest, dry_run: bool = False) -> dict[str, Any]:
-        """
-        Создание виртуальной машины через virt-install
-
-        Args:
-            config: Конфигурация ВМ
-            dry_run: Только проверить команду, не выполнять
-
-        Returns:
-            Словарь с результатом выполнения
-        """
-        try:
-            # Логируем начало создания
-            # self.logger.info(config.name, config)
-
-            # Проверяем, существует ли ВМ с таким именем
-            existing_vm = self.get_vm_by_name(config.name)
-            if existing_vm:
-                return {
-                    "success": False,
-                    "error": f"ВМ с именем '{config.name}' уже существует",
-                    "command": None
-                }
-
-            # Создаем директории для дисков если нужно
-            for disk in config.disks:
-                disk_path = Path(disk.path)
-                if not disk_path.exists() and disk_path.parent:
-                    disk_path.parent.mkdir(parents=True, exist_ok=True)
-                    self.logger.info(f"Создана директория: {disk_path.parent}")
-
-            # Строим команду virt-install
-            command = self._build_virt_install_command(config)
-            self.logger.info(command)
-
-            if dry_run:
-                return {
-                    "success": True,
-                    "message": "DRY RUN: команда сгенерирована успешно",
-                    "command": command,
-                    "vm_name": config.name
-                }
-
-            # Выполняем команду
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 минут таймаут
-            )
-
-            if result.returncode == 0:
-                # Ждем немного, чтобы ВМ появилась в libvirt
-                import time
-                time.sleep(2)
-
-                # Получаем информацию о созданной ВМ
-                vm_info = self.get_vm_by_name(config.name)
-
-                if vm_info:
-                    self.logger.info(f"ВМ '{config.name}' создана успешно")
-
-                    # Устанавливаем автостарт если нужно
-                    if config.autostart:
-                        self._set_autostart(config.name, True)
-
-                    return {
-                        "success": True,
-                        "message": f"ВМ '{config.name}' создана успешно",
-                        "command": command,
-                        "vm_info": vm_info.dict() if hasattr(vm_info, 'dict') else str(vm_info),
-                        "stdout": result.stdout,
-                        "stderr": result.stderr
-                    }
-                else:
-                    self.logger.error(f"ВМ создана, но не найдена в libvirt")
-                    return {
-                        "success": False,
-                        "error": "ВМ создана, но не найдена в libvirt",
-                        "command": command,
-                        "stdout": result.stdout,
-                        "stderr": result.stderr
-                    }
-            else:
-                error_msg = f"Ошибка создания ВМ: {result.stderr}"
-                self.logger.error(error_msg)
-                return {
-                    "success": False,
-                    "error": error_msg,
-                    "command": command,
-                    "stdout": result.stdout,
-                    "stderr": result.stderr
-                }
-
-        except subprocess.TimeoutExpired:
-            error_msg = f"Таймаут при создании ВМ '{config.name}'"
-            self.logger.error(error_msg)
-            return {
-                "success": False,
-                "error": error_msg,
-                "command": command if 'command' in locals() else None
-            }
-        except Exception as e:
-            error_msg = f"Неожиданная ошибка при создании ВМ: {str(e)}"
-            self.logger.error(error_msg, str(e))
-            return {
-                "success": False,
-                "error": error_msg,
-                "command": command if 'command' in locals() else None
-            }
 
     def create_vm_from_xml(self, xml_config: str, autostart: bool = False) -> bool:
         """
@@ -945,7 +1027,7 @@ if __name__ == "__main__":
     # Инициализация менеджера
     with VmManager() as vm_manager:
         # Пример создания ВМ
-        result = vm_manager.create_vm(simple_config, dry_run=True)
+        result = vm_manager.create_vm(simple_config)
         print(json.dumps(result, indent=2, ensure_ascii=False))
         #
         # # Пример использования шаблона
