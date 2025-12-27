@@ -26,7 +26,8 @@ simple_config = VMCreateRequest(
             model=NetworkModel.VIRTIO
         )
     ],
-    os_variant="ubuntu22.04"
+    os_variant="ubuntu22.04",
+    controllers=[VMController(controller_type=ControllerType.SCSI, model="pci-root")],
 )
 simple_config_without_net = VMCreateRequest(
     name="test-vm-03",
@@ -43,7 +44,7 @@ simple_config_without_net = VMCreateRequest(
         )
     ],
     os_variant="ubuntu22.04",
-    controllers=VMController(controller_type=ControllerType.SCSI, model="pci-root"),
+    controllers=[VMController(controller_type=ControllerType.SCSI, model="pci-root")],
 )
 # 2. Создание ВМ Windows
 windows_config = VMCreateRequest(
