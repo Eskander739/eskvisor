@@ -5,7 +5,6 @@ import pytest
 
 from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskQuery, DiskStatus
 
-RANDOM_NAME = random.randint(10000, 99999)
 
 @pytest.mark.tags("VD‑01", "Создание нового виртуального диска")
 @pytest.mark.parametrize("sparse", (True, False))
@@ -18,7 +17,8 @@ def test_vd_01_create_disk(storage_session, setup_test_environment, sparse, disk
     Проверить, что диск появляется в списке и занимает указанное место.
     """
     # ____________________________________Создание диска____________________________________
-    attach_disk_create = DiskCreate(name=f"disk-test-{RANDOM_NAME}", size_gb=0.2, format=disk_format, sparse=sparse)
+    random_name = random.randint(10000, 99999)
+    attach_disk_create = DiskCreate(name=f"disk-test-{random_name}", size_gb=0.2, format=disk_format, sparse=sparse)
     attach_disk = storage_session.create_disk(attach_disk_create)
     assert attach_disk is not None, "Ошибка: диск для подключения не создан"
     vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
