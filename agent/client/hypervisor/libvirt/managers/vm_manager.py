@@ -1027,8 +1027,9 @@ if __name__ == "__main__":
 
     # Инициализация менеджера
     with VmManager().with_default_user() as vm_manager:
+        # print(vm_manager.delete_vm("test-vm-03"))
         # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
-        # result = vm_manager.create_vm(simple_config_without_net)
+        result = vm_manager.create_vm(simple_config_without_net)
         # print(json.dumps(result, indent=2, ensure_ascii=False))
         #
         # # Пример использования шаблона

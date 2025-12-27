@@ -42,7 +42,8 @@ simple_config_without_net = VMCreateRequest(
             format=DiskFormat.QCOW2
         )
     ],
-    os_variant="ubuntu22.04"
+    os_variant="ubuntu22.04",
+    controllers=VMController(controller_type=ControllerType.SCSI, model="pci-root"),
 )
 # 2. Создание ВМ Windows
 windows_config = VMCreateRequest(
