@@ -1,3 +1,4 @@
+import subprocess
 import libvirt
 import os
 import re
@@ -58,7 +59,7 @@ class StorageManager(LibvirtClient):
                 if disk_create.name:
                     self._add_qcow2_metadata(disk_path, disk_create.name)
             else:
-                self._create_raw_disk(disk_path, size_bytes, disk_create.sparse)
+                self._create_raw_disk(disk_path, disk_create.size_gb, disk_create.sparse)
                 if disk_create.name:
                     self._create_metadata_file(disk_path, disk_create)
 
@@ -98,7 +99,6 @@ class StorageManager(LibvirtClient):
         return os.path.join(self._default_storage_dir, f"disk-{uuid.uuid4().hex[:8]}.{disk_create.format.value}")
 
     def _create_qcow2_disk(self, disk_path: str, size_gb: float, sparse: bool = True):
-        import subprocess
 
         sparse_flag = [] if sparse else ["-o", "preallocation=full"]
         cmd = ["qemu-img", "create", "-f", "qcow2"] + sparse_flag + [disk_path, f"{size_gb}G"]
@@ -110,7 +110,6 @@ class StorageManager(LibvirtClient):
             raise Exception(f"Ошибка qemu-img: {result.stderr}")
 
     def _add_qcow2_metadata(self, disk_path: str, disk_name: str):
-        import subprocess
 
         try:
             metadata_cmd = [
@@ -131,22 +130,32 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.warning(f"Ошибка при добавлении метаданных: {e}")
 
-    def _create_raw_disk(self, disk_path: str, size_bytes: int, sparse: bool = True):
+    def _create_raw_disk(self, disk_path: str, size_gb: float, sparse: bool = True):
+        """
+        Создать RAW диск через qemu-img
+
+        Args:
+            disk_path: Путь к файлу диска
+            size_gb: Размер в гигабайтах
+            sparse: Создать разреженный диск (sparse file)
+        """
+
+        # Формируем команду в зависимости от sparse
         if sparse:
-            with open(disk_path, 'wb') as f:
-                f.seek(size_bytes - 1)
-                f.write(b'\0')
+            # Для sparse: просто создаем без preallocation (по умолчанию sparse)
+            cmd = ["qemu-img", "create", "-f", "raw", disk_path, f"{size_gb}G"]
         else:
-            with open(disk_path, 'wb') as f:
-                chunk_size = 1024 * 1024
-                zero_data = b'\0' * chunk_size
+            # Для non-sparse: принудительно выделяем все место
+            cmd = ["qemu-img", "create", "-f", "raw", "-o", "preallocation=full",
+                   disk_path, f"{size_gb}G"]
 
-                for _ in range(size_bytes // chunk_size):
-                    f.write(zero_data)
+        self.logger.debug(f"Создание RAW диска: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True)
 
-                remaining = size_bytes % chunk_size
-                if remaining > 0:
-                    f.write(b'\0' * remaining)
+        if result.returncode != 0:
+            raise Exception(f"Ошибка qemu-img при создании RAW диска: {result.stderr}")
+
+        self.logger.info(f"RAW диск создан: {disk_path}, размер: {size_gb}GB, sparse: {sparse}")
 
     def _create_metadata_file(self, disk_path: str, disk_create: DiskCreate):
         try:
@@ -331,8 +340,6 @@ class StorageManager(LibvirtClient):
                 current_size_gb = current_disk.get_effective_size_gb()
 
                 if disk_update.new_size_gb > current_size_gb:
-                    import subprocess
-
                     self.logger.info(f"Увеличение размера до {disk_update.new_size_gb}GB")
                     cmd = ["qemu-img", "resize", path, f"{disk_update.new_size_gb}G"]
 
@@ -361,8 +368,6 @@ class StorageManager(LibvirtClient):
                 os.makedirs(target_dir, exist_ok=True)
 
             if source_disk.format == DiskFormat.QCOW2:
-                import subprocess
-
                 cmd = ["qemu-img", "convert", "-f", "qcow2", "-O", "qcow2", source_path, target_path]
                 self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
 
@@ -553,7 +558,6 @@ class StorageManager(LibvirtClient):
             backing_file = None
             if disk_format == DiskFormat.QCOW2 and file_path_exists:
                 try:
-                    import subprocess
                     cmd = ["qemu-img", "info", "--output=json", disk_path]
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
                     if result.returncode == 0:
@@ -666,8 +670,6 @@ class StorageManager(LibvirtClient):
             if not os.path.exists(target_dir):
                 os.makedirs(target_dir, exist_ok=True)
 
-            import subprocess
-
             sparse_flag = [] if sparse else ["-S", "0"]
             cmd = ["qemu-img", "convert"] + sparse_flag + ["-O", target_format.value, source_path, target_path]
 
@@ -762,6 +764,8 @@ class StorageManager(LibvirtClient):
             self.logger.error(f"Ошибка поиска устройства: {e}")
             return "vdz"
 
+    # def get_disk_size(self, path: str):
+
     def get_disk_info(self, pool_name: str | None = None, disk_name: str | None = None,
                       path: str | None = None) -> Disk | None:
         try:
@@ -795,7 +799,24 @@ class StorageManager(LibvirtClient):
             elif path.endswith('.vhd') or path.endswith('.vhdx'):
                 disk_format = DiskFormat.VHDX
 
-            size_bytes = os.path.getsize(path) if file_path_exists else 0
+            if file_path_exists:
+                cmd = ["qemu-img", "info", path]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+
+                if result.returncode != 0:
+                    raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
+                size_type = result.stdout.split("\n")[3].split(":")[1].split(" ")[2]
+                size_data = int(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
+                if size_type == "MiB":
+                    size_bytes = (size_data *1024)*1024
+                elif size_type == "KiB":
+                    size_bytes = size_data * 1024
+                elif size_type == "GiB":
+                    size_bytes = ((size_data *1024)*1024)*1024
+                elif size_type == "TiB":
+                    size_bytes = (((size_data *1024)*1024)*1024)*1024
+            else:
+                size_bytes = 0
 
             disk_name = os.path.basename(path)
 

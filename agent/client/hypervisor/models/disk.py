@@ -264,8 +264,9 @@ class DiskCreate(BaseModel):
     size_gb: float = Field(..., gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(None, max_length=500)
-    sparse: bool = Field(default=True, description="Создать разреженный диск")
-
+    sparse: bool = Field(default=True, description="Создать разреженный диск") # Если False = занимает сразу все указанное место
+    #RAW с sparse=True — должен создавать разреженный файл (sparse file)
+    #RAW с sparse=False — должен создавать полный файл, заполненный нулями
 
 
     @model_validator(mode="after")

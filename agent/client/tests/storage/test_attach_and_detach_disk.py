@@ -34,7 +34,6 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
     current_disk_name = vm_disk.name.split(".").pop(0)
     assert current_disk_name == attach_disk_create.name
     assert attach_disk_create.format == DiskFormat.QCOW2
-    assert attach_disk_create.size_gb == attach_disk_create.size_gb
 
     disk_attach = DiskAttach(vm_name=vm_name, path=vm_disk.path, target_dev=target_dev)
 

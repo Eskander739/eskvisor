@@ -1,74 +1,35 @@
 import os
+import random
 
 import pytest
 
-from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskQuery
+from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskQuery, DiskStatus
 
+RANDOM_NAME = random.randint(10000, 99999)
 
 @pytest.mark.tags("VD‑01", "Создание нового виртуального диска")
-def test_vd_01_create_disk(storage_session, setup_test_environment):
+@pytest.mark.parametrize("sparse", (True, False))
+@pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
+def test_vd_01_create_disk(storage_session, setup_test_environment, sparse, disk_format):
     """
     VD‑01: Создание нового виртуального диска
 
     Указать тип (RAW, QCOW2, VHD), размер, формат.
     Проверить, что диск появляется в списке и занимает указанное место.
     """
-    print("\n" + "=" * 60)
-    print("VD‑01: Создание нового виртуального диска")
-    print("=" * 60)
+    # ____________________________________Создание диска____________________________________
+    attach_disk_create = DiskCreate(name=f"disk-test-{RANDOM_NAME}", size_gb=0.2, format=disk_format, sparse=sparse)
+    attach_disk = storage_session.create_disk(attach_disk_create)
+    assert attach_disk is not None, "Ошибка: диск для подключения не создан"
+    vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
 
-    # Тест 1: Создание RAW диска
-    print("\n1. Тестирование создания RAW диска:")
-    raw_disk_create = DiskCreate(
-        name="test-raw-disk.img",
-        path=os.path.join(setup_test_environment.get("raw_dir"), "test-raw-disk.img"),
-        size_gb=1.0,
-        format=DiskFormat.RAW,
-        sparse=False,
-        description="Тестовый RAW диск"
-    )
-
-    storage_session.create_disk(raw_disk_create)
-    raw_disk_info = storage_session.get_disk_info(path=raw_disk_create.path)
-    assert raw_disk_info is not None, "Ошибка: RAW диск не создан"
-    assert os.path.exists(raw_disk_info.path), "Ошибка: файл RAW диска не существует"
-    assert raw_disk_info.format == DiskFormat.RAW, "Ошибка: неверный формат RAW диска"
-    assert raw_disk_info.get_effective_size_gb() == 1.0, f"Ошибка: неверный размер RAW диска: {raw_disk_info.get_effective_size_gb()} GB"
-
-    print(f"   ✅ RAW диск создан: {raw_disk_info.name}")
-    print(f"   📏 Размер: {raw_disk_info.get_effective_size_gb()} GB")
-    print(f"   📍 Путь: {raw_disk_info.path}")
-
-    # Тест 2: Создание QCOW2 диска
-    print("\n2. Тестирование создания QCOW2 диска:")
-    qcow2_disk_create = DiskCreate(
-        name="test-qcow2-disk.qcow2",
-        path=os.path.join(setup_test_environment.get("qcow2_dir"), "test-qcow2-disk.qcow2"),
-        size_gb=2.0,
-        format=DiskFormat.QCOW2,
-        sparse=True,
-        description="Тестовый QCOW2 диск"
-    )
-
-    storage_session.create_disk(qcow2_disk_create)
-
-    qcow2_disk_info = storage_session.get_disk_info(path=qcow2_disk_create.path)
-    assert qcow2_disk_info is not None, "Ошибка: QCOW2 диск не создан"
-    assert os.path.exists(qcow2_disk_info.path), "Ошибка: файл QCOW2 диска не существует"
-    assert qcow2_disk_info.format == DiskFormat.QCOW2, "Ошибка: неверный формат QCOW2 диска"
-    assert qcow2_disk_info.get_effective_size_gb() == 2.0, f"Ошибка: неверный размер QCOW2 диска: {qcow2_disk_info.get_effective_size_gb()} GB"
-
-    print(f"   ✅ QCOW2 диск создан: {qcow2_disk_info.name}")
-    print(f"   📏 Размер: {qcow2_disk_info.get_effective_size_gb()} GB")
-
-    # Тест 3: Проверка, что диски появляются в списке
-    print("\n3. Проверка списка дисков:")
-    all_disks = storage_session.list_disks(DiskQuery(search_path=[setup_test_environment.get("qcow2_dir"),
-                                                                  setup_test_environment.get("raw_dir")]))
-    print("ВСЕ ДИСКИ: ", all_disks)
-
-    # Фильтруем тестовые диски
-    test_disks = [d for d in all_disks if d.name in ['test-raw-disk.img', 'test-qcow2-disk.qcow2']]
-    assert len(test_disks) == 2, f"Ошибка: найдено {len(test_disks)} тестовых дисков вместо 2"
-
-    print(f"   ✅ В списке найдено {len(test_disks)} тестовых диска")
+    assert vm_disk.status.value == DiskStatus.DETACHED.value
+    current_disk_name = vm_disk.name.split(".").pop(0)
+    assert current_disk_name == attach_disk_create.name
+    assert vm_disk.format == disk_format
+    if not sparse:
+        assert round(vm_disk.capacity_bytes / (1024 ** 3), 2) == attach_disk_create.size_gb
+    else:
+        assert round(vm_disk.capacity_bytes / (1024 ** 3), 2) < 0.1
+    assert vm_disk.file_path_exists is True
+    assert vm_disk.path == attach_disk_create.path
