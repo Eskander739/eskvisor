@@ -22,7 +22,7 @@ def test_vd_02_attach_disk(storage_session, setup_test_environment):
         format=DiskFormat.QCOW2,
         sparse=True
     )
-    disk_attach = DiskAttach(vm_name="test-vm-03", path=attach_disk_path, target_dev="hdb")
+    disk_attach = DiskAttach(vm_name="test-hotplug-vm-2", path=attach_disk_path, target_dev="hdb")
     attach_disk = storage_session.create_disk(attach_disk_create)
     assert attach_disk is not None, "Ошибка: диск для подключения не создан"
 
@@ -38,7 +38,7 @@ def test_vd_02_attach_disk(storage_session, setup_test_environment):
     assert vm_disk.status.value == DiskStatus.ATTACHED.value
     assert vm_disk.name == attach_disk_create.name
 
-    storage_session.detach_disk_from_vm(DiskDetach(vm_name="test-vm-03", target_dev=disk_attach.target_dev))
+    storage_session.detach_disk_from_vm(DiskDetach(vm_name="test-hotplug-vm-2", target_dev=disk_attach.target_dev))
 
     vm_disk = storage_session.get_disk_info(path=attach_disk_path)
 

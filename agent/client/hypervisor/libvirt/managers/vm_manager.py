@@ -17,7 +17,7 @@ from agent.client.hypervisor.libvirt.models.network import VMNetwork
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.hypervisor.models.general import VMState
 from agent.client.hypervisor.models.vm import VirtualMachine
-from agent.client.hypervisor.templates.vm import simple_config, simple_config_without_net
+from agent.client.hypervisor.templates.vm import simple_config, simple_config_without_net, simple_hotplug_vm_config
 from agent.client.logger_config import DefaultLogger
 
 
@@ -1029,8 +1029,8 @@ if __name__ == "__main__":
     with VmManager().with_default_user() as vm_manager:
         # print(vm_manager.delete_vm("test-vm-03"))
         # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
-        # result = vm_manager.create_vm(simple_config_without_net)
-        # print(json.dumps(result, indent=2, ensure_ascii=False))
+        result = vm_manager.create_vm(simple_hotplug_vm_config)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
         #
         # # Пример использования шаблона
         # template_result = vm_manager.create_vm_from_template(
@@ -1043,9 +1043,9 @@ if __name__ == "__main__":
 
         # Получение списка ВМ
         # vm_manager.start_vm("test-vm-03")
-        # vm_manager.shutdown_vm("test-vm-03", force=True)
-        vm_manager.start_vm("test-vm-03")
-        # vm_manager.delete_vm_with_force("test-vm-01")
+        # vm_manager.shutdown_vm("test-hotplug-vm-2", force=True)
+        # vm_manager.start_vm("test-hotplug-vm")
+        # vm_manager.delete_vm_with_force("test-hotplug-vm-2")
         vms = vm_manager.list_vms()
         print(f"Найдено ВМ: {len(vms)}")
 

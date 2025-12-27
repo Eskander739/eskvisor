@@ -5,6 +5,7 @@ from agent.client.hypervisor.libvirt.models.disk import VMDisk
 from agent.client.hypervisor.libvirt.models.enum import Architecture, EmulatorType, OSType, GraphicsType, DiskBus, \
     ControllerType
 from agent.client.hypervisor.libvirt.models.network import VMNetwork
+from agent.client.hypervisor.models.general import MachineType
 
 
 class VMCreateRequest(BaseModel):
@@ -45,6 +46,41 @@ class VMCreateRequest(BaseModel):
     cdrom: str | None = None
     video_model: str = "qxl"
 
+    machine_type: MachineType = Field(
+        default=MachineType.Q35 if architecture == Architecture.X86_64 else MachineType.VIRT,
+        description="Тип эмулируемой машины"
+    )
+
+    features: dict[str, str] = Field(
+        default_factory=lambda: {"acpi": "on", "apic": "on"},
+        description="Включенные фичи ВМ"
+    )
+
+    qemu_agent: bool = Field(
+        default=False,
+        description="Включить QEMU guest agent"
+    )
+
+    memballoon_model: str = Field(
+        default="virtio",
+        description="Модель баллона памяти"
+    )
+
+    hyperv_features: dict[str, str] = Field(
+        default_factory=dict,
+        description="Hyper-V фичи (для Windows)"
+    )
+
+    cpu_model: str = Field(
+        default="host-model",
+        description="Модель CPU"
+    )
+
+    cpu_features: list[str] = Field(
+        default_factory=list,
+        description="Дополнительные фичи CPU"
+    )
+
     # Валидаторы
     @field_validator("os_variant")
     def set_default_variant(cls, v, values):
@@ -81,21 +117,28 @@ class VMCreateRequest(BaseModel):
 
         # Для KVM/QEMU x86_64 добавляем PCI контроллер
         if emulator_type in [EmulatorType.KVM, EmulatorType.QEMU] and architecture == Architecture.X86_64:
-            pci_controller = VMController(
-                controller_type=ControllerType.PCI,
-                index=0,
-                model="pcie-root"
-            )
-            controllers.insert(0, pci_controller)
-
-            # Добавляем USB контроллер
-            usb_controller = VMController(
-                controller_type=ControllerType.USB,
-                index=0,
-                model="qemu-xhci",
-                ports=15
-            )
-            controllers.append(usb_controller)
+            print("controllers: ", controllers)
+            for controller in controllers:
+                if controller.controller_type == ControllerType.PCI:
+                    break
+            else:
+                pci_controller = VMController(
+                    controller_type=ControllerType.PCI,
+                    index=0,
+                    model="pcie-root"
+                )
+                controllers.insert(0, pci_controller)
+            for controller in controllers:
+                if controller.controller_type == ControllerType.USB:
+                    break
+            else:
+                usb_controller = VMController(
+                    controller_type=ControllerType.USB,
+                    index=0,
+                    model="qemu-xhci",
+                    ports=15
+                )
+                controllers.append(usb_controller)
 
         # Добавляем SCSI контроллер если есть SCSI диски
         disks = values.get('disks', [])

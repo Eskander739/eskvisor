@@ -731,11 +731,15 @@ class StorageManager(LibvirtClient):
             vm = self.conn.lookupByName(detach_disk.vm_name)
             vm_state, vm_reason = vm.state()
 
+            self.logger.debug(f"Состояние ВМ {detach_disk.vm_name}: {vm_state}")
+
             xml_desc = vm.XMLDesc()
             import xml.etree.ElementTree as ET
             root = ET.fromstring(xml_desc)
 
             disk_elem = None
+            disk_xml = None
+            actual_target_dev = None
 
             # Поиск диска
             if detach_disk.target_dev:
@@ -758,6 +762,7 @@ class StorageManager(LibvirtClient):
                 self.logger.error(f"Диск не найден в ВМ {detach_disk.vm_name}")
                 return False
 
+            # Получаем XML диска и target_dev
             disk_xml = ET.tostring(disk_elem, encoding='unicode')
             target = disk_elem.find("target")
             actual_target_dev = target.get("dev") if target is not None else detach_disk.target_dev
@@ -767,25 +772,61 @@ class StorageManager(LibvirtClient):
             success = False
 
             if vm_state == libvirt.VIR_DOMAIN_RUNNING:
-                # Для работающей ВМ: удаляем из live и из конфигурации
+                # Для работающей ВМ
                 try:
-                    vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE)
-                    vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
-                    success = True
-                    self.logger.info(f"Диск отсоединен от работающей ВМ (live+config)")
-                except libvirt.libvirtError as e:
-                    self.logger.warning(f"Комбинированный флаг не сработал: {e}")
-
-                    # Раздельное отсоединение
+                    # Способ 1: Сначала отключаем live, потом удаляем из конфигурации
                     try:
-                        vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE)
-                        self.logger.info("Диск отсоединен live")
+                        # Отключаем диск из работающей ВМ
+                        vm.detachDevice(disk_xml)
+                        self.logger.info(f"Диск {actual_target_dev} отсоединен от работающей ВМ (live)")
 
+                        # Обновляем объект ВМ
+                        del vm
+                        vm = self.conn.lookupByName(detach_disk.vm_name)
+
+                        # Удаляем диск из конфигурации
                         vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
-                        self.logger.info("Диск удален из конфигурации")
+                        self.logger.info(f"Диск {actual_target_dev} удален из конфигурации ВМ")
+
                         success = True
-                    except libvirt.libvirtError as e2:
-                        self.logger.error(f"Раздельное отсоединение не удалось: {e2}")
+
+                    except libvirt.libvirtError as e:
+                        self.logger.warning(f"Раздельное отсоединение не удалось: {e}")
+
+                        # Способ 2: Пробуем использовать detachDeviceFlags с комбинированными флагами
+                        try:
+                            flags = libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE | libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG
+                            vm.detachDeviceFlags(disk_xml, flags=flags)
+                            self.logger.info(
+                                f"Диск {actual_target_dev} отсоединен через detachDeviceFlags с комбинированными флагами")
+                            success = True
+                        except libvirt.libvirtError as e2:
+                            self.logger.warning(f"Комбинированный флаг не сработал: {e2}")
+
+                            # Способ 3: Используем virsh как запасной вариант
+                            try:
+                                import subprocess
+                                command = f"virsh detach-disk {detach_disk.vm_name} {actual_target_dev} --config --live"
+                                self.logger.info(f"Пробуем через virsh: {command}")
+
+                                result = subprocess.run(
+                                    command,
+                                    shell=True,
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=30
+                                )
+
+                                if result.returncode == 0:
+                                    self.logger.info(f"Диск успешно отсоединен через virsh")
+                                    success = True
+                                else:
+                                    self.logger.error(f"Virsh вернул ошибку: {result.stderr}")
+                            except Exception as e3:
+                                self.logger.error(f"Ошибка при использовании virsh: {e3}")
+
+                except Exception as e:
+                    self.logger.error(f"Ошибка при отключении диска от работающей ВМ: {e}")
             else:
                 # Для остановленной ВМ: удаляем только из конфигурации
                 try:
@@ -796,15 +837,41 @@ class StorageManager(LibvirtClient):
                     self.logger.error(f"Не удалось удалить диск из конфигурации: {e}")
 
             if success:
-                # Обновляем конфигурацию
+                # Обновляем конфигурацию ВМ
                 try:
+                    # Переопределяем ВМ с обновленной конфигурацией
                     del vm
                     vm = self.conn.lookupByName(detach_disk.vm_name)
                     new_xml = vm.XMLDesc()
                     self.conn.defineXML(new_xml)
+                    self.logger.debug(f"Конфигурация ВМ {detach_disk.vm_name} обновлена")
+
+                    # Принудительное обновление состояния
                     self._refresh_vm_state(detach_disk.vm_name)
+
+                    # Проверяем, что диск действительно удален
+                    try:
+                        time.sleep(1)  # Небольшая задержка для обновления
+                        vm_after = self.conn.lookupByName(detach_disk.vm_name)
+                        xml_after = vm_after.XMLDesc()
+
+                        # Проверяем отсутствие диска в конфигурации
+                        if disk_xml and (
+                                actual_target_dev in xml_after or (detach_disk.path and detach_disk.path in xml_after)):
+                            self.logger.warning(f"Диск {actual_target_dev} все еще присутствует в конфигурации ВМ")
+                            return False
+                        else:
+                            self.logger.info(f"Диск {actual_target_dev} успешно отключен от ВМ {detach_disk.vm_name}")
+                            return True
+
+                    except Exception as e:
+                        self.logger.warning(f"Не удалось проверить удаление диска: {e}")
+                        return True
+
                 except Exception as e:
-                    self.logger.debug(f"Не удалось явно обновить конфигурацию: {e}")
+                    self.logger.warning(f"Не удалось явно обновить конфигурацию: {e}")
+                    # Возвращаем True, так как detachDevice возможно сработал
+                    return True
 
             return success
 
@@ -1994,6 +2061,7 @@ if __name__ == "__main__":
         logger.info("=== Обнаружение дисков ===")
         discovered_disks = manager.discover_disks()
         logger.info(f"Найдено дисков: {len(discovered_disks)}")
+        # manager.delete_disk(path="/tmp/vm_storage_test_4rx1npww/attached_disks/attach-test-disk.qcow2")
         # '/tmp/vm_storage_test_jq1o9yh5/attached_disks/attach-test-disk.qcow2'
         # print(manager.detach_disk_from_vm(DiskDetach(vm_name="test-vm-03", target_dev="hdb")))
         # Получение списка всех дисков
@@ -2001,11 +2069,11 @@ if __name__ == "__main__":
         all_disks = manager.list_disks()
         logger.info(f"Всего дисков в системе: {len(all_disks)}")
         for disk in all_disks:
-            logger.info(f"Статус диска: {disk.name} - {disk.status}, существование диска: {disk.file_path_exists}, target_dev: {disk.target_dev}")
+            logger.info(f"Статус диска: {disk.name} - {disk.status}, существование диска: {disk.file_path_exists}, target_dev: {disk.target_dev}, path: {disk.path}")
 
         # Получение дисков ВМ
         logger.info("\n=== Диски ВМ ===")
-        for disk in manager.get_disks_by_vm("test-vm-03"):
+        for disk in manager.get_disks_by_vm("test-hotplug-vm-2"):
             logger.info(f"ДИСК ВМ: {disk.name}")
 
         # Получение дисков хоста
