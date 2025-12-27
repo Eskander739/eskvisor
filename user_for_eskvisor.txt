@@ -12,7 +12,9 @@ sudo usermod -aG qemu eskvisor
 sudo passwd eskvisor
 # Указываем пароль: P@$$w0rd12A
 
-# sudo chmod 777 /run/user/1000/
-# chmod 777 /run/user/1000/libvirt/virtqemud-sock
 # Для работы без пароля (менее безопасно)
 echo "eskvisor ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/eskvisor
+
+sudo systemctl daemon-reload
+sudo systemctl restart virtqemud.socket
+sudo systemctl restart virtqemud

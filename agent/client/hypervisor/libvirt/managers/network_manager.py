@@ -579,7 +579,7 @@ if __name__ == "__main__":
     # Пример использования
     with NetworkManager().with_default_user() as nm:
         print("=== Сводка по сетям ===")
-        print("СЕТЬ ВИДНА ?: ", nm.is_network_visible("test-nat-network"))
+        # print("СЕТЬ ВИДНА ?: ", nm.is_network_visible("test-nat-network"))
         summary = nm.get_network_summary()
         print(f"Всего сетей: {summary['total']}")
         print(f"Активных: {summary['active']}, Неактивных: {summary['inactive']}")
@@ -606,9 +606,9 @@ if __name__ == "__main__":
         #
         # 1. NAT сеть
         # nat_params = NetworkParameters(
-        #     name="test-nat-network",
+        #     name="test-nat-network-2",
         #     forward=NetworkForward(mode="nat"),
-        #     bridge=NetworkBridge(name="virbr-test-nat"),
+        #     bridge=NetworkBridge(name="virbr-test-ntt"),
         #     ipv4_address="192.168.100.0/24",
         #     dhcp_ranges=[
         #         NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")

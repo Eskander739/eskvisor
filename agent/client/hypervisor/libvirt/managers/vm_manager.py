@@ -28,7 +28,7 @@ class VmManager(LibvirtClient):
 
     libvirtError = None
 
-    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None, password: str | None = None):
+    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None, password: str | None = None):
         self.cli = CLIControl()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger()

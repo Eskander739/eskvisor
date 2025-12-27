@@ -9,7 +9,7 @@ from agent.client.hypervisor.libvirt.managers.storage_manager import StorageMana
 
 @pytest.fixture(scope="session", autouse=True)
 def storage_session():
-    with StorageManager() as storage_manager:
+    with StorageManager().with_default_user() as storage_manager:
         yield storage_manager
 
 @pytest.fixture(scope="session")

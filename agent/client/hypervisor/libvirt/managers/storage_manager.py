@@ -21,9 +21,9 @@ class StorageManager(LibvirtClient):
     Управление хранилищами виртуальных дисков через qemu-img
     """
 
-    def __init__(self, connection_uri: str = "qemu:///system"):
+    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None, password: str | None = None):
         """Инициализация StorageManager с логированием"""
-        super().__init__(connection_uri)
+        super().__init__(connection_uri, username, password)
         self.logger = logger
         self.cli = CLIControl()
         self.libvirt_config = LibvirtConfig()
