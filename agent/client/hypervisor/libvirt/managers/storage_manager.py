@@ -445,7 +445,7 @@ class StorageManager(LibvirtClient):
             disk_xmls = []
             for line in xml_desc.split('\n'):
                 if detach_disk.target_dev in line:
-                    start_idx = xml_desc.find(line) - 150
+                    start_idx = xml_desc.find(line) - 176
                     end_idx = xml_desc.find('</disk>', start_idx) + 7
                     disk_xml = xml_desc[start_idx:end_idx]
                     disk_xmls.append(disk_xml)
@@ -463,7 +463,6 @@ class StorageManager(LibvirtClient):
             vm_state, _ = vm.state()
 
             if vm_state == libvirt.VIR_DOMAIN_RUNNING:
-                print("asd")
                 vm.detachDeviceFlags(disk_xml,
                                      libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE | libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
             else:
