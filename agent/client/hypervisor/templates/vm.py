@@ -27,7 +27,7 @@ simple_config = VMCreateRequest(
         )
     ],
     os_variant="ubuntu22.04",
-    controllers=[VMController(controller_type=ControllerType.SCSI, model="pci-root")],
+    controllers=[VMController(controller_type=ControllerType.PCI, model="pci-root")],
 )
 simple_config_without_net = VMCreateRequest(
     name="test-vm-03",
@@ -44,7 +44,7 @@ simple_config_without_net = VMCreateRequest(
         )
     ],
     os_variant="ubuntu22.04",
-    controllers=[VMController(controller_type=ControllerType.SCSI, model="pci-root")],
+    # controllers=[VMController(controller_type=ControllerType.PCI, model="pci-root", index=1)],
 )
 # 2. Создание ВМ Windows
 windows_config = VMCreateRequest(

@@ -346,8 +346,8 @@ class VmManager(LibvirtClient):
             if controller.model:
                 controller_params.append(f"model={controller.model}")
 
-            if controller.ports:
-                controller_params.append(f"ports={controller.ports}")
+            # if controller.ports:
+            #     controller_params.append(f"ports={controller.ports}")
 
             controller_cmd += ",".join(controller_params)
             cmd_parts.append(controller_cmd)
@@ -1029,7 +1029,7 @@ if __name__ == "__main__":
     with VmManager().with_default_user() as vm_manager:
         # print(vm_manager.delete_vm("test-vm-03"))
         # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
-        result = vm_manager.create_vm(simple_config_without_net)
+        # result = vm_manager.create_vm(simple_config_without_net)
         # print(json.dumps(result, indent=2, ensure_ascii=False))
         #
         # # Пример использования шаблона

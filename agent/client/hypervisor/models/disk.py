@@ -64,6 +64,7 @@ class BusType(Enum):
     SATA = "sata"
     SD = "sd"
     XEN = "xen"
+    NVME = "nvme"
 
 
 # Enum для режимов кэширования
@@ -150,7 +151,7 @@ class Disk(BaseModel):
     virtual_size: int | None = Field(None, description="Виртуальный размер в байтах", ge=0)
     disk_size: int | None = Field(None, description="Размер на диске в байтах", ge=0)
     bus_type: BusType | None = Field(None, description="Тип шины подключения")
-    target_dev: str | None = Field(None, description="Устройство в виртуальной машине", pattern=r"^[vs]d[a-z]+$")
+    target_dev: str | None = Field(None, description="Устройство в виртуальной машине")
     cache_mode: CacheMode | None = Field(None, description="Режим кэширования")
     io_mode: IoMode | None = Field(None, description="Режим ввода-вывода")
     discard: DiscardMode | None = Field(None, description="Поддержка discard")
@@ -197,16 +198,15 @@ class Disk(BaseModel):
                 raise ValueError("Для типа pool_disk обязательно указать pool")
 
         # Для всех дисков проверяем capacity
-        if not values.capacity_bytes and not values.capacity_gb:
-            raise ValueError("Необходимо указать либо capacity_bytes, либо capacity_gb")
+        # if not values.capacity_bytes and not values.capacity_gb:
+        #     raise ValueError("Необходимо указать либо capacity_bytes, либо capacity_gb")
 
         return values
 
     @field_validator("target_dev")
     def validate_target_dev_format(cls, v):
         """Валидация формата целевого устройства"""
-        if v and not (v.startswith("vd") or v.startswith("sd")):
-            raise ValueError("target_dev должен начинаться с vd или sd")
+
         return v
 
     # Методы
@@ -277,7 +277,7 @@ class DiskAttach(BaseModel):
     """Модель для подключения диска к виртуальной машине"""
     vm_name: str = Field(..., description="Имя виртуальной машины")
     path: str | None = None
-    target_dev: str = Field(default="vdb", pattern=r"^[vs]d[a-z]+$")
+    target_dev: str = Field(default="vdb")
     bus_type: BusType = Field(default=BusType.VIRTIO)
     cache_mode: CacheMode = Field(default=CacheMode.WRITEBACK)
 
@@ -285,7 +285,7 @@ class DiskAttach(BaseModel):
 class DiskDetach(BaseModel):
     """Модель для отключения диска от виртуальной машины"""
     vm_name: str = Field(..., description="Имя виртуальной машины")
-    target_dev: str = Field(..., pattern=r"^[vs]d[a-z]+$", description="Устройство для отключения")
+    target_dev: str = Field(..., description="Устройство для отключения")
 
     model_config = ConfigDict(validate_default=True)
 

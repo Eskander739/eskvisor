@@ -27,14 +27,16 @@ def test_vd_02_attach_disk(storage_session, setup_test_environment):
     attach_disk = storage_session.create_disk(attach_disk_create)
     assert attach_disk is not None, "Ошибка: диск для подключения не создан"
 
-    vm_disk = storage_session.get_disk_info(attach_disk_path)
+    vm_disk = storage_session.get_disk_info(path=attach_disk_path)
 
     assert vm_disk.status.value == DiskStatus.DETACHED.value
+    assert vm_disk.name == attach_disk_create.name
 
-    storage_session.attach_disk_to_vm(DiskAttach(vm_name="test-vm-03", path=attach_disk_path))
+    storage_session.attach_disk_to_vm(DiskAttach(vm_name="test-vm-03", path=attach_disk_path, target_dev="hdb"))
 
-    vm_disk = storage_session.get_disk_info(attach_disk_path)
+    vm_disk = storage_session.get_disk_info(path=attach_disk_path)
 
     assert vm_disk.status.value == DiskStatus.ATTACHED.value
+    assert vm_disk.name == attach_disk_create.name
 
 
