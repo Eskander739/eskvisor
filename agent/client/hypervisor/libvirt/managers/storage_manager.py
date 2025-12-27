@@ -6,11 +6,11 @@ import uuid
 from datetime import datetime
 from typing import List
 import logging
-
+import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
 from agent.client.hypervisor.models.disk import (
     Disk, DiskCreate, DiskUpdate, DiskAttach, DiskDetach, DiskQuery,
-    DiskFormat, DiskType, DiskStatus, BusType
+    DiskFormat, DiskType, DiskStatus, BusType, CacheMode
 )
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 
@@ -434,6 +434,167 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Неожиданная ошибка: {e}")
             return False
+
+    def get_disks_by_vm(self, vm_name: str) -> List[Disk]:
+        """
+        Получить все диски, подключенные к указанной ВМ
+        """
+        disks = []
+        try:
+            vm = self.conn.lookupByName(vm_name)
+            xml_desc = vm.XMLDesc()
+            root = ET.fromstring(xml_desc)
+
+            for disk_element in root.findall(".//disk"):
+                target = disk_element.find("target")
+                if target is None:
+                    continue
+
+                target_dev = target.get("dev")
+                if target_dev:
+                    try:
+                        disk = self.get_disk_info_by_target_dev(vm_name, target_dev)
+                        disks.append(disk)
+                    except Exception as e:
+                        self.logger.warning(f"Не удалось получить диск {target_dev}: {e}")
+                        continue
+
+            self.logger.info(f"Найдено {len(disks)} дисков для ВМ {vm_name}")
+            return disks
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при получении дисков ВМ {vm_name}: {e}")
+            return []
+
+    def get_disk_info_by_target_dev(self, vm_name: str, target_dev: str) -> Disk:
+        """
+        Получить информацию о диске по target_dev в конкретной ВМ
+        """
+        self.logger.info(f"Получение информации о диске {target_dev} для ВМ {vm_name}")
+
+        try:
+            vm = self.conn.lookupByName(vm_name)
+            xml_desc = vm.XMLDesc()
+
+            # Используем ElementTree для надежного парсинга XML
+            root = ET.fromstring(xml_desc)
+
+            # Ищем диск с указанным target_dev
+            disk_element = None
+            for disk in root.findall(".//disk"):
+                target = disk.find("target")
+                if target is not None and target.get("dev") == target_dev:
+                    disk_element = disk
+                    break
+
+            if disk_element is None:
+                raise ValueError(f"Диск с target_dev='{target_dev}' не найден в ВМ {vm_name}")
+
+            # Извлекаем данные из XML
+            source = disk_element.find("source")
+            driver = disk_element.find("driver")
+            target = disk_element.find("target")
+
+            disk_path = source.get("file") if source is not None else None
+            if not disk_path:
+                raise ValueError(f"Не найден путь к диску для устройства {target_dev}")
+
+            # Получаем формат диска
+            disk_format = DiskFormat.UNKNOWN
+            if driver is not None:
+                driver_type = driver.get("type")
+                if driver_type:
+                    try:
+                        disk_format = DiskFormat(driver_type)
+                    except ValueError:
+                        self.logger.warning(f"Неизвестный формат диска: {driver_type}")
+
+            # Определяем имя диска из пути
+            disk_name = os.path.basename(disk_path)
+
+            # Проверяем существование файла
+            file_path_exists = os.path.exists(disk_path)
+
+            # Получаем размер файла если он существует
+            capacity_bytes = None
+            allocation_bytes = None
+            if file_path_exists:
+                capacity_bytes = os.path.getsize(disk_path)
+                allocation_bytes = capacity_bytes
+
+            # Определяем тип диска
+            disk_type = DiskType.VM_ATTACHED
+
+            # Извлекаем тип шины
+            bus_type = None
+            if target is not None:
+                bus_str = target.get("bus")
+                if bus_str:
+                    try:
+                        bus_type = BusType(bus_str)
+                    except ValueError:
+                        self.logger.debug(f"Неизвестный тип шины: {bus_str}")
+
+            # Извлекаем режим кэширования
+            cache_mode = None
+            if driver is not None:
+                cache_str = driver.get("cache")
+                if cache_str:
+                    try:
+                        cache_mode = CacheMode(cache_str)
+                    except ValueError:
+                        self.logger.debug(f"Неизвестный режим кэширования: {cache_str}")
+
+            # Извлекаем дополнительные параметры
+            address = disk_element.find("address")
+            device_type = disk_element.get("device", "disk")
+
+            # Для QCOW2 пытаемся получить дополнительные метаданные
+            backing_file = None
+            if disk_format == DiskFormat.QCOW2 and file_path_exists:
+                try:
+                    import subprocess
+                    cmd = ["qemu-img", "info", "--output=json", disk_path]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        import json
+                        info = json.loads(result.stdout)
+                        if "backing-file" in info and info["backing-file"]:
+                            backing_file = info["backing-file"]
+                except Exception as e:
+                    self.logger.debug(f"Не удалось получить метаданные QCOW2: {e}")
+
+            # Создаем объект Disk
+            disk = Disk(
+                name=disk_name,
+                path=disk_path,
+                file_path_exists=file_path_exists,
+                type=disk_type,
+                format=disk_format,
+                capacity_bytes=capacity_bytes,
+                allocation_bytes=allocation_bytes,
+                capacity_gb=capacity_bytes / (1024 ** 3) if capacity_bytes else None,
+                allocation_gb=allocation_bytes / (1024 ** 3) if allocation_bytes else None,
+                vm_name=vm_name,
+                status=DiskStatus.ATTACHED,
+                bus_type=bus_type,
+                target_dev=target_dev,
+                cache_mode=cache_mode,
+                backing_file=backing_file,
+                readonly=(device_type == "cdrom"),
+                created=datetime.fromtimestamp(os.path.getctime(disk_path)) if file_path_exists else None,
+                modified=datetime.fromtimestamp(os.path.getmtime(disk_path)) if file_path_exists else None,
+            )
+
+            self.logger.info(f"Информация о диске {target_dev} получена: {disk_name}")
+            return disk
+
+        except libvirt.libvirtError as e:
+            self.logger.error(f"Ошибка libvirt при получении диска {target_dev}: {e}")
+            raise
+        except Exception as e:
+            self.logger.exception(f"Неожиданная ошибка при получении диска {target_dev}: {e}")
+            raise
 
     def detach_disk(self, detach_disk: DiskDetach) -> bool:
         try:
@@ -1075,6 +1236,9 @@ if __name__ == "__main__":
         #     print(f"Диск создан: {disk.name}, размер: {disk.get_effective_size_gb()}GB")
 
         # Получение списка всех дисков
+
+        for vm_disk in manager.get_disks_by_vm("test-vm-03"):
+            print(vm_disk)
         disks = manager.list_disks()
         for current_disk in disks:
             print(f"****************************************************************\n"

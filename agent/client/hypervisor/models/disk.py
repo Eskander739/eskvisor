@@ -162,11 +162,12 @@ class Disk(BaseModel):
     @field_validator("capacity_gb")
     def validate_capacity_gb(cls, v, values):
         """Автоматически вычислять capacity_gb если указан capacity_bytes"""
-        if "capacity_bytes" in values and values["capacity_bytes"] is not None:
+        if values.data.get("capacity_bytes"):
+            capacity_bytes = values.data.get("capacity_bytes")
             if v is None:
                 # Автоматически вычисляем GB из bytes
-                return round(values["capacity_bytes"] / (1024 ** 3), 2)
-            elif abs(v * (1024 ** 3) - values["capacity_bytes"]) > 1024:
+                return round(capacity_bytes / (1024 ** 3), 2)
+            elif abs(v * (1024 ** 3) - capacity_bytes) > 1024:
                 # Проверяем согласованность
                 raise ValueError("capacity_gb не соответствует capacity_bytes")
         return v
@@ -174,10 +175,11 @@ class Disk(BaseModel):
     @field_validator("allocation_gb")
     def validate_allocation_gb(cls, v, values):
         """Автоматически вычислять allocation_gb если указан allocation_bytes"""
-        if "allocation_bytes" in values and values["allocation_bytes"] is not None:
+        if values.data.get("allocation_bytes"):
+            allocation_bytes = values.data.get("allocation_bytes")
             if v is None:
-                return round(values["allocation_bytes"] / (1024 ** 3), 2)
-            elif abs(v * (1024 ** 3) - values["allocation_bytes"]) > 1024:
+                return round(allocation_bytes / (1024 ** 3), 2)
+            elif abs(v * (1024 ** 3) - allocation_bytes) > 1024:
                 raise ValueError("allocation_gb не соответствует allocation_bytes")
         return v
 
@@ -257,13 +259,21 @@ class Disk(BaseModel):
 class DiskCreate(BaseModel):
     """Модель для создания нового диска"""
     name: str = Field(f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255)
-    path: str = f"/home/eska/.local/share/libvirt/images/{f'disk-{str(random.randint(100000, 999999))}'}.{DiskFormat.QCOW2.value}"
+    path: str = f"/home/eska/.local/share/libvirt/images/"
     pool: str | None = Field(None, description="Пул для создания диска")
     size_gb: float = Field(..., gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(None, max_length=500)
     sparse: bool = Field(default=True, description="Создать разреженный диск")
 
+
+
+    @model_validator(mode="after")
+    def validate_query(self) -> Self:
+        """Валидация запроса"""
+        self.name = self.name.split(".").pop(0)
+        self.path = str(Path(self.path) / f"{self.name}.{self.format.value}")
+        return self
 
 # Модель для обновления диска
 class DiskUpdate(BaseModel):
