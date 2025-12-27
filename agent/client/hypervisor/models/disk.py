@@ -120,6 +120,7 @@ class DiskType(Enum):
 class Disk(BaseModel):
     name: str
     path: str
+    file_path_exists: bool
     type: DiskType
     format: DiskFormat
 

@@ -805,7 +805,9 @@ class StorageManager(LibvirtClient):
         """Получить информацию о файловом диске"""
         try:
             if not os.path.exists(path):
-                raise FileNotFoundError(f"Файл {path} не существует")
+                file_path_exists = False
+            else:
+                file_path_exists = True
 
             # Определяем формат по расширению
             disk_format = DiskFormat.UNKNOWN
@@ -821,7 +823,10 @@ class StorageManager(LibvirtClient):
                 disk_format = DiskFormat.VHDX
 
             # Получаем размер файла
-            size_bytes = os.path.getsize(path)
+            if file_path_exists:
+                size_bytes = os.path.getsize(path)
+            else:
+                size_bytes = 0
 
             # Определяем тип диска
             disk_type = DiskType.EXTERNAL_DISK
@@ -845,6 +850,7 @@ class StorageManager(LibvirtClient):
             disk = Disk(
                 name=os.path.basename(path),
                 path=path,
+                file_path_exists=file_path_exists,
                 type=disk_type,
                 format=disk_format,
                 capacity_bytes=size_bytes,
@@ -860,9 +866,6 @@ class StorageManager(LibvirtClient):
                 f"Информация о файловом диске {path}: формат={disk_format}, размер={size_bytes / (1024 ** 3):.2f}GB")
             return disk
 
-        except FileNotFoundError as e:
-            self.logger.error(f"Файл не найден: {e}")
-            return None
         except Exception as e:
             self.logger.exception(f"Ошибка при получении информации о файловом диске {path}: {e}")
             return None
@@ -979,15 +982,15 @@ class StorageManager(LibvirtClient):
             self.logger.info(f"Получение списка дисков с фильтрацией: {query}")
 
             # Собираем диски из всех источников
-            pool_disks = self._get_pool_disks(query)
+            # pool_disks = self._get_pool_disks(query)
             file_disks = self._get_file_disks(query)
             attached_disks = self._get_attached_disks(query)
 
-            self.logger.debug(
-                f"Найдено дисков: пуловых={len(pool_disks)}, файловых={len(file_disks)}, подключенных={len(attached_disks)}")
+            # self.logger.debug(
+            #     f"Найдено дисков: пуловых={len(pool_disks)}, файловых={len(file_disks)}, подключенных={len(attached_disks)}")
 
             # Объединяем списки
-            disks.extend(pool_disks)
+            # disks.extend(pool_disks)
             disks.extend(file_disks)
             disks.extend(attached_disks)
 
@@ -1260,8 +1263,10 @@ class StorageManager(LibvirtClient):
 
             # Получаем размер файла
             size_bytes = 0
+            file_path_exists = False
             if os.path.exists(disk_path):
                 size_bytes = os.path.getsize(disk_path)
+                file_path_exists = True
 
             # Преобразуем bus_type
             bus_type = None
@@ -1275,6 +1280,7 @@ class StorageManager(LibvirtClient):
             disk = Disk(
                 name=os.path.basename(disk_path),
                 path=disk_path,
+                file_path_exists=file_path_exists,
                 type=DiskType.VM_ATTACHED,
                 format=disk_format,
                 capacity_bytes=size_bytes,
@@ -1496,7 +1502,7 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка при конвертации диска: {e}")
             return False
 
-    def get_disks_by_vm(self, vm_name: str, include_system: bool = False) -> List[Disk]:
+    def get_disks_by_vm(self, vm_name: str, include_system: bool = True) -> List[Disk]:
         """
         Получить все диски, подключенные к указанной виртуальной машине
 
@@ -1915,7 +1921,7 @@ if __name__ == "__main__":
         all_disks = manager.list_disks()
         logger.info(f"Всего дисков в системе: {len(all_disks)}")
         for disk in all_disks:
-            logger.info(f"Статус диска: {disk.name} - {disk.status}")
+            logger.info(f"Статус диска: {disk.name} - {disk.status}, существование диска: {disk.file_path_exists}, target_dev: {disk.target_dev}")
 
         # Получение дисков ВМ
         logger.info("\n=== Диски ВМ ===")
@@ -1927,4 +1933,4 @@ if __name__ == "__main__":
         for disk in manager.get_disks_by_node():
             logger.info(f"ДИСК ХОСТА: {disk.name}")
 
-        print(manager.delete_disk(path="/var/lib/libvirt/images/disk-859480.qcow2"))
+        # print(manager.delete_disk(path="/var/lib/libvirt/images/disk-859480.qcow2"))
