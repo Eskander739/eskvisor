@@ -5,9 +5,9 @@ from agent.client.hypervisor.libvirt.models.enum import NetworkType, NetworkMode
 
 class VMNetwork(BaseModel):
     """Модель сетевого интерфейса ВМ"""
-    network_type: NetworkType = NetworkType.NETWORK
+    network_type: NetworkType | str = NetworkType.NETWORK
     source: str = "default"
-    model: NetworkModel = NetworkModel.VIRTIO
+    model: NetworkModel | str = NetworkModel.VIRTIO
     mac_address: str | None = None
     boot_order: int | None = None
 
@@ -18,4 +18,16 @@ class VMNetwork(BaseModel):
             return v
         if len(v) != 17 or v.count(':') != 5:
             raise ValueError("Неверный формат MAC адреса (должен быть XX:XX:XX:XX:XX:XX)")
+        return v
+
+
+    @field_validator("network_type")
+    def validate_network_type(cls, v):
+        NetworkType(v)
+        return v
+
+
+    @field_validator("model")
+    def validate_model(cls, v):
+        NetworkModel(v)
         return v

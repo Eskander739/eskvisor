@@ -5,13 +5,18 @@ from agent.client.hypervisor.libvirt.models.enum import ControllerType
 
 class VMController(BaseModel):
     """Модель контроллера ВМ"""
-    controller_type: ControllerType
+    controller_type: ControllerType | str
     index: int = 0
     model: str | None = None
     ports: int | None = None
 
+    @field_validator("controller_type")
+    def validate_controller_type(cls, v):
+        ControllerType(v)
+        return v
+
     @field_validator("model")
-    def set_default_model(cls, v, values):
+    def validate_model(cls, v, values):
         """Установка модели контроллера по умолчанию"""
         if v is None:
             controller_type = values.get('controller_type')

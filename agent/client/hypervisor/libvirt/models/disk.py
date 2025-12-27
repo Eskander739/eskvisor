@@ -9,9 +9,9 @@ class VMDisk(BaseModel):
     """Модель диска ВМ"""
     path: str
     size_gb: int | None = None
-    bus: DiskBus = DiskBus.VIRTIO
+    bus: DiskBus | str = DiskBus.VIRTIO
     disk_type: DiskType = DiskType.FILE
-    format: DiskFormat = DiskFormat.QCOW2
+    format: DiskFormat | str = DiskFormat.QCOW2
     cache: str = "none"
     readonly: bool = False
     shareable: bool = False
@@ -28,3 +28,15 @@ class VMDisk(BaseModel):
             if not path.is_file():
                 raise ValueError(f"Путь {v} существует, но не является файлом")
         return str(path)
+
+
+    @field_validator("bus")
+    def validate_bus(cls, v):
+        DiskBus(v)
+        return v
+
+
+    @field_validator("format")
+    def validate_format(cls, v):
+        DiskFormat(v)
+        return v

@@ -257,7 +257,7 @@ class Disk(BaseModel):
 class DiskCreate(BaseModel):
     """Модель для создания нового диска"""
     name: str = Field(f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255)
-    path: str = f"/var/lib/libvirt/images/{f'disk-{str(random.randint(100000, 999999))}'}.{DiskFormat.QCOW2.value}"
+    path: str = f"/home/eska/.local/share/libvirt/images/{f'disk-{str(random.randint(100000, 999999))}'}.{DiskFormat.QCOW2.value}"
     pool: str | None = Field(None, description="Пул для создания диска")
     size_gb: float = Field(..., gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)

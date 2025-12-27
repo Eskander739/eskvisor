@@ -14,9 +14,9 @@ class VMCreateRequest(BaseModel):
     name: str
     install_method: str | None = "import"  # "import", "pxe", "boot", "cdrom", "location"
     description: str | None = None
-    architecture: Architecture = Architecture.X86_64
+    architecture: Architecture | str = Architecture.X86_64
     emulator_type: EmulatorType = EmulatorType.KVM
-    os_type: OSType = OSType.LINUX
+    os_type: OSType | str = OSType.LINUX
     os_variant: str | None = None  # ubuntu22.04, centos8, win10 и т.д.
 
     # Ресурсы
@@ -33,7 +33,7 @@ class VMCreateRequest(BaseModel):
     controllers: list[VMController] = Field(default_factory=list)
 
     # Графика и консоль
-    graphics: GraphicsType = GraphicsType.VNC
+    graphics: GraphicsType | str = GraphicsType.VNC
     graphics_port: int | None = None
     graphics_listen: str = "0.0.0.0"
     console_type: str = "pty"
@@ -112,33 +112,33 @@ class VMCreateRequest(BaseModel):
         """Добавление контроллеров по умолчанию"""
         controllers = list(v)
         values = values.data
-        architecture = values.get("architecture", Architecture.X86_64)
-        emulator_type = values.get("emulator_type", EmulatorType.KVM)
+        # architecture = values.get("architecture", Architecture.X86_64)
+        # emulator_type = values.get("emulator_type", EmulatorType.KVM)
 
         # Для KVM/QEMU x86_64 добавляем PCI контроллер
-        if emulator_type in [EmulatorType.KVM, EmulatorType.QEMU] and architecture == Architecture.X86_64:
-            print("controllers: ", controllers)
-            for controller in controllers:
-                if controller.controller_type == ControllerType.PCI:
-                    break
-            else:
-                pci_controller = VMController(
-                    controller_type=ControllerType.PCI,
-                    index=0,
-                    model="pcie-root"
-                )
-                controllers.insert(0, pci_controller)
-            for controller in controllers:
-                if controller.controller_type == ControllerType.USB:
-                    break
-            else:
-                usb_controller = VMController(
-                    controller_type=ControllerType.USB,
-                    index=0,
-                    model="qemu-xhci",
-                    ports=15
-                )
-                controllers.append(usb_controller)
+        # if emulator_type in [EmulatorType.KVM, EmulatorType.QEMU] and architecture == Architecture.X86_64:
+        #     print("controllers: ", controllers)
+            # for controller in controllers:
+            #     if controller.controller_type == ControllerType.PCI:
+            #         break
+            # else:
+            #     pci_controller = VMController(
+            #         controller_type=ControllerType.PCI,
+            #         index=0,
+            #         model="pcie-root"
+            #     )
+            #     controllers.insert(0, pci_controller)
+            # for controller in controllers:
+            #     if controller.controller_type == ControllerType.USB:
+            #         break
+            # else:
+            #     usb_controller = VMController(
+            #         controller_type=ControllerType.USB,
+            #         index=0,
+            #         model="qemu-xhci",
+            #         ports=15
+            #     )
+            #     controllers.append(usb_controller)
 
         # Добавляем SCSI контроллер если есть SCSI диски
         disks = values.get('disks', [])
@@ -182,4 +182,22 @@ class VMCreateRequest(BaseModel):
         if len(boot_orders) != len(set(boot_orders)):
             raise ValueError("Boot order должен быть уникальным для каждого диска")
 
+        return v
+
+
+    @field_validator("graphics")
+    def validate_graphics(cls, v):
+        GraphicsType(v)
+        return v
+
+
+    @field_validator("os_type")
+    def validate_os_type(cls, v):
+        OSType(v)
+        return v
+
+
+    @field_validator("architecture")
+    def validate_architecture(cls, v):
+        Architecture(v)
         return v

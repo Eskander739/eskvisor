@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import json
 from typing import Any
@@ -9,7 +10,8 @@ from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
-from agent.client.hypervisor.libvirt.models.controller import VMController
+import xml.dom.minidom as minidom
+import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.models.disk import VMDisk
 from agent.client.hypervisor.libvirt.models.enum import DiskBus, DiskFormat, NetworkType, NetworkModel, OSType, \
     GraphicsType, ControllerType, Architecture
@@ -100,7 +102,7 @@ class VmManager(LibvirtClient):
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 минут таймаут
+                timeout=2  # 2 секунды таймаут
             )
 
             if result.returncode == 0:
@@ -1018,6 +1020,76 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка при парсинге XML для поиска NVRAM: {e}")
             return None
 
+    def clone_vm(self, source_name: str, new_name: str, new_uuid: bool = True) -> dict[str, Any]:
+        """
+        Клонирование существующей ВМ
+
+        Args:
+            source_name: Имя исходной ВМ
+            new_name: Имя новой ВМ
+            new_uuid: Генерировать новый UUID
+
+        Returns:
+            Результат клонирования
+        """
+        try:
+            # Получаем исходную ВМ
+            source_domain = self.conn.lookupByName(source_name)
+            xml_config = source_domain.XMLDesc(0)
+
+            # Парсим XML
+            root = ET.fromstring(xml_config)
+
+            # Меняем имя
+            name_elem = root.find("name")
+            if name_elem is not None:
+                name_elem.text = new_name
+
+            # Меняем UUID если нужно
+            if new_uuid:
+                uuid_elem = root.find("uuid")
+                if uuid_elem is not None:
+                    uuid_elem.text = self._generate_uuid()
+
+            # Меняем пути к дискам
+            for disk in root.findall(".//disk"):
+                source_elem = disk.find("source")
+                if source_elem is not None and 'file' in source_elem.attrib:
+                    old_path = source_elem.get('file')
+                    if old_path:
+                        # Создаем новый путь
+                        dir_name = os.path.dirname(old_path)
+                        base_name = os.path.basename(old_path)
+                        new_path = os.path.join(dir_name, f"{new_name}_{base_name}")
+
+                        # Копируем диск
+                        shutil.copy2(old_path, new_path)
+
+                        # Обновляем путь в XML
+                        source_elem.set('file', new_path)
+
+            # Генерируем новый XML
+            rough_string = ET.tostring(root, 'utf-8')
+            new_xml = minidom.parseString(rough_string).toprettyxml(indent="  ")
+
+            # Создаем новую ВМ
+            new_domain = self.conn.defineXML(new_xml)
+
+            return {
+                "success": True,
+                "message": f"ВМ '{source_name}' клонирована в '{new_name}'",
+                "xml": new_xml,
+                "domain_name": new_domain.name()
+            }
+
+        except Exception as e:
+            error_msg = f"Ошибка клонирования ВМ: {str(e)}"
+            self.logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
 
 # ========== EXAMPLE USAGE ==========
 
@@ -1029,8 +1101,8 @@ if __name__ == "__main__":
     with VmManager().with_default_user() as vm_manager:
         # print(vm_manager.delete_vm("test-vm-03"))
         # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
-        result = vm_manager.create_vm(simple_hotplug_vm_config)
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        # result = vm_manager.create_vm(simple_hotplug_vm_config)
+        # print(json.dumps(result, indent=2, ensure_ascii=False))
         #
         # # Пример использования шаблона
         # template_result = vm_manager.create_vm_from_template(
@@ -1044,8 +1116,8 @@ if __name__ == "__main__":
         # Получение списка ВМ
         # vm_manager.start_vm("test-vm-03")
         # vm_manager.shutdown_vm("test-hotplug-vm-2", force=True)
-        # vm_manager.start_vm("test-hotplug-vm")
-        # vm_manager.delete_vm_with_force("test-hotplug-vm-2")
+        # vm_manager.start_vm("test-hotplug-vm-2")
+        vm_manager.delete_vm_with_force("TEST-VM_98162")
         vms = vm_manager.list_vms()
         print(f"Найдено ВМ: {len(vms)}")
 

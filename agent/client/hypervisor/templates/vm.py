@@ -1,8 +1,8 @@
 # 1. Создание простой ВМ
 from agent.client.hypervisor.libvirt.models.controller import VMController
 from agent.client.hypervisor.libvirt.models.disk import VMDisk
-from agent.client.hypervisor.libvirt.models.enum import GraphicsType, ControllerType, NetworkType, NetworkModel, \
-    DiskBus, DiskFormat, Architecture, OSType
+from agent.client.hypervisor.libvirt.models.enum import GraphicsType, NetworkType, NetworkModel, \
+    DiskBus, DiskFormat, Architecture, OSType, ControllerType
 from agent.client.hypervisor.libvirt.models.network import VMNetwork
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.hypervisor.models.general import MachineType
@@ -283,35 +283,74 @@ simple_hotplug_vm_config = VMCreateRequest(
             model="pcie-root",
             index=0
         ),
-
         # PCIe порты для hotplug (минимум 2-3)
         VMController(
             controller_type=ControllerType.PCI,
             model="pcie-root-port",
             index=1,
         ),
-        VMController(
-            controller_type=ControllerType.PCI,
-            model="pcie-root-port",
-            index=3,
-        ),
-
-        # USB контроллер
-        VMController(
-            controller_type=ControllerType.USB,
-            model="qemu-xhci",
-            index=4
-        ),
+        #
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=14,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=3,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=4,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=5,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=6,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=7,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=8,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=9,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=10,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=11,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=12,
+        # ),
+        # VMController(
+        #     controller_type=ControllerType.PCI,
+        #     model="pcie-root-port",
+        #     index=13,
+        # ),
     ],
-
-    # Сеть
-    # networks=[
-    #     VMNetwork(
-    #         network_type=NetworkType.NETWORK,
-    #         source="default",
-    #         model=NetworkModel.VIRTIO
-    #     )
-    # ],
 
     # Обязательные фичи
     features={
@@ -321,4 +360,5 @@ simple_hotplug_vm_config = VMCreateRequest(
 
     os_variant="ubuntu22.04",
     qemu_agent=True,  # Важно для корректной работы hotplug
+    autostart=False
 )

@@ -1,10 +1,31 @@
 import os
+import random
 import shutil
 import tempfile
+import uuid
 
 import pytest
 
 from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
+from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
+from agent.client.hypervisor.models.general import VMState
+from agent.client.hypervisor.templates.vm import simple_hotplug_vm_config
+from agent.client.tools import wait_while_not
+
+
+@pytest.fixture(scope="session")
+def create_stopped_vm():
+    with VmManager().with_default_user() as vm_manager:
+        random_name = f"TEST-VM_{random.randint(10000, 99999)}"
+        vm_config = simple_hotplug_vm_config
+        vm_config.name = random_name
+        vm_manager.create_vm(vm_config)
+        vm_manager.shutdown_vm(simple_hotplug_vm_config.name, force=True)
+        assert wait_while_not(lambda: vm_manager.get_vm_by_name(vm_config.name).state == VMState.SHUTOFF, timeout=120)
+
+        yield vm_config
+        vm_manager.delete_vm_with_force(simple_hotplug_vm_config.name)
+
 
 
 @pytest.fixture(scope="session", autouse=True)
