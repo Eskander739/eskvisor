@@ -1042,7 +1042,9 @@ if __name__ == "__main__":
         # print(json.dumps(template_result, indent=2, ensure_ascii=False))
 
         # Получение списка ВМ
-        # vm_manager.shutdown_vm("test-vm-01", force=True)
+        # vm_manager.start_vm("test-vm-03")
+        # vm_manager.shutdown_vm("test-vm-03", force=True)
+        vm_manager.start_vm("test-vm-03")
         # vm_manager.delete_vm_with_force("test-vm-01")
         vms = vm_manager.list_vms()
         print(f"Найдено ВМ: {len(vms)}")

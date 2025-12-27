@@ -1,4 +1,6 @@
 import random
+import time
+
 import libvirt
 import os
 import re
@@ -383,7 +385,7 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка при изменении файлового диска {path}: {e}")
             return None
 
-    def attach_disk_to_vm(self, disk_attach: DiskAttach | None = None) -> bool | None:
+    def attach_disk_to_vm(self, disk_attach: DiskAttach | None = None) -> dict | None:
         """
         Добавить диск к виртуальной машине
 
@@ -391,8 +393,9 @@ class StorageManager(LibvirtClient):
             disk_attach: Модель для подключения диска
 
         Returns:
-            bool: Успешность операции или None при ошибке
+            dict: Результат подключения или None при ошибке
         """
+        target_dev = None
         try:
             if not self.conn:
                 self.logger.error("Отсутствует подключение к libvirt")
@@ -416,7 +419,7 @@ class StorageManager(LibvirtClient):
             # Проверяем, не подключен ли уже этот диск к ВМ
             if self._is_disk_attached_to_vm(disk_attach.path, disk_attach.vm_name):
                 self.logger.warning(f"Диск {disk_attach.path} уже подключен к ВМ {disk_attach.vm_name}")
-                return True  # Уже подключен, считаем успехом
+                return {"target_dev": self._get_disk_target_dev(vm, disk_attach.path), "already_attached": True}
 
             # Получаем информацию о диске
             disk_info = self.get_disk_info(path=disk_attach.path)
@@ -438,14 +441,13 @@ class StorageManager(LibvirtClient):
 
             self.logger.debug(f"Конфигурация: target_dev={target_dev}, bus_type={bus_type}, cache_mode={cache_mode}")
 
-            # Генерируем уникальный alias для устройства чтобы избежать дублирования ID
+            # Генерируем уникальный alias для устройства
             import hashlib
             import time
             alias_hash = hashlib.md5(f"{disk_attach.path}_{int(time.time())}".encode()).hexdigest()[:8]
             alias_name = f"ua-{alias_hash}"
 
-            # Создаем XML для устройства диска БЕЗ явного указания адреса
-            # Libvirt сам назначит уникальный ID и адрес
+            # Создаем XML для устройства диска
             disk_xml = f'''
             <disk type='file' device='disk'>
                 <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
@@ -457,67 +459,70 @@ class StorageManager(LibvirtClient):
 
             self.logger.debug(f"XML для подключения диска:\n{disk_xml}")
 
-            # Пробуем присоединить диск к ВМ
-            try:
-                vm.attachDevice(disk_xml)
-                self.logger.info(
-                    f"Диск {disk_attach.path} успешно добавлен к ВМ {disk_attach.vm_name} как {target_dev}")
-                return True
+            # Получаем состояние ВМ
+            vm_state, vm_reason = vm.state()
+            self.logger.debug(f"Состояние ВМ перед подключением: {vm_state}")
 
-            except libvirt.libvirtError as e:
-                error_msg = str(e)
-                self.logger.warning(f"Первая попытка подключения не удалась: {error_msg}")
+            success = False
 
-                # Если ошибка связана с дублированием device ID, пробуем другой подход
-                if "duplicate device id" in error_msg.lower() or "duplicate device" in error_msg.lower():
-                    self.logger.info("Пробуем подход с явным указанием уникального адреса...")
+            if vm_state == libvirt.VIR_DOMAIN_RUNNING:
+                # Для работающей ВМ: добавляем в live и в конфигурацию
+                try:
+                    # Пробуем добавить и в live, и в конфигурацию
+                    flags = libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE | libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG
+                    vm.attachDeviceFlags(disk_xml, flags=flags)
+                    success = True
+                    self.logger.info(f"Диск подключен к работающей ВМ (live+config)")
+                except libvirt.libvirtError as e:
+                    self.logger.warning(f"Комбинированный флаг не сработал: {e}")
 
-                    # Получаем текущую конфигурацию ВМ для поиска свободного адреса
-                    xml_desc = vm.XMLDesc()
+                    # Раздельное подключение
+                    try:
+                        # Live подключение
+                        vm.attachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE)
+                        self.logger.info("Диск подключен live")
 
-                    # Ищем свободный адрес для виртуального PCI устройства
-                    used_slots = self._get_used_pci_slots(xml_desc)
-                    free_slot = self._find_free_pci_slot(used_slots)
+                        # Добавление в конфигурацию
+                        vm.attachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+                        self.logger.info("Диск добавлен в конфигурацию")
+                        success = True
+                    except libvirt.libvirtError as e2:
+                        self.logger.error(f"Раздельное подключение не удалось: {e2}")
+            else:
+                # Для остановленной ВМ: добавляем только в конфигурацию
+                try:
+                    vm.attachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+                    success = True
+                    self.logger.info(f"Диск добавлен в конфигурацию остановленной ВМ")
+                except libvirt.libvirtError as e:
+                    self.logger.error(f"Не удалось добавить диск в конфигурацию: {e}")
 
-                    # Генерируем еще более уникальный alias
-                    alias_name2 = f"ua-{hashlib.md5(f'{disk_attach.path}_{free_slot}_{int(time.time() * 1000)}'.encode()).hexdigest()[:12]}"
+            if success:
+                # Обновляем объект ВМ после изменений
+                try:
+                    # Закрываем текущий объект ВМ
+                    del vm
 
-                    # Создаем XML с явным уникальным адресом и alias
-                    disk_xml_with_addr = f'''
-                    <disk type='file' device='disk'>
-                        <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
-                        <source file='{disk_attach.path}'/>
-                        <target dev='{target_dev}' bus='{bus_type.value}'/>
-                        <alias name='{alias_name2}'/>
-                        <address type='pci' domain='0x0000' bus='0x00' slot='0x{free_slot:02x}' function='0x0'/>
-                    </disk>
-                    '''
+                    # Получаем обновленный объект ВМ
+                    vm = self.conn.lookupByName(disk_attach.vm_name)
 
-                    self.logger.debug(f"Попытка подключения с уникальным адресом:\n{disk_xml_with_addr}")
-                    vm.attachDevice(disk_xml_with_addr)
-                    self.logger.info(f"Диск подключен с уникальным адресом slot=0x{free_slot:02x}")
-                    return True
+                    # Обновляем конфигурацию ВМ в libvirt
+                    new_xml = vm.XMLDesc()
+                    self.conn.defineXML(new_xml)
+                    self.logger.debug("Конфигурация ВМ обновлена в libvirt")
 
-                elif "hotplug" in error_msg.lower() or "PCI" in error_msg:
-                    self.logger.warning(f"Ошибка горячего подключения: {e}")
-                    self.logger.info("Пробуем минималистичный подход...")
+                    # Принудительно обновляем состояние
+                    self._refresh_vm_state(disk_attach.vm_name)
 
-                    # Минималистичный XML без лишних параметров
-                    disk_xml_simple = f'''
-                    <disk type='file' device='disk'>
-                        <driver name='qemu' type='{disk_info.format.value}'/>
-                        <source file='{disk_attach.path}'/>
-                        <target dev='{target_dev}'/>
-                    </disk>
-                    '''
+                    self.logger.info(
+                        f"Диск {disk_attach.path} успешно добавлен к ВМ {disk_attach.vm_name} как {target_dev}")
+                    return {"target_dev": target_dev}
+                except Exception as e:
+                    self.logger.warning(f"Не удалось обновить состояние ВМ: {e}")
+                    return {"target_dev": target_dev,
+                            "warning": "ВМ может потребоваться перезагрузка для сохранения изменений"}
 
-                    self.logger.debug(f"Попытка минималистичного подключения:\n{disk_xml_simple}")
-                    vm.attachDevice(disk_xml_simple)
-                    self.logger.info(f"Диск подключен минималистичным способом")
-                    return True
-                else:
-                    # Другая ошибка - пробрасываем ее
-                    raise
+            return None
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt при добавлении диска к ВМ {disk_attach.vm_name}: {e}")
@@ -710,6 +715,97 @@ class StorageManager(LibvirtClient):
             self.logger.error(f"Ошибка при поиске свободного устройства: {e}")
             return "vdz"  # Запасной вариант
 
+    def detach_disk_by_path(self, vm_name: str, disk_path: str) -> bool:
+        """
+        Отключить диск от ВМ по пути к диску
+
+        Args:
+            vm_name: Имя ВМ
+            disk_path: Путь к диску
+
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            self.logger.info(f"Попытка отключения диска {disk_path} от ВМ {vm_name}")
+
+            vm = self.conn.lookupByName(vm_name)
+            xml_desc = vm.XMLDesc()
+
+            import xml.etree.ElementTree as ET
+            from xml.etree.ElementTree import Element
+
+            root = ET.fromstring(xml_desc)
+
+            # Ищем диск по пути (используем XPath-подобный поиск)
+            disk_elem = None
+
+            # Ищем все элементы source с атрибутом file
+            for elem in root.findall(".//source"):
+                file_path = elem.get("file")
+                if file_path == disk_path:
+                    # Нашли source элемент с нужным путем
+                    # Находим родительский элемент disk
+                    parent = elem
+                    while parent is not None and parent.tag != 'disk':
+                        parent = parent.getparent() if hasattr(parent, 'getparent') else None
+
+                    if parent is not None and parent.tag == 'disk':
+                        disk_elem = parent
+                        break
+
+            if disk_elem is None:
+                # Альтернативный поиск: ищем все disk элементы и проверяем их source
+                for disk in root.findall(".//disk"):
+                    source = disk.find("source")
+                    if source is not None and source.get("file") == disk_path:
+                        disk_elem = disk
+                        break
+
+            if disk_elem is None:
+                self.logger.error(f"Диск {disk_path} не найден в ВМ {vm_name}")
+
+                # Логируем для отладки - какие диски есть в ВМ
+                self.logger.debug("Текущие диски в ВМ:")
+                for disk in root.findall(".//disk"):
+                    source = disk.find("source")
+                    if source is not None:
+                        self.logger.debug(f"  Путь: {source.get('file')}")
+
+                return False
+
+            # Получаем XML диска
+            disk_xml = ET.tostring(disk_elem, encoding='unicode')
+            self.logger.debug(f"Найден XML диска для отключения:\n{disk_xml}")
+
+            # Получаем target_dev для логов
+            target = disk_elem.find("target")
+            target_dev = target.get("dev") if target is not None else "unknown"
+
+            # Пробуем разные методы отключения
+            methods = [
+                ("legacy", lambda: vm.detachDevice(disk_xml)),
+                ("config", lambda: vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)),
+                ("live", lambda: vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE)),
+            ]
+
+            for method_name, method_func in methods:
+                try:
+                    method_func()
+                    self.logger.info(
+                        f"Диск {disk_path} (устройство {target_dev}) успешно отключен от ВМ {vm_name} методом {method_name}")
+                    return True
+                except libvirt.libvirtError as e:
+                    self.logger.debug(f"Метод {method_name} не удался: {e}")
+                    continue
+
+            self.logger.error(f"Все методы отключения диска {disk_path} не удались")
+            return False
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при отключении диска по пути: {e}")
+            return False
+
     def detach_disk_from_vm(self, detach_disk: DiskDetach) -> bool:
         """
         Отключить диск от виртуальной машины
@@ -721,53 +817,126 @@ class StorageManager(LibvirtClient):
             bool: Успешность операции
         """
         try:
-            self.logger.info(f"Попытка отключения диска {detach_disk.target_dev} от ВМ {detach_disk.vm_name}")
+            self.logger.info(f"Попытка отключения диска от ВМ {detach_disk.vm_name}")
 
             vm = self.conn.lookupByName(detach_disk.vm_name)
+            vm_state, vm_reason = vm.state()
 
-            # Получаем текущую конфигурацию ВМ
             xml_desc = vm.XMLDesc()
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(xml_desc)
 
-            # Находим XML блока диска для данного устройства
-            lines = xml_desc.split('\n')
-            disk_start = -1
-            disk_end = -1
+            disk_elem = None
 
-            for i, line in enumerate(lines):
-                if f"<target dev='{detach_disk.target_dev}'" in line:
-                    # Ищем начало блока диска
-                    for j in range(i, -1, -1):
-                        if '<disk ' in lines[j]:
-                            disk_start = j
-                            break
-                    # Ищем конец блока диска
-                    for j in range(i, len(lines)):
-                        if '</disk>' in lines[j]:
-                            disk_end = j
-                            break
-                    break
+            # Поиск диска
+            if detach_disk.target_dev:
+                self.logger.debug(f"Поиск диска по target_dev: {detach_disk.target_dev}")
+                for disk in root.findall(".//disk"):
+                    target = disk.find("target")
+                    if target is not None and target.get("dev") == detach_disk.target_dev:
+                        disk_elem = disk
+                        break
 
-            if disk_start != -1 and disk_end != -1:
-                # Извлекаем XML диска
-                disk_xml = '\n'.join(lines[disk_start:disk_end + 1])
-                self.logger.debug(f"Найден XML диска:\n{disk_xml}")
+            if disk_elem is None and detach_disk.path:
+                self.logger.debug(f"Поиск диска по пути: {detach_disk.path}")
+                for disk in root.findall(".//disk"):
+                    source = disk.find("source")
+                    if source is not None and source.get("file") == detach_disk.path:
+                        disk_elem = disk
+                        break
 
-                # Отключаем диск
-                vm.detachDevice(disk_xml)
-
-                self.logger.info(f"Диск {detach_disk.target_dev} успешно отключен от ВМ {detach_disk.vm_name}")
-                return True
-            else:
-                self.logger.error(
-                    f"Устройство {detach_disk.target_dev} не найдено в конфигурации ВМ {detach_disk.vm_name}")
+            if disk_elem is None:
+                self.logger.error(f"Диск не найден в ВМ {detach_disk.vm_name}")
                 return False
 
-        except libvirt.libvirtError as e:
-            self.logger.error(f"Ошибка libvirt при отключении диска от ВМ {detach_disk.vm_name}: {e}")
-            return False
+            disk_xml = ET.tostring(disk_elem, encoding='unicode')
+            target = disk_elem.find("target")
+            actual_target_dev = target.get("dev") if target is not None else detach_disk.target_dev
+
+            self.logger.info(f"Отсоединение диска {actual_target_dev} от ВМ {detach_disk.vm_name}")
+
+            success = False
+
+            if vm_state == libvirt.VIR_DOMAIN_RUNNING:
+                # Для работающей ВМ: удаляем из live и из конфигурации
+                try:
+                    vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE)
+                    vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+                    success = True
+                    self.logger.info(f"Диск отсоединен от работающей ВМ (live+config)")
+                except libvirt.libvirtError as e:
+                    self.logger.warning(f"Комбинированный флаг не сработал: {e}")
+
+                    # Раздельное отсоединение
+                    try:
+                        vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE)
+                        self.logger.info("Диск отсоединен live")
+
+                        vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+                        self.logger.info("Диск удален из конфигурации")
+                        success = True
+                    except libvirt.libvirtError as e2:
+                        self.logger.error(f"Раздельное отсоединение не удалось: {e2}")
+            else:
+                # Для остановленной ВМ: удаляем только из конфигурации
+                try:
+                    vm.detachDeviceFlags(disk_xml, flags=libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+                    success = True
+                    self.logger.info(f"Диск удален из конфигурации остановленной ВМ")
+                except libvirt.libvirtError as e:
+                    self.logger.error(f"Не удалось удалить диск из конфигурации: {e}")
+
+            if success:
+                # Обновляем конфигурацию
+                try:
+                    del vm
+                    vm = self.conn.lookupByName(detach_disk.vm_name)
+                    new_xml = vm.XMLDesc()
+                    self.conn.defineXML(new_xml)
+                    self._refresh_vm_state(detach_disk.vm_name)
+                except Exception as e:
+                    self.logger.debug(f"Не удалось явно обновить конфигурацию: {e}")
+
+            return success
+
         except Exception as e:
-            self.logger.exception(f"Ошибка при отключении диска от ВМ {detach_disk.vm_name}: {e}")
+            self.logger.exception(f"Ошибка при отключении диска: {e}")
             return False
+
+    def _refresh_vm_state(self, vm_name: str) -> None:
+        """
+        Принудительно обновить состояние ВМ в libvirt
+
+        Args:
+            vm_name: Имя ВМ
+        """
+        try:
+            self.logger.debug(f"Обновление состояния ВМ {vm_name}")
+
+            # Получаем ВМ
+            vm = self.conn.lookupByName(vm_name)
+
+            # Способ 1: Получить и переопределить XML
+            xml_desc = vm.XMLDesc()
+            self.conn.defineXML(xml_desc)
+            self.logger.debug(f"ВМ {vm_name} переопределена")
+
+            # Способ 2: Создать новый объект ВМ
+            # Просто переполучаем ВМ, чтобы обновить кэш
+            new_vm = self.conn.lookupByName(vm_name)
+            _ = new_vm.XMLDesc()  # Принудительно читаем конфигурацию
+
+            # Способ 3: Использовать refresh (если доступен)
+            try:
+                vm.refresh()
+                self.logger.debug(f"ВМ {vm_name} обновлена через refresh()")
+            except AttributeError:
+                self.logger.debug("Метод refresh() не доступен")
+
+            self.logger.debug(f"Состояние ВМ {vm_name} обновлено")
+
+        except Exception as e:
+            self.logger.warning(f"Не удалось обновить состояние ВМ {vm_name}: {e}")
 
     def get_disk_info(self, pool_name: str | None = None, disk_name: str | None = None,
                       path: str | None = None) -> Disk | None:
@@ -851,6 +1020,7 @@ class StorageManager(LibvirtClient):
                 name=os.path.basename(path),
                 path=path,
                 file_path_exists=file_path_exists,
+                # target_dev=
                 type=disk_type,
                 format=disk_format,
                 capacity_bytes=size_bytes,
@@ -1915,7 +2085,8 @@ if __name__ == "__main__":
         logger.info("=== Обнаружение дисков ===")
         discovered_disks = manager.discover_disks()
         logger.info(f"Найдено дисков: {len(discovered_disks)}")
-
+        # '/tmp/vm_storage_test_jq1o9yh5/attached_disks/attach-test-disk.qcow2'
+        # print(manager.detach_disk_from_vm(DiskDetach(vm_name="test-vm-03", target_dev="hdb")))
         # Получение списка всех дисков
         logger.info("\n=== Все диски ===")
         all_disks = manager.list_disks()
