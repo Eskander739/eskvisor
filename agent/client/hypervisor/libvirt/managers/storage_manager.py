@@ -1,4 +1,6 @@
 import subprocess
+from pathlib import Path
+
 import libvirt
 import os
 import re
@@ -783,9 +785,32 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Неожиданная ошибка: {e}")
             return None
 
+    @staticmethod
+    def convert_to_bytes_simple(size_data: float, size_type: str) -> int:
+        """
+        Простая конвертация в байты (только двоичные единицы KiB, MiB, GiB, TiB)
+        """
+        # Приводим к верхнему регистру и удаляем пробелы
+        size_type = size_type.upper().strip()
+
+        # Определяем множитель
+        if size_type == "B":
+            return int(size_data)
+        elif size_type == "KIB" or size_type == "K":
+            return int(size_data * 1024)
+        elif size_type == "MIB" or size_type == "M":
+            return int(size_data * 1024 ** 2)
+        elif size_type == "GIB" or size_type == "G":
+            return int(size_data * 1024 ** 3)
+        elif size_type == "TIB" or size_type == "T":
+            return int(size_data * 1024 ** 4)
+        else:
+            raise ValueError(f"Неизвестный тип размера: {size_type}")
+
     def _get_file_disk_info(self, path: str) -> Disk | None:
         try:
             file_path_exists = os.path.exists(path)
+            print("path :", path)
 
             disk_format = DiskFormat.UNKNOWN
             if path.endswith('.qcow2'):
@@ -806,15 +831,8 @@ class StorageManager(LibvirtClient):
                 if result.returncode != 0:
                     raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
                 size_type = result.stdout.split("\n")[3].split(":")[1].split(" ")[2]
-                size_data = int(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
-                if size_type == "MiB":
-                    size_bytes = (size_data *1024)*1024
-                elif size_type == "KiB":
-                    size_bytes = size_data * 1024
-                elif size_type == "GiB":
-                    size_bytes = ((size_data *1024)*1024)*1024
-                elif size_type == "TiB":
-                    size_bytes = (((size_data *1024)*1024)*1024)*1024
+                size_data = float(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
+                size_bytes = self.convert_to_bytes_simple(size_data, size_type)
             else:
                 size_bytes = 0
 
@@ -976,6 +994,7 @@ class StorageManager(LibvirtClient):
         standard_dirs = [
             self._default_storage_dir,
             "/var/lib/libvirt/volumes",
+            f"{str(Path.home())}/.local/share/libvirt/images",
             "/opt/vm_disks",
             os.path.expanduser("~/vm_disks")
         ]
