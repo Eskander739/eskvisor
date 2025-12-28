@@ -1,83 +1,55 @@
-import os
-import subprocess
+import random
 
-from agent.client.hypervisor.models.disk import DiskUpdate
+import pytest
+
+from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus, DiskUpdate
 
 
-def test_vd_04_extend_disk():
+@pytest.mark.tags("VD‑04", "Расширение диска")
+@pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
+def test_vd_04_extend_disk(storage_session, setup_test_environment, disk_format):
     """
     VD‑04: Расширение диска
 
     Увеличить размер диска.
-    Проверить, что в гостевой ОС можно использовать новое пространство.
     """
-    print("\n" + "=" * 60)
-    print("VD‑04: Расширение диска")
-    print("=" * 60)
+    edit_disk = DiskUpdate(new_size_gb=0.5)
+    disk_path = None
 
-    with StorageManager() as manager:
-        # Создаем тестовый диск для расширения
-        extend_disk_path = os.path.join(test_env['raw_dir'], "extend-test-disk.img")
+    def bytes_to_gb(data: int):
+        return round(data / (1024 ** 3), 2)
+    try:
+        # ____________________________________Создание диска____________________________________
+        random_name = random.randint(10000, 99999)
+        attach_disk_create = DiskCreate(name=f"disk-test-{random_name}", size_gb=0.2, format=disk_format, sparse=False)
+        attach_disk = storage_session.create_disk(attach_disk_create)
+        assert attach_disk is not None, "Ошибка: диск для подключения не создан"
+        vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        before_change_disk_virtual_size = storage_session.get_disk_virtual_size(path=attach_disk_create.path)
+        disk_path = vm_disk.path
+        assert bytes_to_gb(before_change_disk_virtual_size) ==  attach_disk_create.size_gb
 
-        # Создаем начальный файл размером 100MB
-        initial_size_mb = 100
-        with open(extend_disk_path, 'wb') as f:
-            f.write(b'\0' * 1024 * 1024 * initial_size_mb)
+        assert vm_disk.status.value == DiskStatus.DETACHED.value
+        current_disk_name = vm_disk.name.split(".").pop(0)
+        assert current_disk_name == attach_disk_create.name
+        assert vm_disk.format == disk_format
+        assert vm_disk.file_path_exists is True
+        assert vm_disk.path == attach_disk_create.path
 
-        print(f"   Создан тестовый диск: {extend_disk_path}")
-        print(f"   📏 Исходный размер: {initial_size_mb} MB")
+        # ____________________________________Редактирование диска____________________________________
+        storage_session.extend_disk(new_size_gb=edit_disk.new_size_gb, path=disk_path)
+        vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        disk_path = vm_disk.path
+        assert vm_disk.path == attach_disk_create.path
 
-        # Получаем начальную информацию о диске
-        initial_disk_info = manager.get_disk_info(path=extend_disk_path)
-        assert initial_disk_info is not None, "Ошибка: информация о диске не получена"
+        after_change_disk_virtual_size = storage_session.get_disk_virtual_size(path=attach_disk_create.path)
+        assert bytes_to_gb(after_change_disk_virtual_size) == edit_disk.new_size_gb
+        assert round(after_change_disk_virtual_size/before_change_disk_virtual_size, 2) == 2.5
 
-        initial_size_gb = initial_disk_info.get_effective_size_gb()
-        print(f"   📏 Начальный размер (через get_disk_info): {initial_size_gb:.2f} GB")
-
-        # Расширяем диск до 200MB (0.2GB)
-        new_size_gb = 0.2  # 200MB
-
-        # Сначала пробуем через edit_disk
-        disk_update = DiskUpdate(new_size_gb=new_size_gb)
-
-        print(f"\n   Расширение диска до {new_size_gb} GB...")
-
-        # Для файловых дисков расширение может требовать qemu-img
-        # Используем прямое расширение через qemu-img
-        try:
-            # Проверяем наличие qemu-img
-            result = subprocess.run(["which", "qemu-img"], capture_output=True, text=True)
-            if result.returncode == 0:
-                # Используем qemu-img для расширения
-                cmd = ["qemu-img", "resize", extend_disk_path, f"{new_size_gb}G"]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-
-                if result.returncode == 0:
-                    print("   ✅ Диск расширен через qemu-img")
-
-                    # Проверяем новый размер
-                    final_disk_info = manager.get_disk_info(path=extend_disk_path)
-                    final_size_gb = final_disk_info.get_effective_size_gb()
-
-                    print(f"   📏 Новый размер: {final_size_gb:.2f} GB")
-                    print(f"   📈 Увеличение: {(final_size_gb - initial_size_gb):.2f} GB")
-
-                    # Проверяем, что размер увеличился
-                    assert final_size_gb > initial_size_gb, "Ошибка: размер диска не увеличился"
-                    assert abs(
-                        final_size_gb - new_size_gb) < 0.01, f"Ошибка: итоговый размер {final_size_gb:.2f} GB не соответствует целевому {new_size_gb:.2f} GB"
-
-                    print("   ✅ Проверка расширения диска пройдена")
-                else:
-                    print(f"   ⚠️  qemu-img не смог расширить диск: {result.stderr}")
-                    print("   ⚠️  Этот тест требует установленного qemu-img")
-            else:
-                print("   ⚠️  qemu-img не найден, пропускаем тест расширения")
-        except Exception as e:
-            print(f"   ⚠️  Ошибка при расширении диска: {e}")
-            print("   ⚠️  Пропускаем тест расширения")
-
-        # Очистка
-        if os.path.exists(extend_disk_path):
-            os.remove(extend_disk_path)
+    finally:
+        # ____________________________________Удаление диска(постусловие)____________________________________
+        if disk_path is not None:
+            storage_session.delete_disk(path=disk_path)
+            vm_disk = storage_session.get_disk_info(path=disk_path)
+            assert vm_disk.file_path_exists is False
 
