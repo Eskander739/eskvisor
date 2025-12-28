@@ -1,103 +1,65 @@
+import random
+import uuid
 
-def test_vd_05_convert_disk():
+import pytest
+
+from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus
+from agent.client.hypervisor.models.msg import CommandMessagesEnum
+
+
+@pytest.mark.tags("VD‑05", "Изменение типа диска")
+@pytest.mark.parametrize("sparse", (True, False))
+@pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
+def test_vd_05_convert_disk(storage_session, disk_format, sparse):
     """
     VD‑05: Изменение типа диска (например, с QCOW2 на RAW)
 
     Конвертировать диск в другой формат.
     Убедиться, что данные сохраняются и диск работает.
     """
-    print("\n" + "=" * 60)
-    print("VD‑05: Изменение типа диска")
-    print("=" * 60)
 
-    with StorageManager() as manager:
-        # Создаем тестовый QCOW2 диск
-        source_disk_path = os.path.join(test_env['qcow2_dir'], "convert-source.qcow2")
-        target_disk_path = os.path.join(test_env['raw_dir'], "convert-target.img")
+    disk_path = None
+    disk_format_convert = {DiskFormat.QCOW2: DiskFormat.RAW, DiskFormat.RAW: DiskFormat.QCOW2}
 
-        # Создаем исходный QCOW2 диск
-        print("\n1. Создание исходного QCOW2 диска:")
-        qcow2_create = DiskCreate(
-            name="convert-source.qcow2",
-            path=source_disk_path,
-            size_gb=0.5,  # 500MB
-            format=DiskFormat.QCOW2,
-            sparse=True
-        )
+    def bytes_to_gb(data: int):
+        return round(data / (1024 ** 3), 2)
+    try:
+        # ____________________________________Создание диска____________________________________
+        random_name = random.randint(10000, 99999)
+        attach_disk_create = DiskCreate(name=f"disk-test-{random_name}", size_gb=0.2, format=disk_format, sparse=sparse)
+        attach_disk = storage_session.create_disk(attach_disk_create)
+        assert attach_disk is not None, "Ошибка: диск для подключения не создан"
+        vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        before_change_disk_virtual_size = storage_session.get_disk_virtual_size(path=attach_disk_create.path)
+        disk_path = vm_disk.path
+        assert bytes_to_gb(before_change_disk_virtual_size) ==  attach_disk_create.size_gb
 
-        source_disk = manager.create_disk(qcow2_create)
-        assert source_disk is not None, "Ошибка: исходный QCOW2 диск не создан"
-        assert source_disk.format == DiskFormat.QCOW2, "Ошибка: неверный формат исходного диска"
+        assert vm_disk.status.value == DiskStatus.DETACHED.value
+        current_disk_name = vm_disk.name.split(".").pop(0)
+        assert current_disk_name == attach_disk_create.name
+        assert vm_disk.format == disk_format
+        assert vm_disk.file_path_exists is True
+        assert vm_disk.path == attach_disk_create.path
 
-        print(f"   ✅ Создан QCOW2 диск: {source_disk_path}")
-        print(f"   📏 Размер: {source_disk.get_effective_size_gb():.2f} GB")
+        # ____________________________________Изменение типа диска____________________________________
+        convert_disk_info = storage_session.convert_disk_format(source_path=disk_path,
+                                                               target_format=disk_format_convert.get(disk_format),
+                                                               request_id=str(uuid.uuid4()), sparse=sparse)
+        assert convert_disk_info.code == CommandMessagesEnum.disk_convert_successfully.name
+        assert convert_disk_info.message == CommandMessagesEnum.disk_convert_successfully.value
+        assert f".{disk_format_convert.get(disk_format).value}" in convert_disk_info.target_path
+        vm_disk = storage_session.get_disk_info(path=convert_disk_info.target_path)
+        disk_path = vm_disk.path
+        assert vm_disk.format.value == disk_format_convert.get(disk_format).value
 
-        # Конвертируем в RAW
-        print("\n2. Конвертация QCOW2 в RAW:")
-
-        # Проверяем наличие qemu-img
-        result = subprocess.run(["which", "qemu-img"], capture_output=True, text=True)
-        if result.returncode == 0:
-            try:
-                # Используем метод конвертации из StorageManager
-                success = manager.convert_disk_format(
-                    source_path=source_disk_path,
-                    target_path=target_disk_path,
-                    target_format=DiskFormat.RAW,
-                    sparse=False
-                )
-
-                if success:
-                    print("   ✅ Конвертация выполнена успешно")
-
-                    # Проверяем, что целевой файл существует
-                    assert os.path.exists(target_disk_path), "Ошибка: целевой RAW файл не создан"
-
-                    # Получаем информацию о целевом диске
-                    target_disk_info = manager.get_disk_info(path=target_disk_path)
-                    assert target_disk_info is not None, "Ошибка: информация о целевом диске не получена"
-                    assert target_disk_info.format == DiskFormat.RAW, f"Ошибка: неверный формат целевого диска: {target_disk_info.format}"
-
-                    print(f"   ✅ Создан RAW диск: {target_disk_path}")
-                    print(f"   📏 Размер: {target_disk_info.get_effective_size_gb():.2f} GB")
-
-                    # Сравниваем размеры
-                    source_size = source_disk.get_effective_size_gb()
-                    target_size = target_disk_info.get_effective_size_gb()
-
-                    print(f"   📊 QCOW2 размер: {source_size:.2f} GB")
-                    print(f"   📊 RAW размер: {target_size:.2f} GB")
-
-                    # RAW обычно больше QCOW2 из-за sparse
-                    if source_size <= target_size:
-                        print("   ✅ Размеры соответствуют ожиданиям")
-                    else:
-                        print(f"   ⚠️  RAW размер меньше QCOW2: {target_size:.2f} GB < {source_size:.2f} GB")
-
-                    # Проверяем содержимое (базовую проверку)
-                    print("\n3. Базовая проверка целостности:")
-                    # Открываем файлы и проверяем первые байты
-                    try:
-                        with open(source_disk_path, 'rb') as f1, open(target_disk_path, 'rb') as f2:
-                            # Проверяем, что оба файла можно прочитать
-                            f1.read(1)
-                            f2.read(1)
-                            print("   ✅ Оба файла читаются корректно")
-                    except Exception as e:
-                        print(f"   ⚠️  Ошибка чтения файлов: {e}")
-
-                else:
-                    print("   ❌ Конвертация не удалась")
-                    print("   ⚠️  Этот тест требует корректной работы qemu-img")
-
-            except Exception as e:
-                print(f"   ⚠️  Ошибка при конвертации: {e}")
-                print("   ⚠️  Пропускаем тест конвертации")
+        if not sparse:
+            assert round(vm_disk.capacity_bytes / (1024 ** 3), 2) == attach_disk_create.size_gb
         else:
-            print("   ⚠️  qemu-img не найден, пропускаем тест конвертации")
+            assert round(vm_disk.capacity_bytes / (1024 ** 3), 2) < 0.1
 
-        # Очистка
-        for disk_path in [source_disk_path, target_disk_path]:
-            if os.path.exists(disk_path):
-                os.remove(disk_path)
-
+    finally:
+        # ____________________________________Удаление диска(постусловие)____________________________________
+        if disk_path is not None:
+            storage_session.delete_disk(path=disk_path)
+            vm_disk = storage_session.get_disk_info(path=disk_path)
+            assert vm_disk.file_path_exists is False

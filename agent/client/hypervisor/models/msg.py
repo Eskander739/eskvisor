@@ -12,6 +12,8 @@ class CommandMessagesEnum(Enum):
     vm_create_error = "VM create error"
     vm_create_unexpected_error = "VM create unexpected error"
     vm_create_subprocess_timeout_error = "VM create subprocess timeout error"
+    disk_convert_error = "Disk convert error"
+    disk_convert_successfully = "Disk convert successfully"
 
 
 class DefaultMessage(BaseModel):
@@ -43,4 +45,8 @@ class VmMessage(DefaultMessage):
     vm_info: None | VirtualMachine = None
     stdout: str | None = None
     stderr: str | None = None
+    note: str | None = None
+
+class StorageMessage(DefaultMessage):
+    target_path: str | None = None
     note: str | None = None

@@ -15,6 +15,7 @@ from agent.client.hypervisor.models.disk import (
     DiskFormat, DiskType, DiskStatus, BusType, CacheMode
 )
 from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.hypervisor.models.msg import StorageMessage, CommandMessagesEnum
 
 
 class StorageManager(LibvirtClient):
@@ -660,16 +661,23 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка получения списка: {e}")
             return []
 
-    def convert_disk_format(self, source_path: str, target_path: str,
-                            target_format: DiskFormat, sparse: bool = True) -> bool:
+    def convert_disk_format(self, source_path: str,
+                            target_format: DiskFormat, request_id: str, sparse: bool = True, target_path: str | None = None) -> StorageMessage:
+        """
+        В target_path нужно указывать полный путь включая сам файл диска и его расширение
+        """
+
         try:
             if not os.path.exists(source_path):
                 self.logger.error(f"Исходный файл не существует")
                 return False
-
-            target_dir = os.path.dirname(target_path)
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir, exist_ok=True)
+            if target_path is not None:
+                target_dir = os.path.dirname(target_path)
+                if not os.path.exists(target_dir):
+                    os.makedirs(target_dir, exist_ok=True)
+            else:
+                current_disk_format = self.libvirt_config.disk_format_by_path(source_path)
+                target_path = source_path.replace(f".{current_disk_format.value}", f".{target_format.value}")
 
             sparse_flag = [] if sparse else ["-S", "0"]
             cmd = ["qemu-img", "convert"] + sparse_flag + ["-O", target_format.value, source_path, target_path]
@@ -681,17 +689,28 @@ class StorageManager(LibvirtClient):
 
             if result.returncode != 0:
                 self.logger.error(f"Ошибка при конвертации: {result.stderr}")
-                return False
+                return StorageMessage(request_id=request_id,
+                                      message=CommandMessagesEnum.disk_convert_error.value,
+                                      code=CommandMessagesEnum.disk_convert_error.name)
 
             self.logger.info("Конвертация успешно завершена")
-            return True
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_convert_successfully.value,
+                                  code=CommandMessagesEnum.disk_convert_successfully.name,
+                                  target_path=target_path)
 
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Ошибка qemu-img при конвертации: {e}")
-            return False
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_convert_error.value,
+                                  code=CommandMessagesEnum.disk_convert_error.name,
+                                  note=str(e))
         except Exception as e:
             self.logger.exception(f"Ошибка при конвертации диска: {e}")
-            return False
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_convert_error.value,
+                                  code=CommandMessagesEnum.disk_convert_error.name,
+                                  note=str(e))
 
     # Вспомогательные методы
 
