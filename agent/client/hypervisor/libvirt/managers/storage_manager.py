@@ -271,17 +271,20 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка: {e}")
             return False
 
-    def edit_disk(self, pool_name: str | None = None, disk_name: str | None = None,
-                  path: str | None = None, disk_update: DiskUpdate | None = None) -> Disk | None:
-        if not disk_update:
-            self.logger.error("Не указана модель обновления")
-            return None
+    def extend_disk(self,
+                    new_size_gb: int,
+                    path: str | None = None,
+                    pool_name: str | None = None,
+                    disk_name: str | None = None):
+        """
+        Расширение размера диска
+        """
 
         try:
             if pool_name and disk_name:
-                return self._edit_pool_disk(pool_name, disk_name, disk_update)
+                return self._edit_pool_disk(pool_name, disk_name, new_size_gb)
             elif path:
-                return self._edit_file_disk(path, disk_update)
+                return self._edit_file_disk(path, new_size_gb)
             else:
                 return None
 
@@ -292,26 +295,39 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка: {e}")
             return None
 
-    def _edit_pool_disk(self, pool_name: str, disk_name: str, disk_update: DiskUpdate) -> Disk | None:
+    def edit_disk(self, pool_name: str | None = None, disk_name: str | None = None,
+                  path: str | None = None, disk_update: DiskUpdate | None = None) -> Disk | None:
+        raise NotImplementedError
+        # if not disk_update:
+        #     self.logger.error("Не указана модель обновления")
+        #     return None
+        #
+        # try:
+        #     if pool_name and disk_name:
+        #         return self._edit_pool_disk(pool_name, disk_name, disk_update)
+        #     elif path:
+        #         return self._edit_file_disk(path, disk_update)
+        #     else:
+        #         return None
+        #
+        # except libvirt.libvirtError as e:
+        #     self.logger.error(f"Ошибка libvirt: {e}")
+        #     return None
+        # except Exception as e:
+        #     self.logger.exception(f"Ошибка: {e}")
+        #     return None
+
+    def _edit_pool_disk(self, pool_name: str, disk_name: str, new_size_gb: int) -> Disk | None:
         try:
             pool = self.conn.storagePoolLookupByName(pool_name)
             vol = pool.storageVolLookupByName(disk_name)
+            vol_info = vol.info()
+            current_size_gb = vol_info[1] / (1024 ** 3)
 
-            if disk_update.new_size_gb is not None:
-                vol_info = vol.info()
-                current_size_gb = vol_info[1] / (1024 ** 3)
-
-                if disk_update.new_size_gb > current_size_gb:
-                    new_size_bytes = int(disk_update.new_size_gb * 1024 * 1024 * 1024)
-                    vol.resize(new_size_bytes, 0)
-                    self.logger.info(f"Размер изменен на {disk_update.new_size_gb}GB")
-
-            if disk_update.name is not None and disk_update.name != disk_name:
-                xml_desc = vol.XMLDesc()
-                new_xml = xml_desc.replace(f"<name>{disk_name}</name>", f"<name>{disk_update.name}</name>")
-                new_vol = pool.createXML(new_xml, 0)
-                vol.delete(0)
-                disk_name = disk_update.name
+            if new_size_gb > current_size_gb:
+                new_size_bytes = int(new_size_gb * 1024 * 1024 * 1024)
+                vol.resize(new_size_bytes, 0)
+                self.logger.info(f"Размер изменен на {new_size_gb}GB")
 
             return self.get_disk_info(pool_name, disk_name)
 
@@ -319,29 +335,14 @@ class StorageManager(LibvirtClient):
             self.logger.error(f"Ошибка изменения пулового диска: {e}")
             return None
 
-    def _edit_file_disk(self, path: str, disk_update: DiskUpdate) -> Disk | None:
+    def _edit_file_disk(self, path: str, new_size_gb: int) -> Disk | None:
         try:
-            current_disk = self.get_disk_info(path=path)
-            if not current_disk:
-                return None
-
-            if disk_update.name is not None and disk_update.name != current_disk.name:
-                new_path = os.path.join(os.path.dirname(path), disk_update.name)
-                shutil.move(path, new_path)
-
-                old_metadata = f"{path}.meta"
-                new_metadata = f"{new_path}.meta"
-                if os.path.exists(old_metadata):
-                    shutil.move(old_metadata, new_metadata)
-
-                path = new_path
-
-            if disk_update.new_size_gb is not None:
-                current_size_gb = current_disk.get_effective_size_gb()
-
-                if disk_update.new_size_gb > current_size_gb:
-                    self.logger.info(f"Увеличение размера до {disk_update.new_size_gb}GB")
-                    cmd = ["qemu-img", "resize", path, f"{disk_update.new_size_gb}G"]
+            if new_size_gb is not None:
+                current_size_bytes = self.get_disk_size(path)
+                current_size_gb = round(current_size_bytes / (1024 ** 3), 2)
+                if new_size_gb > current_size_gb:
+                    self.logger.info(f"Увеличение размера до {new_size_gb}GB")
+                    cmd = ["qemu-img", "resize", path, f"{new_size_gb}G"]
 
                     self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
                     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -803,6 +804,16 @@ class StorageManager(LibvirtClient):
             return int(size_data * 1024 ** 4)
         else:
             raise ValueError(f"Неизвестный тип размера: {size_type}")
+
+    def get_disk_virtual_size(self, path: str) -> int: # Возвращает размер в байтах
+        cmd = ["qemu-img", "info", path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
+        size_type = result.stdout.split("\n")[2].split(":")[1].split(" ")[2]
+        size_data = float(result.stdout.split("\n")[2].split(":")[1].split(" ")[1])
+        return self.convert_to_bytes_simple(size_data, size_type)
 
     def get_disk_size(self, path: str) -> int: # Возвращает размер в байтах
         cmd = ["qemu-img", "info", path]

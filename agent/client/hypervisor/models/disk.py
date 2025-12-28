@@ -158,20 +158,6 @@ class Disk(BaseModel):
     discard: DiscardMode | None = Field(None, description="Поддержка discard")
     detect_zeroes: DetectZeroesMode | None = Field(None, description="Обнаружение нулей")
 
-    # Валидаторы
-    @field_validator("capacity_gb")
-    def validate_capacity_gb(cls, v, values):
-        """Автоматически вычислять capacity_gb если указан capacity_bytes"""
-        if values.data.get("capacity_bytes"):
-            capacity_bytes = values.data.get("capacity_bytes")
-            if v is None:
-                # Автоматически вычисляем GB из bytes
-                return round(capacity_bytes / (1024 ** 3), 2)
-            elif abs(v * (1024 ** 3) - capacity_bytes) > 1024:
-                # Проверяем согласованность
-                raise ValueError("capacity_gb не соответствует capacity_bytes")
-        return v
-
     @field_validator("allocation_gb")
     def validate_allocation_gb(cls, v, values):
         """Автоматически вычислять allocation_gb если указан allocation_bytes"""
@@ -199,6 +185,16 @@ class Disk(BaseModel):
         elif disk_type == DiskType.POOL_DISK:
             if not values.pool:
                 raise ValueError("Для типа pool_disk обязательно указать pool")
+
+        if values.capacity_bytes:
+            if values.capacity_gb is None:
+                # Автоматически вычисляем GB из bytes
+                values.capacity_gb = values.capacity_bytes / (1024 ** 3)
+            elif values.capacity_gb is not None:
+                capacity_gb_to_bytes = int(values.capacity_gb * 1024 * 1024 * 1024)
+                if capacity_gb_to_bytes != values.capacity_bytes:
+                    raise ValueError("capacity_gb не соответствует capacity_bytes")
+                # Проверяем согласованность
 
         return values
 
@@ -275,8 +271,8 @@ class DiskCreate(BaseModel):
 # Модель для обновления диска
 class DiskUpdate(BaseModel):
     """Модель для обновления диска"""
-    name: str | None = Field(None, min_length=1, max_length=255)
-    description: str | None = Field(None, max_length=500)
+    # name: str | None = Field(None, min_length=1, max_length=255)
+    # description: str | None = Field(None, max_length=500)
     new_size_gb: float | None = Field(None, gt=0, le=65536, description="Новый размер (только увеличение)")
 
 
