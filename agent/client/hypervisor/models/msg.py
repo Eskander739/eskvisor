@@ -2,6 +2,7 @@ from enum import Enum
 
 from pydantic import BaseModel, model_validator
 
+from agent.client.hypervisor.models.disk import Disk
 from agent.client.hypervisor.models.vm import VirtualMachine
 
 
@@ -13,6 +14,12 @@ class CommandMessagesEnum(Enum):
     vm_create_unexpected_error = "VM create unexpected error"
     vm_create_subprocess_timeout_error = "VM create subprocess timeout error"
     disk_convert_error = "Disk convert error"
+    disk_not_found = "Disk not found"
+    disk_founded = "Disk founded"
+    disk_not_found_unexpected_error = "Disk not found unexpected error"
+    disk_not_found_libvirt_error = "Disk not found libvirt error"
+    disk_create_error = "Disk create error"
+    disk_successfully_created = "Disk successfully created"
     disk_convert_successfully = "Disk convert successfully"
 
 
@@ -50,3 +57,6 @@ class VmMessage(DefaultMessage):
 class StorageMessage(DefaultMessage):
     target_path: str | None = None
     note: str | None = None
+    disk_info: Disk | None = None
+    stdout: str | None = None
+    stderr: str | None = None

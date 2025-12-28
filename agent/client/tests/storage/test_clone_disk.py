@@ -5,6 +5,8 @@ import shutil
 import pytest
 
 from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus, DiskType
+from agent.client.hypervisor.models.msg import CommandMessagesEnum
+
 
 @pytest.mark.tags("VD‑07", "Клонирование диска")
 @pytest.mark.parametrize("sparse", (True, False))
@@ -28,6 +30,7 @@ def test_vd_06_clone_disk(storage_session, setup_test_environment, sparse, disk_
         attach_disk = storage_session.create_disk(attach_disk_create)
         assert attach_disk is not None, "Ошибка: диск для подключения не создан"
         vm_disk_start = storage_session.get_disk_info(path=attach_disk_create.path)
+        vm_disk_start = vm_disk_start.disk_info
         first_disk_path = vm_disk_start.path
 
         assert vm_disk_start.status.value == DiskStatus.DETACHED.value
@@ -47,6 +50,7 @@ def test_vd_06_clone_disk(storage_session, setup_test_environment, sparse, disk_
         storage_session.clone_disk(source_path=vm_disk_start.path, target_path=target_path,
                                    target_name=cloned_disk_name)
         vm_disk = storage_session.get_disk_info(path=target_path)
+        vm_disk = vm_disk.disk_info
         cloned_disk_path = vm_disk.path
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
@@ -68,8 +72,10 @@ def test_vd_06_clone_disk(storage_session, setup_test_environment, sparse, disk_
         if first_disk_path is not None:
             storage_session.delete_disk(path=first_disk_path)
             vm_disk = storage_session.get_disk_info(path=first_disk_path)
-            assert vm_disk.file_path_exists is False
+            assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
+            assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
         if cloned_disk_path is not None:
             storage_session.delete_disk(path=cloned_disk_path)
             vm_disk = storage_session.get_disk_info(path=cloned_disk_path)
-            assert vm_disk.file_path_exists is False
+            assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
+            assert vm_disk.code == CommandMessagesEnum.disk_not_found.name

@@ -2,6 +2,7 @@ import random
 
 import pytest
 from agent.client.hypervisor.models.disk import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
+from agent.client.hypervisor.models.msg import CommandMessagesEnum
 
 RANDOM_NAME = random.randint(10000, 99999)
 
@@ -31,6 +32,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         assert attach_disk is not None, "Ошибка: диск для подключения не создан"
 
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        vm_disk = vm_disk.disk_info
         disk_path = vm_disk.path
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
@@ -61,4 +63,5 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         if disk_path is not None:
             storage_session.delete_disk(path=disk_path)
             vm_disk = storage_session.get_disk_info(path=disk_path)
-            assert vm_disk.file_path_exists is False
+            assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
+            assert vm_disk.code == CommandMessagesEnum.disk_not_found.name

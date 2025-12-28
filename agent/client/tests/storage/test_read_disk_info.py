@@ -3,6 +3,8 @@ import random
 import pytest
 
 from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus
+from agent.client.hypervisor.models.msg import CommandMessagesEnum
+
 
 @pytest.mark.tags("VD‑08", "Просмотр информации о диске")
 @pytest.mark.parametrize("sparse", (True, False))
@@ -27,6 +29,7 @@ def test_vd_08_disk_info(storage_session, disk_format, sparse):
         attach_disk = storage_session.create_disk(attach_disk_create)
         assert attach_disk is not None, "Ошибка: диск для подключения не создан"
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        vm_disk = vm_disk.disk_info
         disk_virtual_size = storage_session.get_disk_virtual_size(path=attach_disk_create.path)
         disk_path = vm_disk.path
         assert vm_disk.status.value == DiskStatus.DETACHED.value
@@ -46,5 +49,6 @@ def test_vd_08_disk_info(storage_session, disk_format, sparse):
         if disk_path is not None:
             storage_session.delete_disk(path=disk_path)
             vm_disk = storage_session.get_disk_info(path=disk_path)
-            assert vm_disk.file_path_exists is False
+            assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
+            assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
 

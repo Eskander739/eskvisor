@@ -25,26 +25,34 @@ class StorageManager(LibvirtClient):
         self.logger = logging.getLogger(__name__)
         self.libvirt_config = LibvirtConfig()
 
-    def create_disk(self, disk_create: DiskCreate) -> Disk | None:
+    def create_disk(self, disk_create: DiskCreate, request_id: str = str(uuid.uuid4())) -> Disk | StorageMessage:
         try:
             self.logger.info(f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB")
 
             if disk_create.pool:
                 self.logger.debug(f"Создание в пуле: {disk_create.pool}")
-                return self._create_pool_disk(disk_create)
+                return self._create_pool_disk(disk_create, request_id)
             else:
                 self.logger.debug("Создание файлового диска")
-                return self._create_file_disk(disk_create)
+                return self._create_file_disk(disk_create, request_id)
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt: {e}")
-            return None
+            return StorageMessage(request_id=request_id,
+                           message=CommandMessagesEnum.disk_create_error.value,
+                           code=CommandMessagesEnum.disk_create_error.name,
+                           note=str(e))
         except Exception as e:
             self.logger.exception(f"Ошибка: {e}")
-            return None
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_create_error.value,
+                                  code=CommandMessagesEnum.disk_create_error.name,
+                                  note=str(e))
 
-    def _create_file_disk(self, disk_create: DiskCreate) -> Disk | None:
+    def _create_file_disk(self, disk_create: DiskCreate, request_id: str) -> StorageMessage:
         try:
+            create_qcow2_info = None
+            create_raw_info = None
             disk_path = self._get_disk_path(disk_create)
             disk_dir = os.path.dirname(disk_path)
 
@@ -56,11 +64,17 @@ class StorageManager(LibvirtClient):
             size_bytes = int(disk_create.size_gb * 1024 * 1024 * 1024)
 
             if disk_create.format == DiskFormat.QCOW2:
-                self._create_qcow2_disk(disk_path, disk_create.size_gb, disk_create.sparse)
+                create_qcow2_info = self._create_qcow2_disk(disk_path,
+                                                            disk_create.size_gb,
+                                                            request_id,
+                                                            disk_create.sparse)
                 if disk_create.name:
                     self._add_qcow2_metadata(disk_path, disk_create.name)
             else:
-                self._create_raw_disk(disk_path, disk_create.size_gb, disk_create.sparse)
+                create_raw_info = self._create_raw_disk(disk_path,
+                                                        disk_create.size_gb,
+                                                        request_id,
+                                                        disk_create.sparse)
                 if disk_create.name:
                     self._create_metadata_file(disk_path, disk_create)
 
@@ -74,13 +88,18 @@ class StorageManager(LibvirtClient):
                 allocation_bytes=size_bytes,
                 status=DiskStatus.DETACHED
             )
+            storage_message = create_qcow2_info if create_qcow2_info else create_raw_info
+            storage_message.disk_info = disk
 
             self.logger.info(f"Файловый диск создан: {disk.name}")
-            return disk
+            return storage_message
 
         except Exception as e:
             self.logger.exception(f"Ошибка создания файлового диска: {e}")
-            return None
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_create_error.value,
+                                  code=CommandMessagesEnum.disk_create_error.name,
+                                  note=str(e))
 
     def _get_disk_path(self, disk_create: DiskCreate) -> str:
         if disk_create.path:
@@ -99,7 +118,7 @@ class StorageManager(LibvirtClient):
 
         return os.path.join(self.libvirt_config.default_storage_dir, f"disk-{uuid.uuid4().hex[:8]}.{disk_create.format.value}")
 
-    def _create_qcow2_disk(self, disk_path: str, size_gb: float, sparse: bool = True):
+    def _create_qcow2_disk(self, disk_path: str, size_gb: float, request_id: str, sparse: bool = True) -> StorageMessage:
 
         sparse_flag = [] if sparse else ["-o", "preallocation=full"]
         cmd = ["qemu-img", "create", "-f", "qcow2"] + sparse_flag + [disk_path, f"{size_gb}G"]
@@ -108,7 +127,16 @@ class StorageManager(LibvirtClient):
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            raise Exception(f"Ошибка qemu-img: {result.stderr}")
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_create_error.value,
+                                  code=CommandMessagesEnum.disk_create_error.name,
+                                  stderr=result.stderr,
+                                  stdout=result.stdout,
+                                  )
+        return StorageMessage(request_id=request_id,
+                              message=CommandMessagesEnum.disk_successfully_created.value,
+                              code=CommandMessagesEnum.disk_successfully_created.name,
+                              )
 
     def _add_qcow2_metadata(self, disk_path: str, disk_name: str):
 
@@ -131,7 +159,7 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.warning(f"Ошибка при добавлении метаданных: {e}")
 
-    def _create_raw_disk(self, disk_path: str, size_gb: float, sparse: bool = True):
+    def _create_raw_disk(self, disk_path: str, size_gb: float, request_id: str, sparse: bool = True) -> StorageMessage:
         """
         Создать RAW диск через qemu-img
 
@@ -154,9 +182,19 @@ class StorageManager(LibvirtClient):
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            raise Exception(f"Ошибка qemu-img при создании RAW диска: {result.stderr}")
+            self.delete_disk(path=disk_path)
+            return StorageMessage(request_id=request_id,
+                           message=CommandMessagesEnum.disk_create_error.value,
+                           code=CommandMessagesEnum.disk_create_error.name,
+                           stderr=result.stderr,
+                           stdout=result.stdout,
+                           )
 
         self.logger.info(f"RAW диск создан: {disk_path}, размер: {size_gb}GB, sparse: {sparse}")
+        return StorageMessage(request_id=request_id,
+                              message=CommandMessagesEnum.disk_successfully_created.value,
+                              code=CommandMessagesEnum.disk_successfully_created.name,
+                              )
 
     def _create_metadata_file(self, disk_path: str, disk_create: DiskCreate):
         try:
@@ -170,7 +208,7 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.warning(f"Не удалось создать файл метаданных: {e}")
 
-    def _create_pool_disk(self, disk_create: DiskCreate) -> Disk | None:
+    def _create_pool_disk(self, disk_create: DiskCreate, request_id: str) -> Disk | None:
         try:
             pool = self.conn.storagePoolLookupByName(disk_create.pool)
             pool_info = pool.info()
@@ -786,21 +824,37 @@ class StorageManager(LibvirtClient):
 
 
     def get_disk_info(self, pool_name: str | None = None, disk_name: str | None = None,
-                      path: str | None = None) -> Disk | None:
+                      path: str | None = None, request_id: str = str(uuid.uuid4())) -> Disk | StorageMessage:
         try:
             if path:
-                return self._get_file_disk_info(path)
+                if os.path.exists(path):
+                    disk_info = self._get_file_disk_info(path)
+                    return StorageMessage(request_id=request_id,
+                                          message=CommandMessagesEnum.disk_founded.value,
+                                          code=CommandMessagesEnum.disk_founded.name,
+                                          disk_info=disk_info)
+                return StorageMessage(request_id=request_id,
+                                      message=CommandMessagesEnum.disk_not_found.value,
+                                      code=CommandMessagesEnum.disk_not_found.name)
             elif pool_name and disk_name:
                 return self._get_pool_disk_info(pool_name, disk_name)
             else:
-                return None
+                return StorageMessage(request_id=request_id,
+                                      message=CommandMessagesEnum.disk_not_found.value,
+                                      code=CommandMessagesEnum.disk_not_found.name)
 
         except (libvirt.libvirtError, FileNotFoundError) as e:
             self.logger.error(f"Ошибка получения информации: {e}")
-            return None
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_not_found_libvirt_error.value,
+                                  code=CommandMessagesEnum.disk_not_found_libvirt_error.name,
+                                  note=str(e))
         except Exception as e:
             self.logger.exception(f"Неожиданная ошибка: {e}")
-            return None
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_not_found_unexpected_error.value,
+                                  code=CommandMessagesEnum.disk_not_found_unexpected_error.name,
+                                  note=str(e))
 
     @staticmethod
     def convert_to_bytes_simple(size_data: float, size_type: str) -> int:

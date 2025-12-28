@@ -4,6 +4,7 @@ import random
 import pytest
 
 from agent.client.hypervisor.models.disk import DiskQuery, DiskCreate, DiskFormat, DiskStatus
+from agent.client.hypervisor.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("VD‑07", "Удаление диска")
@@ -21,6 +22,7 @@ def test_vd_07_delete_disk(storage_session, setup_test_environment, sparse, disk
     attach_disk = storage_session.create_disk(attach_disk_create)
     assert attach_disk is not None, "Ошибка: диск для подключения не создан"
     vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+    vm_disk = vm_disk.disk_info
 
     assert vm_disk.status.value == DiskStatus.DETACHED.value
     current_disk_name = vm_disk.name.split(".").pop(0)
@@ -36,6 +38,6 @@ def test_vd_07_delete_disk(storage_session, setup_test_environment, sparse, disk
     # ____________________________________Удаление диска____________________________________
     storage_session.delete_disk(path=vm_disk.path)
     vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
-    assert vm_disk.file_path_exists is False
-    assert vm_disk.vm_name is None
+    assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
+    assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
 
