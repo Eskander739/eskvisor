@@ -20,7 +20,14 @@ class CommandMessagesEnum(Enum):
     disk_not_found_libvirt_error = "Disk not found libvirt error"
     disk_create_error = "Disk create error"
     disk_successfully_created = "Disk successfully created"
+    disk_successfully_attached = "Disk successfully attached"
+    disk_attach_error = "Disk attach error"
+    disk_already_attached_error = "Disk already attached error"
+    disk_attach_libvirt_error = "Disk attach libvirt error"
+    disk_attach_unexpected_error = "Disk attach unexpected error"
     disk_convert_successfully = "Disk convert successfully"
+    disk_not_found_by_target_dev = "Disk not found by target_dev"
+    disk_founded_by_target_dev = "Disk founded by target_dev"
 
 
 class DefaultMessage(BaseModel):

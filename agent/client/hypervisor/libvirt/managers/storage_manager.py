@@ -433,22 +433,25 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка клонирования: {e}")
             return None
 
-    def attach_disk(self, disk_attach: DiskAttach) -> bool:
+    def attach_disk(self, disk_attach: DiskAttach, request_id: str) -> StorageMessage:
         try:
-            if not disk_attach:
-                return False
 
             self.logger.info(f"Подключение диска {disk_attach.path} к ВМ {disk_attach.vm_name}")
 
             vm = self.conn.lookupByName(disk_attach.vm_name)
 
-            if self._is_disk_attached_to_vm(disk_attach.path, disk_attach.vm_name):
+            get_vm_by_path = self._find_vm_by_disk_path(disk_attach.path)
+            if get_vm_by_path:
                 self.logger.warning(f"Диск уже подключен")
-                return True
+                return StorageMessage(request_id=request_id,
+                                      message=CommandMessagesEnum.disk_already_attached_error.value,
+                                      code=CommandMessagesEnum.disk_already_attached_error.name
+                                      )
 
             disk_info = self.get_disk_info(path=disk_attach.path)
-            if not disk_info:
-                return False
+            if disk_info.code != CommandMessagesEnum.disk_founded.name:
+                return disk_info
+            disk_info = disk_info.disk_info
 
             bus_type = disk_attach.bus_type or BusType.VIRTIO
             cache_mode = disk_attach.cache_mode.value if disk_attach.cache_mode else "writethrough"
@@ -471,16 +474,27 @@ class StorageManager(LibvirtClient):
                 vm.attachDeviceFlags(disk_xml, libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
 
             self.logger.info(f"Диск успешно подключен как {target_dev}")
-            return True
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_successfully_attached.value,
+                                  code=CommandMessagesEnum.disk_successfully_attached.name
+                                  )
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка подключения: {e}")
-            return False
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_attach_libvirt_error.value,
+                                  code=CommandMessagesEnum.disk_attach_libvirt_error.name,
+                                  note=str(e)
+                                  )
         except Exception as e:
             self.logger.exception(f"Неожиданная ошибка: {e}")
-            return False
+            return StorageMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.disk_attach_unexpected_error.value,
+                                  code=CommandMessagesEnum.disk_attach_unexpected_error.name,
+                                  note=str(e)
+                                  )
 
-    def get_disks_by_vm(self, vm_name: str) -> List[Disk]:
+    def get_disks_by_vm(self, vm_name: str, request_id) -> List[Disk]:
         """
         Получить все диски, подключенные к указанной ВМ
         """
@@ -498,7 +512,8 @@ class StorageManager(LibvirtClient):
                 target_dev = target.get("dev")
                 if target_dev:
                     try:
-                        disk = self.get_disk_info_by_target_dev(vm_name, target_dev)
+                        disk = self.get_disk_info_by_target_dev(vm_name, target_dev, request_id)
+                        disk = disk.disk_info
                         disks.append(disk)
                     except Exception as e:
                         self.logger.warning(f"Не удалось получить диск {target_dev}: {e}")
@@ -511,7 +526,7 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка при получении дисков ВМ {vm_name}: {e}")
             return []
 
-    def get_disk_info_by_target_dev(self, vm_name: str, target_dev: str) -> Disk:
+    def get_disk_info_by_target_dev(self, vm_name: str, target_dev: str, request_id: str) -> StorageMessage:
         """
         Получить информацию о диске по target_dev в конкретной ВМ
         """
@@ -533,7 +548,10 @@ class StorageManager(LibvirtClient):
                     break
 
             if disk_element is None:
-                raise ValueError(f"Диск с target_dev='{target_dev}' не найден в ВМ {vm_name}")
+                return StorageMessage(request_id=request_id,
+                                      message=CommandMessagesEnum.disk_not_found_by_target_dev.value,
+                                      code=CommandMessagesEnum.disk_not_found_by_target_dev.name,
+                                      )
 
             # Извлекаем данные из XML
             source = disk_element.find("source")
@@ -631,7 +649,12 @@ class StorageManager(LibvirtClient):
             )
 
             self.logger.info(f"Информация о диске {target_dev} получена: {disk_name}")
-            return disk
+            storage_message = StorageMessage(request_id=request_id,
+                                             message=CommandMessagesEnum.disk_founded_by_target_dev.value,
+                                             code=CommandMessagesEnum.disk_founded_by_target_dev.name,
+                                             )
+            storage_message.disk_info = disk
+            return storage_message
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt при получении диска {target_dev}: {e}")
@@ -1339,7 +1362,7 @@ if __name__ == "__main__":
 
         # Получение списка всех дисков
 
-        for vm_disk in manager.get_disks_by_vm("test-vm-03"):
+        for vm_disk in manager.get_disks_by_vm("test-vm-03", str(uuid.uuid4())):
             print(vm_disk)
         disks = manager.list_disks()
         for current_disk in disks:

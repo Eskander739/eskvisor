@@ -47,11 +47,31 @@ def create_stopped_vm():
         vm_config = simple_hotplug_vm_config
         vm_config.name = random_name
         vm_manager.create_vm(vm_config)
-        vm_manager.shutdown_vm(simple_hotplug_vm_config.name, force=True)
+        vm_manager.shutdown_vm(vm_config.name, force=True)
         assert wait_while_not(lambda: vm_manager.get_vm_by_name(vm_config.name).state == VMState.SHUTOFF, timeout=120)
 
         yield vm_config
-        vm_manager.delete_vm_with_force(simple_hotplug_vm_config.name)
+        vm_manager.delete_vm_with_force(vm_config.name)
+
+
+@pytest.fixture(scope="session")
+def multi_create_stopped_vm():
+    with VmManager().with_default_user() as vm_manager:
+        vm_config_names = []
+
+        for _ in range(2):
+            current_vm_name = f"TEST-VM_{random.randint(10000, 99999)}"
+            vm_config = simple_hotplug_vm_config
+            vm_config.name = current_vm_name
+            vm_manager.create_vm(vm_config)
+            vm_manager.shutdown_vm(vm_config.name, force=True)
+            assert wait_while_not(lambda: vm_manager.get_vm_by_name(vm_config.name).state == VMState.SHUTOFF,
+                                  timeout=120)
+            vm_config_names.append(current_vm_name)
+        yield vm_config_names
+
+        for vm_config_name in vm_config_names:
+            vm_manager.delete_vm_with_force(vm_config_name)
 
 
 

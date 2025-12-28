@@ -1048,9 +1048,10 @@ if __name__ == "__main__":
         # vm_manager.start_vm("test-vm-03")
         # vm_manager.shutdown_vm("test-hotplug-vm-2", force=True)
         # vm_manager.start_vm("TEST-VM_66323")
-        vm_manager.delete_vm_with_force("test-hotplug-vm-2")
+        # vm_manager.delete_vm_with_force("test-hotplug-vm-2")
         vms = vm_manager.list_vms()
         print(f"Найдено ВМ: {len(vms)}")
 
         for vm in vms:
+            vm_manager.delete_vm_with_force(vm.name)
             print(f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs")

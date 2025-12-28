@@ -1,4 +1,5 @@
 import random
+import uuid
 
 import pytest
 from agent.client.hypervisor.models.disk import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
@@ -22,6 +23,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
     """
 
     vm_name = create_stopped_vm.name
+    request_id = str(uuid.uuid4())
     target_dev = "vdb"
     disk_path = None
     try:
@@ -29,7 +31,8 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         attach_disk_create = DiskCreate(name=f"disk-test-{RANDOM_NAME}.qcow2", size_gb=0.2, format=DiskFormat.QCOW2,
                                         sparse=True)
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk is not None, "Ошибка: диск для подключения не создан"
+        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
+        assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
 
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
         vm_disk = vm_disk.disk_info
@@ -44,9 +47,12 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
 
         # ____________________________________Подключение диска____________________________________
 
-        storage_session.attach_disk(disk_attach)
+        storage_session.attach_disk(disk_attach, request_id=request_id)
 
-        vm_disk = storage_session.get_disk_info_by_target_dev(vm_name=vm_name, target_dev=target_dev)
+        vm_disk = storage_session.get_disk_info_by_target_dev(vm_name=vm_name,
+                                                              target_dev=target_dev,
+                                                              request_id=request_id)
+        vm_disk = vm_disk.disk_info
 
         assert vm_disk.status.value == DiskStatus.ATTACHED.value
         assert vm_disk.vm_name == vm_name
@@ -56,6 +62,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         storage_session.detach_disk(DiskDetach(vm_name=vm_name, target_dev=disk_attach.target_dev))
 
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        vm_disk = vm_disk.disk_info
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
     finally:
