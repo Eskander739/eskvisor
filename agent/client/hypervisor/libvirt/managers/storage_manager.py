@@ -400,6 +400,7 @@ class StorageManager(LibvirtClient):
             self.logger.info(f"Клонирование диска: {source_path} -> {target_path}")
 
             source_disk = self.get_disk_info(path=source_path)
+            source_disk = source_disk.disk_info
             if not source_disk:
                 return None
 
