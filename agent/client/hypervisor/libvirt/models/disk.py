@@ -7,7 +7,7 @@ from agent.client.hypervisor.libvirt.models.enum import DiskBus, DiskType, DiskF
 
 class VMDisk(BaseModel):
     """Модель диска ВМ"""
-    path: str
+    path: str | None = None
     size_gb: int | None = None
     bus: DiskBus | str = DiskBus.VIRTIO
     disk_type: DiskType = DiskType.FILE

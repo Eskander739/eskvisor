@@ -1,0 +1,46 @@
+from enum import Enum
+
+from pydantic import BaseModel, model_validator
+
+from agent.client.hypervisor.models.vm import VirtualMachine
+
+
+class CommandMessagesEnum(Enum):
+    vm_with_name_already_exists = "VM with already exists"
+    vm_created_but_not_found_in_libvirt = "VM created but not found in libvirt"
+    vm_successfully_created = "VM successfully created"
+    vm_create_error = "VM create error"
+    vm_create_unexpected_error = "VM create unexpected error"
+    vm_create_subprocess_timeout_error = "VM create subprocess timeout error"
+
+
+class DefaultMessage(BaseModel):
+    request_id: str
+    message: CommandMessagesEnum | str
+    code: CommandMessagesEnum | str
+
+    @model_validator(mode="after")
+    def validate_disk_type_constraints(cls, values):
+        """
+        Проверка условно обязательных полей в зависимости от типа
+        """
+        CommandMessagesEnum(values.message)
+
+        for key, value in CommandMessagesEnum.__dict__.items():
+            if values.code in key or values.code == key:
+                break
+        else:
+            raise ValueError(f"Некорректный code: {values.code}")
+
+        return values
+
+class VmError(DefaultMessage):
+    pass
+
+class VmMessage(DefaultMessage):
+    success: bool
+    command: str | None = None
+    vm_info: None | VirtualMachine = None
+    stdout: str | None = None
+    stderr: str | None = None
+    note: str | None = None

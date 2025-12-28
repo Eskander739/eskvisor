@@ -27,6 +27,10 @@ class LibvirtConfig:
         return {".qcow2", ".raw", ".img", ".vmdk", ".vdi", ".vhd", ".vhdx"}
 
     @property
+    def default_session_storage(self):
+        return f"{str(Path.home())}/.local/share/libvirt/images"
+
+    @property
     def default_storage_dir(self):
         return "/var/lib/libvirt/images"
 

@@ -1,4 +1,6 @@
-from pydantic import field_validator, BaseModel, Field
+import uuid
+
+from pydantic import field_validator, BaseModel, Field, model_validator
 
 from agent.client.hypervisor.libvirt.models.controller import VMController
 from agent.client.hypervisor.libvirt.models.disk import VMDisk
@@ -11,6 +13,8 @@ from agent.client.hypervisor.models.general import MachineType
 class VMCreateRequest(BaseModel):
     """Модель запроса на создание ВМ через virt-install"""
     # Основные параметры
+
+    request_id: str = str(uuid.uuid4())
     name: str
     install_method: str | None = "import"  # "import", "pxe", "boot", "cdrom", "location"
     description: str | None = None
@@ -40,7 +44,7 @@ class VMCreateRequest(BaseModel):
 
     # Прочие настройки
     autostart: bool = False
-    boot_devices: list[str] = Field(default_factory=lambda: ["hd"])
+    boot_devices: list[str] | None = None
     extra_args: str | None = None
     location: str | None = None  # Путь к ISO для установки
     cdrom: str | None = None
@@ -80,6 +84,23 @@ class VMCreateRequest(BaseModel):
         default_factory=list,
         description="Дополнительные фичи CPU"
     )
+
+    @model_validator(mode="after")
+    def validate_disk_type_constraints(cls, values):
+        """Проверка условно обязательных полей в зависимости от типа"""
+
+        if values.boot_devices:
+            for current_disk in values.disks:
+                if current_disk.path is None:
+                    raise ValueError("Несовместимые параметры, "
+                                     f"нельзя использовать boot_devices='{values.boot_devices}' и диски с path=None")
+
+        if values.boot_devices is None and values.install_method is None:
+            raise ValueError("Несовместимые параметры "
+                             "нельзя использовать boot_devices=None и диски с install_method=None")
+
+
+        return values
 
     # Валидаторы
     @field_validator("os_variant")

@@ -274,7 +274,13 @@ simple_hotplug_vm_config = VMCreateRequest(
     # Обязательные параметры для hotplug
     architecture=Architecture.X86_64,
     machine_type=MachineType.Q35,  # Обязательно для hotplug!
-
+    disks=[
+        VMDisk(
+            size_gb=1,
+            bus=DiskBus.VIRTIO,
+            format=DiskFormat.QCOW2
+        )
+    ],
     # Минимальные контроллеры для hotplug
     controllers=[
         # PCIe root (обязательно)
@@ -358,7 +364,8 @@ simple_hotplug_vm_config = VMCreateRequest(
         "apic": "on",
     },
 
-    os_variant="ubuntu22.04",
+    os_variant="generic",
+    install_method="import",
     qemu_agent=True,  # Важно для корректной работы hotplug
     autostart=False
 )
