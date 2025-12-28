@@ -1,78 +1,75 @@
 import os
+import random
 import shutil
 
+import pytest
 
-def test_vd_06_clone_disk():
+from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus, DiskType
+
+@pytest.mark.tags("VD‑07", "Клонирование диска")
+@pytest.mark.parametrize("sparse", (True, False))
+@pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
+def test_vd_06_clone_disk(storage_session, setup_test_environment, sparse, disk_format):
     """
     VD‑06: Клонирование диска
 
     Создать копию диска. Проверить, что клон идентичен исходному.
     """
-    print("\n" + "=" * 60)
-    print("VD‑06: Клонирование диска")
-    print("=" * 60)
 
-    with StorageManager() as manager:
-        # Создаем исходный диск
-        source_disk_path = os.path.join(test_env['raw_dir'], "clone-source.img")
-        clone_disk_path = os.path.join(test_env['raw_dir'], "clone-copy.img")
+    first_disk_path = None
+    cloned_disk_path = None
 
-        # Создаем исходный файл с тестовыми данными
-        print("\n1. Создание исходного диска:")
-        test_data = b"Test data for cloning " * 100  # 2KB тестовых данных
+    try:
+        # ____________________________________Создание диска____________________________________
+        random_name = random.randint(10000, 99999)
+        cloned_disk_name = f"disk-test-cloned-{random_name}"
+        cloned_disk_file_name = f"disk-test-cloned-{random_name}.{disk_format.value}"
+        attach_disk_create = DiskCreate(name=f"disk-test-{random_name}", size_gb=0.2, format=disk_format, sparse=sparse)
+        attach_disk = storage_session.create_disk(attach_disk_create)
+        assert attach_disk is not None, "Ошибка: диск для подключения не создан"
+        vm_disk_start = storage_session.get_disk_info(path=attach_disk_create.path)
+        first_disk_path = vm_disk_start.path
 
-        with open(source_disk_path, 'wb') as f:
-            f.write(test_data)
+        assert vm_disk_start.status.value == DiskStatus.DETACHED.value
+        current_disk_name = vm_disk_start.name.split(".").pop(0)
+        assert current_disk_name == attach_disk_create.name
+        assert vm_disk_start.format == disk_format
+        if not sparse:
+            assert round(vm_disk_start.capacity_bytes / (1024 ** 3), 2) == attach_disk_create.size_gb
+        else:
+            assert round(vm_disk_start.capacity_bytes / (1024 ** 3), 2) < 0.1
+        assert vm_disk_start.file_path_exists is True
+        assert vm_disk_start.path == attach_disk_create.path
 
-        source_size = os.path.getsize(source_disk_path)
-        print(f"   ✅ Создан исходный диск: {source_disk_path}")
-        print(f"   📏 Размер: {source_size / 1024:.2f} KB")
+        # ____________________________________Клонирование диска диска____________________________________
+        target_path = vm_disk_start.path.replace(f"{attach_disk_create.name}.{attach_disk_create.format.value}",
+                                                 cloned_disk_file_name)
+        storage_session.clone_disk(source_path=vm_disk_start.path, target_path=target_path,
+                                   target_name=cloned_disk_name)
+        vm_disk = storage_session.get_disk_info(path=target_path)
+        cloned_disk_path = vm_disk.path
 
-        # Клонируем диск (простое копирование файла)
-        print("\n2. Клонирование диска:")
-        try:
-            shutil.copy2(source_disk_path, clone_disk_path)
-            print(f"   ✅ Диск клонирован: {clone_disk_path}")
+        assert vm_disk.status.value == DiskStatus.DETACHED.value
+        assert vm_disk.format.value == disk_format.value
+        assert vm_disk.type.value == DiskType.EXTERNAL_DISK.value
+        assert vm_disk.file_path_exists is True
+        if not sparse:
+            assert round(vm_disk_start.capacity_bytes / (1024 ** 3), 2) == attach_disk_create.size_gb
+        else:
+            assert round(vm_disk_start.capacity_bytes / (1024 ** 3), 2) < 0.1
+        assert vm_disk.path == target_path
 
-            # Проверяем, что файл скопирован
-            assert os.path.exists(clone_disk_path), "Ошибка: клон не создан"
+        current_disk_name = vm_disk.name.split(".").pop(0)
+        assert current_disk_name == cloned_disk_name
+    finally:
 
-            # Сравниваем размеры
-            clone_size = os.path.getsize(clone_disk_path)
-            print(f"   📏 Размер клона: {clone_size / 1024:.2f} KB")
+        # ____________________________________Удаление дисков(постусловие)____________________________________
 
-            assert source_size == clone_size, f"Ошибка: размеры не совпадают: {source_size} != {clone_size}"
-
-            # Сравниваем содержимое
-            print("\n3. Проверка идентичности содержимого:")
-            with open(source_disk_path, 'rb') as f1, open(clone_disk_path, 'rb') as f2:
-                source_content = f1.read()
-                clone_content = f2.read()
-
-                assert source_content == clone_content, "Ошибка: содержимое дисков не идентично"
-                print("   ✅ Содержимое дисков идентично")
-
-            # Проверяем через StorageManager
-            print("\n4. Проверка через StorageManager:")
-            source_info = manager.get_disk_info(path=source_disk_path)
-            clone_info = manager.get_disk_info(path=clone_disk_path)
-
-            assert source_info is not None and clone_info is not None, "Ошибка: информация о дисках не получена"
-
-            print(f"   📝 Исходный диск: {source_info.name}, Формат: {source_info.format.value}")
-            print(f"   📝 Клон: {clone_info.name}, Формат: {clone_info.format.value}")
-
-            # Основные параметры должны совпадать
-            assert source_info.format == clone_info.format, "Ошибка: форматы не совпадают"
-            assert source_info.get_effective_size_gb() == clone_info.get_effective_size_gb(), "Ошибка: размеры не совпадают"
-
-            print("   ✅ Основные параметры дисков совпадают")
-
-        except Exception as e:
-            print(f"   ⚠️  Ошибка при клонировании: {e}")
-            print("   ⚠️  Пропускаем тест клонирования")
-
-        # Очистка
-        for disk_path in [source_disk_path, clone_disk_path]:
-            if os.path.exists(disk_path):
-                os.remove(disk_path)
+        if first_disk_path is not None:
+            storage_session.delete_disk(path=first_disk_path)
+            vm_disk = storage_session.get_disk_info(path=first_disk_path)
+            assert vm_disk.file_path_exists is False
+        if cloned_disk_path is not None:
+            storage_session.delete_disk(path=cloned_disk_path)
+            vm_disk = storage_session.get_disk_info(path=cloned_disk_path)
+            assert vm_disk.file_path_exists is False
