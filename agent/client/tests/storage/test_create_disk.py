@@ -1,9 +1,8 @@
-import os
 import random
 
 import pytest
 
-from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskQuery, DiskStatus
+from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus
 
 
 @pytest.mark.tags("VD‑01", "Создание нового виртуального диска")

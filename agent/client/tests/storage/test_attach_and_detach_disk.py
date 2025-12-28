@@ -47,6 +47,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         vm_disk = storage_session.get_disk_info_by_target_dev(vm_name=vm_name, target_dev=target_dev)
 
         assert vm_disk.status.value == DiskStatus.ATTACHED.value
+        assert vm_disk.vm_name == vm_name
 
         # ____________________________________Отключение диска____________________________________
 

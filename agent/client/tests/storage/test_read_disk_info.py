@@ -1,59 +1,50 @@
-import os
+import random
 
-from agent.client.hypervisor.models.disk import DiskQuery, DiskFormat
+import pytest
 
+from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus
 
-def test_vd_08_disk_info():
+@pytest.mark.tags("VD‑08", "Просмотр информации о диске")
+@pytest.mark.parametrize("sparse", (True, False))
+@pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
+def test_vd_08_disk_info(storage_session, disk_format, sparse):
     """
     VD‑08: Просмотр информации о диске
 
     Открыть свойства диска: размер, формат, путь, использование.
     """
-    print("\n" + "=" * 60)
-    print("VD‑08: Просмотр информации о диске")
-    print("=" * 60)
 
-    with StorageManager() as manager:
-        # Создаем тестовый диск для проверки информации
-        test_disk_path = os.path.join(test_env['raw_dir'], "info-test-disk.img")
+    disk_path = None
+    def bytes_to_gb(data: int):
+        return round(data / (1024 ** 3), 2)
+    try:
+        # ____________________________________Создание диска____________________________________
+        random_name = random.randint(10000, 99999)
+        attach_disk_create = DiskCreate(name=f"disk-test-{random_name}",
+                                        size_gb=0.2,
+                                        format=disk_format,
+                                        sparse=sparse)
+        attach_disk = storage_session.create_disk(attach_disk_create)
+        assert attach_disk is not None, "Ошибка: диск для подключения не создан"
+        vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        disk_virtual_size = storage_session.get_disk_virtual_size(path=attach_disk_create.path)
+        disk_path = vm_disk.path
+        assert vm_disk.status.value == DiskStatus.DETACHED.value
+        current_disk_name = vm_disk.name.split(".").pop(0)
+        assert current_disk_name == attach_disk_create.name
+        assert vm_disk.format == disk_format
+        if not sparse:
+            assert round(vm_disk.capacity_bytes / (1024 ** 3), 2) == attach_disk_create.size_gb
+        else:
+            assert round(vm_disk.capacity_bytes / (1024 ** 3), 2) < 0.1
 
-        # Создаем простой файл для теста
-        with open(test_disk_path, 'wb') as f:
-            f.write(b'\0' * 1024 * 1024)  # 1MB файл
-
-        # Получаем информацию о диске
-        disk_info = manager.get_disk_info(path=test_disk_path)
-
-        assert disk_info is not None, "Ошибка: информация о диске не получена"
-        assert disk_info.name == "info-test-disk.img", f"Ошибка: неверное имя диска: {disk_info.name}"
-        assert disk_info.path == test_disk_path, f"Ошибка: неверный путь к диску: {disk_info.path}"
-        assert disk_info.format in [DiskFormat.RAW, DiskFormat.UNKNOWN], f"Ошибка: неверный формат: {disk_info.format}"
-        assert disk_info.capacity_bytes >= 1024 * 1024, f"Ошибка: неверный размер в байтах: {disk_info.capacity_bytes}"
-
-        print("   ✅ Информация о диске получена:")
-        print(f"     📝 Имя: {disk_info.name}")
-        print(f"     📍 Путь: {disk_info.path}")
-        print(f"     🏷️  Формат: {disk_info.format.value}")
-        print(f"     📏 Размер: {disk_info.get_effective_size_gb()} GB")
-        print(f"     📊 Использование: {disk_info.get_allocation_percentage()}%")
-        print(f"     🏷️  Тип: {disk_info.type.value}")
-        print(f"     📊 Статус: {disk_info.status.value if disk_info.status else 'N/A'}")
-
-        # Проверяем информацию через list_disks с фильтром
-        print("\n   Проверка фильтрации дисков:")
-
-        # Фильтр по формату
-        raw_query = DiskQuery(format=DiskFormat.RAW)
-        raw_disks = manager.list_disks(raw_query)
-        print(f"     RAW дисков найдено: {len(raw_disks)}")
-
-        # Фильтр по размеру
-        size_query = DiskQuery(min_size_gb=0.5)
-        large_disks = manager.list_disks(size_query)
-        print(f"     Дисков > 0.5GB: {len(large_disks)}")
-
-        # Фильтр по имени
-        name_query = DiskQuery(vm_name=None)  # Диски без ВМ
-        detached_disks = manager.list_disks(name_query)
-        print(f"     Отключенных дисков: {len(detached_disks)}")
+        assert bytes_to_gb(disk_virtual_size) == attach_disk_create.size_gb
+        assert vm_disk.file_path_exists is True
+        assert vm_disk.path == attach_disk_create.path
+    finally:
+        # ____________________________________Удаление диска(постусловие)____________________________________
+        if disk_path is not None:
+            storage_session.delete_disk(path=disk_path)
+            vm_disk = storage_session.get_disk_info(path=disk_path)
+            assert vm_disk.file_path_exists is False
 
