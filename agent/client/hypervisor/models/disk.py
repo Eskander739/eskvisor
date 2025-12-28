@@ -200,10 +200,6 @@ class Disk(BaseModel):
             if not values.pool:
                 raise ValueError("Для типа pool_disk обязательно указать pool")
 
-        # Для всех дисков проверяем capacity
-        # if not values.capacity_bytes and not values.capacity_gb:
-        #     raise ValueError("Необходимо указать либо capacity_bytes, либо capacity_gb")
-
         return values
 
     @field_validator("target_dev")

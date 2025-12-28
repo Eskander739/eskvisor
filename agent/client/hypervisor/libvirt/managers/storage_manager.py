@@ -24,7 +24,6 @@ class StorageManager(LibvirtClient):
         super().__init__(connection_uri, username, password)
         self.logger = logging.getLogger(__name__)
         self.libvirt_config = LibvirtConfig()
-        self._default_storage_dir = "/var/lib/libvirt/images"
 
     def create_disk(self, disk_create: DiskCreate) -> Disk | None:
         try:
@@ -96,9 +95,9 @@ class StorageManager(LibvirtClient):
             extension = f".{disk_create.format.value}"
             filename = f"{disk_create.name}{extension}" if not disk_create.name.endswith(
                 extension) else disk_create.name
-            return os.path.join(self._default_storage_dir, filename)
+            return os.path.join(self.libvirt_config.default_storage_dir, filename)
 
-        return os.path.join(self._default_storage_dir, f"disk-{uuid.uuid4().hex[:8]}.{disk_create.format.value}")
+        return os.path.join(self.libvirt_config.default_storage_dir, f"disk-{uuid.uuid4().hex[:8]}.{disk_create.format.value}")
 
     def _create_qcow2_disk(self, disk_path: str, size_gb: float, sparse: bool = True):
 
@@ -766,7 +765,6 @@ class StorageManager(LibvirtClient):
             self.logger.error(f"Ошибка поиска устройства: {e}")
             return "vdz"
 
-    # def get_disk_size(self, path: str):
 
     def get_disk_info(self, pool_name: str | None = None, disk_name: str | None = None,
                       path: str | None = None) -> Disk | None:
@@ -807,11 +805,19 @@ class StorageManager(LibvirtClient):
         else:
             raise ValueError(f"Неизвестный тип размера: {size_type}")
 
+    def get_disk_size(self, path: str) -> int: # Возвращает размер в байтах
+        cmd = ["qemu-img", "info", path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
+        size_type = result.stdout.split("\n")[3].split(":")[1].split(" ")[2]
+        size_data = float(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
+        return self.convert_to_bytes_simple(size_data, size_type)
+
     def _get_file_disk_info(self, path: str) -> Disk | None:
         try:
             file_path_exists = os.path.exists(path)
-            print("path :", path)
-
             disk_format = DiskFormat.UNKNOWN
             if path.endswith('.qcow2'):
                 disk_format = DiskFormat.QCOW2
@@ -824,17 +830,7 @@ class StorageManager(LibvirtClient):
             elif path.endswith('.vhd') or path.endswith('.vhdx'):
                 disk_format = DiskFormat.VHDX
 
-            if file_path_exists:
-                cmd = ["qemu-img", "info", path]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-
-                if result.returncode != 0:
-                    raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
-                size_type = result.stdout.split("\n")[3].split(":")[1].split(" ")[2]
-                size_data = float(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
-                size_bytes = self.convert_to_bytes_simple(size_data, size_type)
-            else:
-                size_bytes = 0
+            size_bytes = self.get_disk_size(path) if file_path_exists else 0
 
             disk_name = os.path.basename(path)
 
@@ -844,7 +840,6 @@ class StorageManager(LibvirtClient):
                     with open(metadata_path, 'r') as f:
                         for line in f:
                             if line.startswith('name='):
-                                print("МЕТА ДАТА: ", disk_name, "^^^", line)
                                 disk_name = line.strip().split('=', 1)[1]
                                 break
                 except Exception:
@@ -991,13 +986,7 @@ class StorageManager(LibvirtClient):
 
     def _get_file_disks(self, query: DiskQuery | None) -> List[Disk]:
         disks = []
-        standard_dirs = [
-            self._default_storage_dir,
-            "/var/lib/libvirt/volumes",
-            f"{str(Path.home())}/.local/share/libvirt/images",
-            "/opt/vm_disks",
-            os.path.expanduser("~/vm_disks")
-        ]
+        standard_dirs = list(self.libvirt_config.search_dirs)
 
         if query and hasattr(query, 'search_path'):
             standard_dirs.insert(0, query.search_path)
@@ -1017,9 +1006,8 @@ class StorageManager(LibvirtClient):
         return disks
 
     def _is_disk_file(self, file_path: str) -> bool:
-        disk_extensions = {'.qcow2', '.raw', '.img', '.vmdk', '.vdi', '.vhd', '.vhdx'}
         return (os.path.isfile(file_path) and
-                any(file_path.endswith(ext) for ext in disk_extensions))
+                any(file_path.endswith(ext) for ext in self.libvirt_config.disk_extensions))
 
     def _get_attached_disks(self, query: DiskQuery | None, existing_disks: List[Disk] | None = None) -> List[Disk]:
         attached_disks = []
@@ -1133,18 +1121,9 @@ class StorageManager(LibvirtClient):
                     pass
 
             if disk_format == DiskFormat.UNKNOWN:
-                if disk_path.endswith('.qcow2'):
-                    disk_format = DiskFormat.QCOW2
-                elif disk_path.endswith('.raw') or disk_path.endswith('.img'):
-                    disk_format = DiskFormat.RAW
-                elif disk_path.endswith('.vmdk'):
-                    disk_format = DiskFormat.VMDK
-                elif disk_path.endswith('.vdi'):
-                    disk_format = DiskFormat.VDI
-                elif disk_path.endswith('.vhd') or disk_path.endswith('.vhdx'):
-                    disk_format = DiskFormat.VHDX
+                disk_format = self.libvirt_config.disk_format_by_path(disk_path)
 
-            size_bytes = os.path.getsize(disk_path) if os.path.exists(disk_path) else 0
+            size_bytes = self.get_disk_size(disk_path) if os.path.exists(disk_path) else 0
 
             bus_type = None
             if bus_type_str:
