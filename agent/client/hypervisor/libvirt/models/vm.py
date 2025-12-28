@@ -21,7 +21,7 @@ class VMCreateRequest(BaseModel):
     architecture: Architecture | str = Architecture.X86_64
     emulator_type: EmulatorType = EmulatorType.KVM
     os_type: OSType | str = OSType.LINUX
-    os_variant: str | None = None  # ubuntu22.04, centos8, win10 и т.д.
+    os_variant: str | None = "generic"  # ubuntu22.04, centos8, win10 и т.д.
 
     # Ресурсы
     memory_mb: int = 1024
@@ -43,6 +43,7 @@ class VMCreateRequest(BaseModel):
     console_type: str = "pty"
 
     # Прочие настройки
+    autostart_vm: bool = False
     autostart: bool = False
     boot_devices: list[str] | None = None
     extra_args: str | None = None

@@ -270,6 +270,7 @@ simple_hotplug_vm_config = VMCreateRequest(
     description="Тестовая ВМ с базовой поддержкой hotplug",
     memory_mb=2048,
     vcpus=2,
+    autostart_vm=False,
 
     # Обязательные параметры для hotplug
     architecture=Architecture.X86_64,

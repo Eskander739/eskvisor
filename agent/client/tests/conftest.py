@@ -47,8 +47,7 @@ def create_stopped_vm():
         vm_config = simple_hotplug_vm_config
         vm_config.name = random_name
         vm_manager.create_vm(vm_config)
-        vm_manager.shutdown_vm(vm_config.name, force=True)
-        assert wait_while_not(lambda: vm_manager.get_vm_by_name(vm_config.name).state == VMState.SHUTOFF, timeout=120)
+        assert wait_while_not(lambda: vm_manager.get_vm_by_name(vm_config.name, vm_config.request_id).state == VMState.SHUTOFF, timeout=120)
 
         yield vm_config
         vm_manager.delete_vm_with_force(vm_config.name)
@@ -64,8 +63,7 @@ def multi_create_stopped_vm():
             vm_config = simple_hotplug_vm_config
             vm_config.name = current_vm_name
             vm_manager.create_vm(vm_config)
-            vm_manager.shutdown_vm(vm_config.name, force=True)
-            assert wait_while_not(lambda: vm_manager.get_vm_by_name(vm_config.name).state == VMState.SHUTOFF,
+            assert wait_while_not(lambda: vm_manager.get_vm_by_name(vm_config.name, vm_config.request_id).state == VMState.SHUTOFF,
                                   timeout=120)
             vm_config_names.append(current_vm_name)
         yield vm_config_names
@@ -79,3 +77,9 @@ def multi_create_stopped_vm():
 def storage_session():
     with StorageManager().with_default_user() as storage_manager:
         yield storage_manager
+
+
+@pytest.fixture(scope="session", autouse=True)
+def vm_session():
+    with VmManager().with_default_user() as vm_manager:
+        yield vm_manager

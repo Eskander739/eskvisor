@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import json
 import time
+import uuid
 from typing import Any
 from pathlib import Path
 
@@ -53,8 +54,8 @@ class VmManager(LibvirtClient):
         try:
             self.logger.info(f"Запуск создания ВМ: {config.name}")
 
-            existing_vm = self.get_vm_by_name(config.name)
-            if existing_vm:
+            existing_vm = self.get_vm_by_name(config.name, config.request_id)
+            if existing_vm.message == CommandMessagesEnum.vm_successfully_found.value:
                 return VmError(message=CommandMessagesEnum.vm_with_name_already_exists.value.format(config.name),
                                code=CommandMessagesEnum.vm_with_name_already_exists.name,
                                request_id=config.request_id)
@@ -100,7 +101,7 @@ class VmManager(LibvirtClient):
             if result.returncode == 0:
                 time.sleep(2)
 
-                vm_info = self.get_vm_by_name(config.name)
+                vm_info = self.get_vm_by_name(config.name, config.request_id)
 
                 if vm_info:
                     self.logger.info(f"ВМ '{config.name}' создана успешно")
@@ -112,7 +113,7 @@ class VmManager(LibvirtClient):
                                      message=CommandMessagesEnum.vm_successfully_created.value,
                                      code=CommandMessagesEnum.vm_successfully_created.name,
                                      command=command,
-                                     vm_info=vm_info,
+                                     vm_info=vm_info.vm_info,
                                      stdout=result.stdout,
                                      stderr=result.stderr)
                 else:
@@ -142,7 +143,7 @@ class VmManager(LibvirtClient):
                     )
 
                     if import_result.returncode == 0:
-                        vm_info = self.get_vm_by_name(config.name)
+                        vm_info = self.get_vm_by_name(config.name, config.request_id)
 
                         if vm_info:
                             self.logger.info(f"ВМ '{config.name}' создана успешно с флагом --import")
@@ -194,15 +195,15 @@ class VmManager(LibvirtClient):
                                      stderr=result.stderr,
                                      )
 
-        # except subprocess.TimeoutExpired:
-        #     error_msg = f"Таймаут при создании ВМ '{config.name}'"
-        #     self.logger.error(error_msg)
-        #     return VmMessage(request_id=config.request_id,
-        #                      success=False,
-        #                      message=CommandMessagesEnum.vm_create_subprocess_timeout_error.value,
-        #                      code=CommandMessagesEnum.vm_create_subprocess_timeout_error.name,
-        #                      command=command if "command" in locals() else None,
-        #                      )
+        except subprocess.TimeoutExpired:
+            error_msg = f"Таймаут при создании ВМ '{config.name}'"
+            self.logger.error(error_msg)
+            return VmMessage(request_id=config.request_id,
+                             success=False,
+                             message=CommandMessagesEnum.vm_create_subprocess_timeout_error.value,
+                             code=CommandMessagesEnum.vm_create_subprocess_timeout_error.name,
+                             command=command if "command" in locals() else None,
+                             )
         except Exception as e:
             error_msg = f"Неожиданная ошибка при создании ВМ: {str(e)}"
             self.logger.error(error_msg, exc_info=True)
@@ -229,6 +230,9 @@ class VmManager(LibvirtClient):
 
         if config.description:
             cmd_parts.extend(["--description", f"'{config.description}'"])
+
+        if not config.autostart_vm:
+            cmd_parts.extend(["--noreboot"])
 
         if config.machine_type:
             cmd_parts.extend(["--machine", f"{config.machine_type.value}"])
@@ -638,12 +642,13 @@ class VmManager(LibvirtClient):
 
         return vms
 
-    def _get_vm_info(self, domain) -> VirtualMachine:
+    def _get_vm_info(self, domain, display_logs: bool = True) -> VirtualMachine:
         """Получение информации о виртуальной машине"""
         try:
             info = domain.info()
             state = VMState(info[0])
-
+            if display_logs:
+                self.logger.info(f"ВМ {domain} найдена")
             return VirtualMachine(
                 name=domain.name(),
                 state=state,
@@ -655,30 +660,64 @@ class VmManager(LibvirtClient):
                 cpu_time=info[4]
             )
         except self.libvirtError as e:
-            self.logger.error(f"Ошибка получения информации о ВМ, \nerr: {e}")
+            if display_logs:
+                self.logger.error(f"Ошибка получения информации о ВМ, \nerr: {e}")
             raise
 
-    def get_vm_by_name(self, name: str) -> VirtualMachine | None:
+    def get_vm_state_by_name(self, name: str, display_logs: bool = False) -> int | bool:
+        """Получение состояния ВМ по имени"""
+        try:
+            virtual_machine = self.conn.lookupByName(name)
+            if display_logs:
+                self.logger.info(f"Поиск ВМ {name}")
+            return self._get_vm_info(virtual_machine, display_logs).state.value
+        except self.libvirtError:
+            if display_logs:
+                self.logger.info(f"ВМ {name} не найдена")
+            return False
+
+    def get_vm_by_name(self, name: str, request_id: str) -> VmMessage:
         """Получение ВМ по имени"""
         try:
             virtual_machine = self.conn.lookupByName(name)
-            return self._get_vm_info(virtual_machine)
-        except self.libvirtError:
-            return None
+            self.logger.info(f"Поиск ВМ {name}")
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_successfully_found.value,
+                             code=CommandMessagesEnum.vm_successfully_found.name,
+                             vm_info=self._get_vm_info(virtual_machine),
+                             success=True)
+        except self.libvirtError as e:
+            self.logger.info(f"ВМ {name} не найдена")
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_found_error.value,
+                             code=CommandMessagesEnum.vm_found_error.name,
+                             success=False,
+                             note=str(e))
 
-    def start_vm(self, name: str) -> bool:
+    def start_vm(self, name: str, request_id: str) -> VmMessage:
         """Запуск виртуальной машины"""
         try:
             domain = self.conn.lookupByName(name)
             if domain.create() == 0:
                 self.logger.info(f"ВМ {name} запущена")
-                return True
-            return False
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_started.value,
+                                 code=CommandMessagesEnum.vm_successfully_started.name,
+                                 success=True)
+            self.logger.info(f"ВМ {name} не запустилась")
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_start_error.value,
+                             code=CommandMessagesEnum.vm_start_error.name,
+                             success=False)
         except self.libvirtError as e:
             self.logger.error(f"Ошибка запуска ВМ {name}, \nerr: {e}")
-            return False
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_start_error.value,
+                             code=CommandMessagesEnum.vm_start_error.name,
+                             success=False,
+                             note=str(e))
 
-    def shutdown_vm(self, name: str, force: bool = False) -> bool:
+    def shutdown_vm(self, name: str, request_id: str, force: bool = False) -> VmMessage:
         """
         Выключение виртуальной машины
 
@@ -697,50 +736,92 @@ class VmManager(LibvirtClient):
             if result == 0:
                 action = "принудительно выключена" if force else "выключена"
                 self.logger.info(f"ВМ {name} {action}")
-                return True
-            return False
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_shutdowned.value,
+                                 code=CommandMessagesEnum.vm_successfully_shutdowned.name,
+                                 success=True)
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_shutdown_error.value,
+                             code=CommandMessagesEnum.vm_shutdown_error.name,
+                             success=False)
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка выключения ВМ {name}, \nerr: {e}")
-            return False
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_shutdown_error.value,
+                             code=CommandMessagesEnum.vm_shutdown_error.name,
+                             success=False,
+                             note=str(e))
 
-    def reboot_vm(self, name: str) -> bool:
+    def reboot_vm(self, name: str, request_id: str) -> VmMessage:
         """Перезагрузка виртуальной машины"""
         try:
             domain = self.conn.lookupByName(name)
             if domain.reboot(0) == 0:
                 self.logger.info(f"ВМ {name} перезагружается")
-                return True
-            return False
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_restarted.value,
+                                 code=CommandMessagesEnum.vm_successfully_restarted.name,
+                                 success=True)
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_restart_error.value,
+                             code=CommandMessagesEnum.vm_restart_error.name,
+                             success=False)
         except self.libvirtError as e:
             self.logger.error(f"Ошибка перезагрузки ВМ {name}, \nerr: {e}")
-            return False
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_restart_error.value,
+                             code=CommandMessagesEnum.vm_restart_error.name,
+                             success=False,
+                             note=str(e))
 
-    def suspend_vm(self, name: str) -> bool:
+    def suspend_vm(self, name: str, request_id: str) -> VmMessage:
         """Приостановка виртуальной машины"""
         try:
             domain = self.conn.lookupByName(name)
             if domain.suspend() == 0:
                 self.logger.info(f"ВМ {name} приостановлена")
-                return True
-            return False
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_stopped.value,
+                                 code=CommandMessagesEnum.vm_successfully_stopped.name,
+                                 success=True)
+            self.logger.info(f"ВМ {name} не приостановлена")
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_stop_error.value,
+                             code=CommandMessagesEnum.vm_stop_error.name,
+                             success=False)
         except self.libvirtError as e:
             self.logger.error(f"Ошибка приостановки ВМ {name}, \nerr: {e}")
-            return False
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_stop_error.value,
+                             code=CommandMessagesEnum.vm_stop_error.name,
+                             success=False,
+                             note=str(e))
 
-    def resume_vm(self, name: str) -> bool:
+    def resume_vm(self, name: str, request_id: str) -> VmMessage:
         """Возобновление работы виртуальной машины"""
         try:
             domain = self.conn.lookupByName(name)
             if domain.resume() == 0:
                 self.logger.info(f"ВМ {name} возобновлена")
-                return True
-            return False
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_resumed.value,
+                                 code=CommandMessagesEnum.vm_successfully_resumed.name,
+                                 success=True)
+            self.logger.info(f"ВМ {name} не возобновлена")
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_resume_error.value,
+                             code=CommandMessagesEnum.vm_resume_error.name,
+                             success=False)
         except self.libvirtError as e:
             self.logger.error(f"Ошибка возобновления ВМ {name}")
-            return False
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_resume_error.value,
+                             code=CommandMessagesEnum.vm_resume_error.name,
+                             success=False,
+                             note=str(e))
 
-    def delete_vm(self, name: str, delete_disks: bool = False, delete_nvram: bool = True) -> bool:
+    def delete_vm(self, name: str, request_id: str, delete_disks: bool = False, delete_nvram: bool = True) -> VmMessage:
         """
         Удаление виртуальной машины с поддержкой UEFI NVRAM
 
@@ -795,15 +876,22 @@ class VmManager(LibvirtClient):
                         self.logger.error(f"Не удалось удалить диск {disk_path}, \nerr: {e}")
 
             self.logger.info(f"ВМ {name} удалена")
-            return True
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_successfully_deleted.value,
+                             code=CommandMessagesEnum.vm_successfully_deleted.name,
+                             success=True)
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления ВМ {name}, \nerr: {e}")
 
             if "nvram" in str(e).lower():
-                return self._delete_vm_with_nvram_fallback(name, delete_disks)
+                return self._delete_vm_with_nvram_fallback(name, request_id, delete_disks)
 
-            return False
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_delete_error.value,
+                             code=CommandMessagesEnum.vm_delete_error.name,
+                             success=False,
+                             note=str(e))
 
     def _extract_disk_paths(self, xml_config: str) -> list[str]:
         """
@@ -842,7 +930,7 @@ class VmManager(LibvirtClient):
 
         return disk_paths
 
-    def _delete_vm_with_nvram_fallback(self, name: str, delete_disks: bool = False) -> bool:
+    def _delete_vm_with_nvram_fallback(self, name: str, request_id: str, delete_disks: bool = False) -> VmMessage:
         """
         Альтернативный метод удаления ВМ с NVRAM
 
@@ -875,7 +963,10 @@ class VmManager(LibvirtClient):
                     except OSError:
                         pass
 
-                return True
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_deleted.value,
+                                 code=CommandMessagesEnum.vm_successfully_deleted.name,
+                                 success=True)
             else:
                 command = f"virsh undefine --remove-all-storage {name}"
                 result = subprocess.run(
@@ -887,14 +978,24 @@ class VmManager(LibvirtClient):
 
                 if result.returncode == 0:
                     self.logger.info(f"ВМ {name} удалена через virsh undefine --remove-all-storage")
-                    return True
+                    return VmMessage(request_id=request_id,
+                                     message=CommandMessagesEnum.vm_successfully_deleted.value,
+                                     code=CommandMessagesEnum.vm_successfully_deleted.name,
+                                     success=True)
                 else:
                     self.logger.error(f"Не удалось удалить ВМ {name} даже через virsh: {result.stderr}")
-                    return False
+                    return VmMessage(request_id=request_id,
+                                     message=CommandMessagesEnum.vm_delete_error.value,
+                                     code=CommandMessagesEnum.vm_delete_error.name,
+                                     success=False)
 
         except Exception as e:
             self.logger.error(f"Ошибка в альтернативном методе удаления ВМ {name}, \nerr: {e}")
-            return False
+            return VmMessage(request_id=request_id,
+                             message=CommandMessagesEnum.vm_delete_error.value,
+                             code=CommandMessagesEnum.vm_delete_error.name,
+                             success=False,
+                             note=str(e))
 
     def get_vm_xml(self, name: str) -> str | None:
         """Получение XML конфигурации ВМ"""
@@ -905,29 +1006,36 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка получения XML для ВМ {name}, \nerr: {e}")
             return None
 
-    def delete_vm_with_force(self, name: str):
+    def delete_vm_with_force(self, name: str, request_id: str):
         """
         Вспомогательная функция для принудительного удаления ВМ
         Используйте эту функцию если обычное удаление не работает
 
         Args:
             name: Имя ВМ
+            request_id: id запроса
         """
 
         methods = [
-            lambda: self.delete_vm(name, delete_nvram=True),
-            lambda: self.delete_vm(name, delete_nvram=False),
-            lambda: self._delete_vm_with_nvram_fallback(name)
+            lambda: self.delete_vm(name, delete_nvram=True, request_id=request_id),
+            lambda: self.delete_vm(name, delete_nvram=False, request_id=request_id),
+            lambda: self._delete_vm_with_nvram_fallback(name, request_id)
         ]
 
         for i, method in enumerate(methods, 1):
             print(f"Попытка {i} удаления ВМ {name}...")
             if method():
                 print(f"ВМ {name} успешно удалена")
-                return True
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_deleted.value,
+                                 code=CommandMessagesEnum.vm_successfully_deleted.name,
+                                 success=True)
 
         print(f"Не удалось удалить ВМ {name}")
-        return False
+        return VmMessage(request_id=request_id,
+                         message=CommandMessagesEnum.vm_delete_error.value,
+                         code=CommandMessagesEnum.vm_delete_error.name,
+                         success=False)
 
     def _extract_nvram_path(self, xml_config: str) -> str | None:
         """
@@ -1053,5 +1161,5 @@ if __name__ == "__main__":
         print(f"Найдено ВМ: {len(vms)}")
 
         for vm in vms:
-            vm_manager.delete_vm_with_force(vm.name)
+            vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
             print(f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs")
