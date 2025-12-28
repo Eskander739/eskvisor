@@ -1,6 +1,8 @@
+import logging
 import os
 import random
 import shutil
+import sys
 import tempfile
 import uuid
 
@@ -11,6 +13,31 @@ from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
 from agent.client.hypervisor.models.general import VMState
 from agent.client.hypervisor.templates.vm import simple_hotplug_vm_config
 from agent.client.tools import wait_while_not
+
+
+def pytest_configure(config):
+    """Настройка логирования при запуске pytest"""
+
+    # Создаем handler для вывода в консоль
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    console_handler.setFormatter(formatter)
+
+    # Настраиваем root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(console_handler)
+
+    # Включаем логи для твоих модулей
+    logging.getLogger("agent.client").setLevel(logging.DEBUG)
+    logging.getLogger("agent.client.hypervisor").setLevel(logging.DEBUG)
+
+    # Отключаем слишком шумные логи
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 @pytest.fixture(scope="session")
