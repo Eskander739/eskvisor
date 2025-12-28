@@ -67,24 +67,16 @@ class VmManager(LibvirtClient):
                     disk_path.parent.mkdir(parents=True, exist_ok=True)
                     self.logger.info(f"Создана директория: {disk_path.parent}")
 
-            # Проверяем, указан ли источник установки
-            # Если нет, добавляем флаг --import для существующего образа
             if not (config.cdrom or config.location):
-                # Проверяем, существует ли основной диск
                 if config.disks:
                     main_disk = config.disks[0]
                     disk_path = Path(main_disk.path)
                     if disk_path.exists():
-                        # Если диск существует, используем --import
                         config.install_method = "import"
                     else:
-                        # Если диск не существует, нужен источник установки
-                        # Создаем пустой диск и используем --import для создания пустой ВМ
-                        # или можно установить значение по умолчанию
                         self.logger.warning(
                             f"Диск {main_disk.path} не существует. Используем --import для создания пустой ВМ")
 
-            # Строим команду virt-install с дополнительной проверкой
             command = self._build_virt_install_command(config)
             self.logger.info(f"Команда virt-install: {command}")
 
@@ -96,7 +88,6 @@ class VmManager(LibvirtClient):
                     "vm_name": config.name
                 }
 
-            # Выполняем команду
             result = subprocess.run(
                 command,
                 shell=True,
@@ -106,17 +97,13 @@ class VmManager(LibvirtClient):
             )
 
             if result.returncode == 0:
-                # Ждем немного, чтобы ВМ появилась в libvirt
                 import time
                 time.sleep(2)
 
-                # Получаем информацию о созданной ВМ
                 vm_info = self.get_vm_by_name(config.name)
 
                 if vm_info:
                     self.logger.info(f"ВМ '{config.name}' создана успешно")
-
-                    # Устанавливаем автостарт если нужно
                     if config.autostart:
                         self._set_autostart(config.name, True)
 
@@ -138,14 +125,11 @@ class VmManager(LibvirtClient):
                         "stderr": result.stderr
                     }
             else:
-                # Анализируем ошибку и пытаемся исправить
                 error_msg = result.stderr
 
-                # Если ошибка связана с отсутствием метода установки
                 if "Необходимо определить метод установки" in error_msg or "install method must be specified" in error_msg.lower():
                     self.logger.warning("Обнаружена ошибка метода установки. Пробуем с флагом --import...")
 
-                    # Добавляем флаг --import и пробуем снова
                     import_command = command + " --import"
                     self.logger.info(f"Повторная попытка с командой: {import_command}")
 
@@ -233,7 +217,6 @@ class VmManager(LibvirtClient):
         """
         cmd_parts = ["virt-install"]
 
-        # Основные параметры
         cmd_parts.extend(["--name", config.name])
 
         if config.description:
@@ -249,14 +232,11 @@ class VmManager(LibvirtClient):
         if config.max_vcpus and config.max_vcpus != config.vcpus:
             cmd_parts.extend(["--vcpus", f"{config.vcpus},maxvcpus={config.max_vcpus}"])
 
-        # Архитектура и эмулятор
         cmd_parts.extend(["--arch", config.architecture.value])
 
-        # Тип ОС и вариант
         if config.os_variant:
             cmd_parts.extend(["--os-variant", config.os_variant])
 
-        # CPU модель и фичи
         if config.cpu_model:
             cmd_parts.extend(["--cpu", config.cpu_model])
 
@@ -264,21 +244,16 @@ class VmManager(LibvirtClient):
             features_str = ",".join(config.cpu_features)
             cmd_parts.extend(["--features", features_str])
 
-        # Диски
         for i, disk in enumerate(config.disks):
             disk_cmd = f"--disk "
 
-            # Собираем параметры диска
             disk_params = []
 
             if disk.path:
-                # Проверяем, существует ли диск
                 disk_path = Path(disk.path)
                 if disk_path.exists():
-                    # Существующий диск
                     disk_params.append(f"path={disk.path}")
                 else:
-                    # Новый диск
                     if disk.size_gb:
                         disk_params.append(f"size={disk.size_gb}")
                     if disk.format:
@@ -306,11 +281,9 @@ class VmManager(LibvirtClient):
             disk_cmd += ",".join(disk_params)
             cmd_parts.append(disk_cmd)
 
-        # Сети
         for i, net in enumerate(config.networks):
             net_cmd = f"--network "
 
-            # Собираем параметры сети
             net_params = []
 
             if net.network_type == NetworkType.BRIDGE:
@@ -334,11 +307,9 @@ class VmManager(LibvirtClient):
             net_cmd += ",".join(net_params)
             cmd_parts.append(net_cmd)
 
-        # Контроллеры
         for controller in config.controllers:
             controller_cmd = f"--controller "
 
-            # Собираем параметры контроллера
             controller_params = []
             controller_params.append(f"type={controller.controller_type.value}")
 
@@ -354,7 +325,6 @@ class VmManager(LibvirtClient):
             controller_cmd += ",".join(controller_params)
             cmd_parts.append(controller_cmd)
 
-        # Графика
         if config.graphics == GraphicsType.NONE:
             cmd_parts.append("--graphics none")
         else:
@@ -372,14 +342,11 @@ class VmManager(LibvirtClient):
 
             cmd_parts.append(graphics_cmd)
 
-        # Видео
         cmd_parts.extend(["--video", config.video_model])
 
-        # Консоль
         if config.console_type:
             cmd_parts.extend(["--console", f"{config.console_type}"])
 
-        # Устройства загрузки
         if config.boot_devices:
             boot_cmd = "--boot "
             boot_params = []
@@ -387,40 +354,32 @@ class VmManager(LibvirtClient):
             for i, device in enumerate(config.boot_devices):
                 boot_params.append(device)
 
-            # Добавляем menu=on для отображения меню загрузки
             boot_params.append("menu=on")
 
             boot_cmd += ",".join(boot_params)
             cmd_parts.append(boot_cmd)
 
-        # Автостарт
         if config.autostart:
             cmd_parts.append("--autostart")
 
-        # CD-ROM для установки
         if config.cdrom:
             cmd_parts.extend(["--cdrom", config.cdrom])
         elif config.location:
             cmd_parts.extend(["--location", config.location])
 
-        # Если нет источника установки, но есть атрибут install_method
         elif hasattr(config, 'install_method') and config.install_method:
             if config.install_method == "import":
                 cmd_parts.append("--import")
             elif config.install_method == "pxe":
                 cmd_parts.append("--pxe")
             elif config.install_method == "boot":
-                # Уже обрабатывается в boot_devices
                 pass
 
-        # Дополнительные аргументы
         if config.extra_args:
             cmd_parts.extend(["--extra-args", f"'{config.extra_args}'"])
 
-        # Флаг --wait -1 для фонового выполнения
         cmd_parts.append("--wait -1")
 
-        # Флаг --noautoconsole
         cmd_parts.append("--noautoconsole")
 
         return " ".join(cmd_parts)
@@ -483,7 +442,6 @@ class VmManager(LibvirtClient):
         Returns:
             Результат создания
         """
-        # Предустановленные шаблоны
         templates = {
             "ubuntu-server": VMCreateRequest(
                 name=vm_name,
@@ -575,12 +533,10 @@ class VmManager(LibvirtClient):
             ),
         }
 
-        # Получаем шаблон
         if template_name in templates:
             config = templates[template_name]
             config.name = vm_name  # Обновляем имя
         else:
-            # Пытаемся загрузить шаблон из файла
             try:
                 template_path = Path(template_name)
                 if template_path.exists():
@@ -599,12 +555,10 @@ class VmManager(LibvirtClient):
                     "error": f"Ошибка загрузки шаблона: {str(e)}"
                 }
 
-        # Применяем переопределения
         for key, value in overrides.items():
             if hasattr(config, key):
                 setattr(config, key, value)
 
-        # Создаем ВМ
         return self.create_vm(config)
 
     def edit_vm(self, vm_name: str, **changes) -> bool:
@@ -619,20 +573,13 @@ class VmManager(LibvirtClient):
             Успех операции
         """
         try:
-            # Получаем текущую конфигурацию
             domain = self.conn.lookupByName(vm_name)
             xml_config = domain.XMLDesc(0)
 
-            # Здесь должна быть логика парсинга XML и применения изменений
-            # Это упрощенная версия - в реальности нужен парсер XML
-
             self.logger.logger.warning("Метод edit_vm требует реализации парсера XML")
 
-            # Временное решение - пересоздание ВМ
             if 'new_name' in changes:
                 new_name = changes.pop('new_name')
-                # Создаем копию ВМ с новым именем
-                # Это упрощенный подход, в реальности нужно клонировать ВМ
                 pass
 
             return False
@@ -641,7 +588,6 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка редактирования ВМ '{vm_name}', \nerr: {e}")
             return False
 
-    # Остальные методы остаются без изменений
     def list_vms(self, only_active: bool = False) -> list[VirtualMachine]:
         """
         Получение списка виртуальных машин
@@ -788,42 +734,32 @@ class VmManager(LibvirtClient):
             Успех операции
         """
         try:
-            # Получаем домен
             domain = self.conn.lookupByName(name)
 
-            # Получаем XML конфигурацию перед удалением
             xml_config = domain.XMLDesc(0)
 
-            # Извлекаем путь к NVRAM файлу
             nvram_path = None
             if delete_nvram:
                 nvram_path = self._extract_nvram_path(xml_config)
 
-            # Получаем информацию о дисках
             disks_to_delete = []
             if delete_disks:
                 disks_to_delete = self._extract_disk_paths(xml_config)
 
-            # Если ВМ запущена, выключаем её
             if domain.isActive():
                 self.logger.info(f"ВМ {name} запущена, выключаем...")
                 domain.destroy()
 
-            # Удаляем конфигурацию домена
-            # Используем флаги для корректного удаления с NVRAM
             try:
-                # Пытаемся удалить с флагом --managed-save
                 domain.undefineFlags(
                     VIR_DOMAIN_UNDEFINE_MANAGED_SAVE |
                     VIR_DOMAIN_UNDEFINE_NVRAM
                 )
                 self.logger.info(f"Конфигурация ВМ {name} удалена с флагами")
             except self.libvirtError as e:
-                # Если не сработало, пробуем стандартный способ
                 self.logger.warning(f"Стандартное удаление не сработало: {e}")
                 domain.undefine()
 
-            # Удаляем файл NVRAM если он существует
             if nvram_path and os.path.exists(nvram_path):
                 try:
                     os.remove(nvram_path)
@@ -831,7 +767,6 @@ class VmManager(LibvirtClient):
                 except OSError as e:
                     self.logger.error(f"Не удалось удалить файл NVRAM {nvram_path}, \nerr: {e}")
 
-            # Удаляем диски если нужно
             for disk_path in disks_to_delete:
                 if os.path.exists(disk_path):
                     try:
@@ -846,7 +781,6 @@ class VmManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления ВМ {name}, \nerr: {e}")
 
-            # Если ошибка связана с NVRAM, пробуем альтернативный способ
             if "nvram" in str(e).lower():
                 return self._delete_vm_with_nvram_fallback(name, delete_disks)
 
@@ -868,7 +802,6 @@ class VmManager(LibvirtClient):
 
             root = ET.fromstring(xml_config)
 
-            # Ищем все элементы disk
             for disk in root.findall('.//disk'):
                 source = disk.find('source')
                 if source is not None:
@@ -884,8 +817,6 @@ class VmManager(LibvirtClient):
                     if volume_attr:
                         pool_attr = source.get('pool')
                         if pool_attr:
-                            # Формируем путь к тому в пуле
-                            # В реальности нужно использовать libvirt API для получения пути
                             pass
         except Exception as e:
             self.logger.error(f"Ошибка при извлечении путей к дискам: {e}")
@@ -904,7 +835,6 @@ class VmManager(LibvirtClient):
             Успех операции
         """
         try:
-            # Используем virsh команду для удаления
             command = f"virsh undefine --nvram {name}"
             result = subprocess.run(
                 command,
@@ -916,7 +846,6 @@ class VmManager(LibvirtClient):
             if result.returncode == 0:
                 self.logger.info(f"ВМ {name} удалена через virsh undefine --nvram")
 
-                # Дополнительно удаляем вручную если остались следы
                 nvram_pattern = f"/var/lib/libvirt/qemu/nvram/{name}_*"
                 import glob
                 nvram_files = glob.glob(nvram_pattern)
@@ -929,7 +858,6 @@ class VmManager(LibvirtClient):
 
                 return True
             else:
-                # Пробуем удалить без NVRAM
                 command = f"virsh undefine --remove-all-storage {name}"
                 result = subprocess.run(
                     command,
@@ -967,7 +895,6 @@ class VmManager(LibvirtClient):
             name: Имя ВМ
         """
 
-        # Пробуем разные методы удаления
         methods = [
             lambda: self.delete_vm(name, delete_nvram=True),
             lambda: self.delete_vm(name, delete_nvram=False),
@@ -994,7 +921,6 @@ class VmManager(LibvirtClient):
             Путь к файлу NVRAM или None если не используется
         """
         try:
-            # Парсим XML для поиска nvram
             import xml.etree.ElementTree as ET
 
             root = ET.fromstring(xml_config)
@@ -1005,10 +931,8 @@ class VmManager(LibvirtClient):
                 if nvram_element is not None:
                     return nvram_element.text
 
-            # Проверяем loader/nvram в другом формате
             loader_element = root.find('.//loader[@type="pflash"]')
             if loader_element is not None:
-                # Ищем nvram в родительском элементе
                 parent = loader_element.getparent()
                 if parent is not None:
                     nvram_element = parent.find('nvram')
@@ -1033,46 +957,36 @@ class VmManager(LibvirtClient):
             Результат клонирования
         """
         try:
-            # Получаем исходную ВМ
             source_domain = self.conn.lookupByName(source_name)
             xml_config = source_domain.XMLDesc(0)
 
-            # Парсим XML
             root = ET.fromstring(xml_config)
 
-            # Меняем имя
             name_elem = root.find("name")
             if name_elem is not None:
                 name_elem.text = new_name
 
-            # Меняем UUID если нужно
             if new_uuid:
                 uuid_elem = root.find("uuid")
                 if uuid_elem is not None:
                     uuid_elem.text = self._generate_uuid()
 
-            # Меняем пути к дискам
             for disk in root.findall(".//disk"):
                 source_elem = disk.find("source")
                 if source_elem is not None and 'file' in source_elem.attrib:
                     old_path = source_elem.get('file')
                     if old_path:
-                        # Создаем новый путь
                         dir_name = os.path.dirname(old_path)
                         base_name = os.path.basename(old_path)
                         new_path = os.path.join(dir_name, f"{new_name}_{base_name}")
 
-                        # Копируем диск
                         shutil.copy2(old_path, new_path)
 
-                        # Обновляем путь в XML
                         source_elem.set('file', new_path)
 
-            # Генерируем новый XML
             rough_string = ET.tostring(root, 'utf-8')
             new_xml = minidom.parseString(rough_string).toprettyxml(indent="  ")
 
-            # Создаем новую ВМ
             new_domain = self.conn.defineXML(new_xml)
 
             return {
@@ -1090,8 +1004,6 @@ class VmManager(LibvirtClient):
                 "error": error_msg
             }
 
-
-# ========== EXAMPLE USAGE ==========
 
 if __name__ == "__main__":
     # Пример создания ВМ с использованием нового API
