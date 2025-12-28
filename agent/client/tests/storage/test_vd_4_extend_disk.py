@@ -8,7 +8,7 @@ from agent.client.hypervisor.models.msg import CommandMessagesEnum
 
 @pytest.mark.tags("VD‑04", "Расширение диска")
 @pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
-def test_vd_04_extend_disk(storage_session, setup_test_environment, disk_format):
+def test_vd_04_extend_disk(storage_session, disk_format):
     """
     VD‑04: Расширение диска
 

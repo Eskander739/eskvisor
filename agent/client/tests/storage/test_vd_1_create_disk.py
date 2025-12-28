@@ -9,7 +9,7 @@ from agent.client.hypervisor.models.msg import CommandMessagesEnum
 @pytest.mark.tags("VD‑01", "Создание нового виртуального диска")
 @pytest.mark.parametrize("sparse", (True, False))
 @pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
-def test_vd_01_create_disk(storage_session, setup_test_environment, sparse, disk_format):
+def test_vd_01_create_disk(storage_session, sparse, disk_format):
     """
     VD‑01: Создание нового виртуального диска
 
