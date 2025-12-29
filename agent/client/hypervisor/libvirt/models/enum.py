@@ -51,6 +51,16 @@ class DiskType(str, Enum):
     DIR = "dir"
     NETWORK = "network"
     VOLUME = "volume"
+    DISK = "disk"  # Основной диск для ОС
+    CDROM = "cdrom"  # CD/DVD привод с ISO
+    FLOPPY = "floppy"  # Дискета
+
+
+class DiskDeviceType(str, Enum):
+    """Типы устройств (target dev type в libvirt)"""
+    DISK = "disk"           # Основной диск
+    CDROM = "cdrom"         # CD/DVD привод
+    FLOPPY = "floppy"       # Дискета
 
 
 class DiskFormat(str, Enum):

@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 
-from agent.client.hypervisor.libvirt.models.enum import DiskBus, DiskType, DiskFormat
+from agent.client.hypervisor.libvirt.models.enum import DiskBus, DiskType, DiskFormat, DiskDeviceType
 
 
 class VMDisk(BaseModel):
@@ -10,6 +10,7 @@ class VMDisk(BaseModel):
     path: str | None = None
     size_gb: int | None = 1
     bus: DiskBus | str = DiskBus.VIRTIO
+    device_type: DiskDeviceType | str = Field(default=DiskDeviceType.DISK, description="Тип устройства")
     disk_type: DiskType = DiskType.FILE
     format: DiskFormat | str = DiskFormat.QCOW2
     cache: str = "none"
