@@ -685,25 +685,57 @@ class VmManager(LibvirtClient):
 
     def _apply_virsh_commands(self, vm_name: str, changes: list[str], is_running: bool) -> bool:
         try:
-            cmd = ["virsh", "edit", vm_name] + changes
-            if is_running:
-                cmd.append("--live")
+            # Команды, которые можно передать через virsh edit
+            edit_params = ['--description', '--rename', '--autostart', '--disable-autostart']
+            edit_changes = [ch for ch in changes if any(param in ch for param in edit_params)]
 
-            self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if edit_changes:
+                cmd = ['virsh', 'edit', vm_name] + edit_changes
+                if is_running:
+                    cmd.append('--live')
 
-            if result.returncode != 0:
-                self.logger.error(f"Ошибка при применении изменений: {result.stderr}")
-                return False
+                self.logger.debug(f"Выполнение команды edit: {' '.join(cmd)}")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
-            self.logger.info(f"Изменения применены успешно")
+                if result.returncode != 0:
+                    self.logger.error(f"Ошибка при применении изменений через edit: {result.stderr}")
+                    return False
+
+            # Отдельные команды для параметров, не поддерживаемых edit
+            separate_commands = []
+
+            for i in range(0, len(changes), 2):
+                param = changes[i]
+                value = changes[i + 1] if i + 1 < len(changes) else ''
+
+                if param == '--memory':
+                    cmd = ['virsh', 'setmem', vm_name, value, '--config']
+                    separate_commands.append(cmd)
+                    if is_running:
+                        separate_commands.append(['virsh', 'setmem', vm_name, value, '--live'])
+
+                elif param == '--current-memory' and is_running:
+                    separate_commands.append(['virsh', 'setmem', vm_name, value, '--live'])
+
+                elif param == '--vcpus':
+                    cmd = ['virsh', 'setvcpus', vm_name, value, '--config']
+                    separate_commands.append(cmd)
+                    if is_running:
+                        separate_commands.append(['virsh', 'setvcpus', vm_name, value, '--live'])
+
+                elif 'maxvcpus=' in value:
+                    max_vcpus = value.split('maxvcpus=')[1].split(',')[0]
+                    separate_commands.append(['virsh', 'setvcpus', vm_name, max_vcpus, '--maximum', '--config'])
+
+            # Выполняем отдельные команды
+            for cmd in separate_commands:
+                if not self._execute_virsh_command(cmd):
+                    return False
+
             return True
 
-        except subprocess.TimeoutExpired:
-            self.logger.error("Таймаут при выполнении команды")
-            return False
         except Exception as e:
-            self.logger.error(f"Ошибка при выполнении команды: {e}")
+            self.logger.error(f"Ошибка при применении команд virsh: {e}")
             return False
 
     def _apply_xml_changes(self, vm_name: str, vm_update: VmUpdateRequest, is_running: bool) -> bool:
