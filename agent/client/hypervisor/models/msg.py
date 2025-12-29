@@ -42,6 +42,10 @@ class CommandMessagesEnum(Enum):
     disk_convert_successfully = "Disk convert successfully"
     disk_not_found_by_target_dev = "Disk not found by target_dev"
     disk_founded_by_target_dev = "Disk founded by target_dev"
+    vm_edit_success = "VM successfully edited"
+    vm_edit_error = "VM edit error"
+    vm_edit_xml_error = "VM edit XML error"
+    vm_edit_unexpected_error = "VM edit unexpected error"
 
 
 class DefaultMessage(BaseModel):

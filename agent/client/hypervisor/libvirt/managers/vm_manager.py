@@ -21,7 +21,7 @@ from agent.client.hypervisor.libvirt.models.disk import VMDisk
 from agent.client.hypervisor.libvirt.models.enum import DiskBus, DiskFormat, NetworkType, NetworkModel, OSType, \
     GraphicsType, ControllerType, Architecture
 from agent.client.hypervisor.libvirt.models.network import VMNetwork
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
+from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VmUpdateRequest
 from agent.client.hypervisor.models.general import VMState
 from agent.client.hypervisor.models.msg import VmError, CommandMessagesEnum, VmMessage
 from agent.client.hypervisor.models.vm import VirtualMachine
@@ -589,138 +589,140 @@ class VmManager(LibvirtClient):
 
     #_______________________________________________Редактирование ВМ_______________________________________________
 
-    def edit_vm(self, vm_name: str, vm_update: dict[str, Any]) -> bool:
-        """
-        Редактирование свойств виртуальной машины с использованием virsh.
-        Работает как для запущенных, так и для остановленных ВМ.
-
-        Поддерживаемые свойства:
-        - memory_mb: Изменение объема памяти (MB)
-        - vcpus: Изменение количества виртуальных CPU
-        - max_vcpus: Максимальное количество vCPU
-        - current_memory_mb: Текущий объем памяти (для live изменения)
-        - cpu_model: Модель CPU
-        - cpu_features: Дополнительные CPU фичи
-        - autostart: Автозапуск при старте хоста
-        - description: Описание ВМ
-        - name: Переименование ВМ (только для остановленных)
-        - graphics: Настройки графики (тип, порт, listen)
-        - video_model: Модель видеоадаптера
-        - machine_type: Тип эмулируемой машины
-        - os_variant: Вариант ОС
-        - boot_devices: Порядок загрузочных устройств
-        - features: Фичи ВМ (acpi, apic и др.)
-        - qemu_agent: Включение QEMU Guest Agent
-        - memballoon_model: Модель баллона памяти
-
-        Args:
-            vm_name: Имя виртуальной машины
-            vm_update: Словарь с параметрами для обновления
-
-        Returns:
-            bool: True если успешно, False если ошибка
-        """
+    def edit_vm(self, vm_name: str, vm_update: VmUpdateRequest, request_id: str) -> VmMessage:
         try:
             self.logger.info(f"Редактирование свойств ВМ {vm_name}")
 
-            # Проверяем существование ВМ
-            try:
-                vm = self.conn.lookupByName(vm_name)
-                state, _ = vm.state()
-                is_running = state == libvirt.VIR_DOMAIN_RUNNING
-                self.logger.info(f"Состояние ВМ: {'запущена' if is_running else 'остановлена'}")
-            except libvirt.libvirtError as e:
-                self.logger.error(f"ВМ {vm_name} не найдена: {e}")
-                return False
+            vm = self.conn.lookupByName(vm_name)
+            state, _ = vm.state()
+            is_running = state == libvirt.VIR_DOMAIN_RUNNING
 
-            # Применяем изменения в зависимости от состояния ВМ
-            success = True
+            self.logger.info(f"Состояние ВМ: {'запущена' if is_running else 'остановлена'}")
 
-            # 1. Обрабатываем параметры, которые можно изменить через отдельные команды virsh
-            success &= self._apply_virsh_direct_commands(vm_name, vm_update, is_running)
+            live_changes = []
 
-            # 2. Обрабатываем параметры, требующие изменения XML
-            if self._has_xml_changes(vm_update):
-                success &= self._apply_xml_changes(vm_name, vm_update, is_running)
+            if vm_update.memory_mb is not None:
+                live_changes.extend(["--memory", str(vm_update.memory_mb * 1024)])
+            if vm_update.current_memory_mb is not None and is_running:
+                live_changes.extend(["--current-memory", str(vm_update.current_memory_mb * 1024)])
+            if vm_update.vcpus is not None:
+                live_changes.extend(["--vcpus", str(vm_update.vcpus)])
+            if vm_update.max_vcpus is not None:
+                live_changes.extend(["--vcpus", f"{vm_update.vcpus or 1},maxvcpus={vm_update.max_vcpus}"])
+            if vm_update.autostart is not None:
+                if vm_update.autostart:
+                    live_changes.extend(["--autostart"])
+                else:
+                    live_changes.extend(["--autostart", "--disable"])
+            if vm_update.description is not None:
+                live_changes.extend(["--description", f"'{vm_update.description}'"])
+            if vm_update.name is not None and vm_update.name != vm_name and not is_running:
+                live_changes.extend(["--rename", vm_update.name])
 
-            # 3. Проверяем, нужна ли перезагрузка для некоторых изменений
-            needs_reboot = self._check_needs_reboot(vm_update)
-            if needs_reboot and is_running and vm_update.get('reboot_if_needed', False):
+            xml_params = ["cpu_model", "cpu_features", "graphics", "video_model", "machine_type",
+                          "os_variant", "boot_devices", "features", "memballoon_model", "hyperv_features", "qemu_agent"]
+
+            xml_changes = any(getattr(vm_update, param) is not None for param in xml_params)
+
+            if live_changes and is_running:
+                success = self._apply_virsh_commands(vm_name, live_changes, is_running)
+                if not success:
+                    return VmMessage(
+                        request_id=request_id,
+                        success=False,
+                        message=CommandMessagesEnum.vm_edit_error.value,
+                        code=CommandMessagesEnum.vm_edit_error.name
+                    )
+
+            if xml_changes:
+                success = self._apply_xml_changes(vm_name, vm_update, is_running)
+                if not success:
+                    return VmMessage(
+                        request_id=request_id,
+                        success=False,
+                        message=CommandMessagesEnum.vm_edit_xml_error.value,
+                        code=CommandMessagesEnum.vm_edit_xml_error.name
+                    )
+
+            reboot_needed = any(getattr(vm_update, param) is not None for param in
+                                ["cpu_model", "cpu_features", "machine_type", "video_model",
+                                 "os_variant", "boot_devices", "features", "memballoon_model", "hyperv_features"])
+
+            if reboot_needed and is_running and vm_update.reboot_if_needed:
                 self.logger.info(f"Перезагрузка ВМ {vm_name} для применения изменений")
-                success &= self._reboot_vm(vm_name)
+                reboot_cmd = ["virsh", "reboot", vm_name]
+                if not self._execute_virsh_command(reboot_cmd):
+                    return VmMessage(
+                        request_id=request_id,
+                        success=False,
+                        message=CommandMessagesEnum.vm_restart_error.value,
+                        code=CommandMessagesEnum.vm_restart_error.name
+                    )
 
-            return success
+            return VmMessage(
+                request_id=request_id,
+                success=True,
+                message=CommandMessagesEnum.vm_edit_success.value,
+                code=CommandMessagesEnum.vm_edit_success.name
+            )
 
+        except libvirt.libvirtError as e:
+            self.logger.error(f"ВМ {vm_name} не найдена: {e}")
+            return VmMessage(
+                request_id=request_id,
+                success=False,
+                message=CommandMessagesEnum.vm_found_error.value,
+                code=CommandMessagesEnum.vm_found_error.name
+            )
         except Exception as e:
             self.logger.exception(f"Ошибка при редактировании ВМ: {e}")
+            return VmMessage(
+                request_id=request_id,
+                success=False,
+                message=CommandMessagesEnum.vm_edit_unexpected_error.value,
+                code=CommandMessagesEnum.vm_edit_unexpected_error.name
+            )
+
+    def _apply_virsh_commands(self, vm_name: str, changes: list[str], is_running: bool) -> bool:
+        try:
+            cmd = ["virsh", "edit", vm_name] + changes
+            if is_running:
+                cmd.append("--live")
+
+            self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+            if result.returncode != 0:
+                self.logger.error(f"Ошибка при применении изменений: {result.stderr}")
+                return False
+
+            self.logger.info(f"Изменения применены успешно")
+            return True
+
+        except subprocess.TimeoutExpired:
+            self.logger.error("Таймаут при выполнении команды")
+            return False
+        except Exception as e:
+            self.logger.error(f"Ошибка при выполнении команды: {e}")
             return False
 
-    def _apply_virsh_direct_commands(self, vm_name: str, vm_update: dict[str, Any], is_running: bool) -> bool:
-        """Применение изменений через отдельные команды virsh"""
-        success = True
-
-        # 1. Изменение памяти
-        if 'memory_mb' in vm_update:
-            success &= self._update_memory(vm_name, vm_update['memory_mb'], is_running)
-
-        # 2. Изменение текущей памяти (только для запущенной ВМ)
-        if 'current_memory_mb' in vm_update and is_running:
-            success &= self._update_current_memory(vm_name, vm_update['current_memory_mb'])
-
-        # 3. Изменение vCPU
-        if 'vcpus' in vm_update:
-            success &= self._update_vcpus(vm_name, vm_update['vcpus'], is_running)
-
-        # 4. Изменение максимального количества vCPU
-        if 'max_vcpus' in vm_update:
-            success &= self._update_max_vcpus(vm_name, vm_update['max_vcpus'])
-
-        # 5. Настройка автозапуска
-        if 'autostart' in vm_update:
-            success &= self._update_autostart(vm_name, vm_update['autostart'])
-
-        # 6. Изменение описания
-        if 'description' in vm_update:
-            success &= self._update_description(vm_name, vm_update['description'])
-
-        # 7. Переименование ВМ (только если остановлена)
-        if 'name' in vm_update and vm_update['name'] != vm_name:
-            success &= self._rename_vm(vm_name, vm_update['name'], is_running)
-
-        # 8. Включение/отключение QEMU Guest Agent (если есть отдельная команда)
-        if 'qemu_agent' in vm_update:
-            success &= self._update_qemu_agent(vm_name, vm_update['qemu_agent'], is_running)
-
-        return success
-
-    def _apply_xml_changes(self, vm_name: str, vm_update: dict[str, Any], is_running: bool) -> bool:
-        """Применение изменений через модификацию XML"""
+    def _apply_xml_changes(self, vm_name: str, vm_update: VmUpdateRequest, is_running: bool) -> bool:
         try:
-            # Получаем текущий XML
             vm = self.conn.lookupByName(vm_name)
             current_xml = vm.XMLDesc()
-
-            # Парсим XML
             root = ET.fromstring(current_xml)
 
-            # Применяем изменения к XML
             self._modify_xml(root, vm_update)
+            new_xml = ET.tostring(root, encoding="unicode")
 
-            # Конвертируем обратно в строку
-            new_xml = ET.tostring(root, encoding='unicode')
-
-            # Сохраняем во временный файл
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as tmp:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as tmp:
                 tmp.write(new_xml)
                 tmp_path = tmp.name
 
             try:
-                # Применяем изменения через virsh define
-                cmd = ['virsh', 'define', tmp_path]
+                cmd = ["virsh", "define", tmp_path]
                 if is_running:
-                    # Для запущенной ВМ добавляем флаг --live если возможно
-                    # Некоторые изменения могут быть применены без перезагрузки
-                    cmd.extend(['--live'])
+                    cmd.append("--live")
 
                 self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -733,7 +735,6 @@ class VmManager(LibvirtClient):
                 return True
 
             finally:
-                # Удаляем временный файл
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
 
@@ -741,348 +742,165 @@ class VmManager(LibvirtClient):
             self.logger.exception(f"Ошибка при модификации XML: {e}")
             return False
 
-    def _modify_xml(self, root: ET.Element, vm_update: dict[str, Any]):
-        """Модификация XML дерева согласно обновлениям"""
-
-        # 1. Обновление CPU модели и фич
-        if 'cpu_model' in vm_update or 'cpu_features' in vm_update:
-            self._update_cpu_xml(root, vm_update)
-
-        # 2. Обновление графики
-        if 'graphics' in vm_update:
-            self._update_graphics_xml(root, vm_update['graphics'])
-
-        # 3. Обновление видео модели
-        if 'video_model' in vm_update:
-            self._update_video_xml(root, vm_update['video_model'])
-
-        # 4. Обновление типа машины
-        if 'machine_type' in vm_update:
-            self._update_machine_type_xml(root, vm_update['machine_type'])
-
-        # 5. Обновление варианта ОС
-        if 'os_variant' in vm_update:
-            self._update_os_variant_xml(root, vm_update['os_variant'])
-
-        # 6. Обновление порядка загрузки
-        if 'boot_devices' in vm_update:
-            self._update_boot_order_xml(root, vm_update['boot_devices'])
-
-        # 7. Обновление фич ВМ
-        if 'features' in vm_update:
-            self._update_features_xml(root, vm_update['features'])
-
-        # 8. Обновление модели баллона памяти
-        if 'memballoon_model' in vm_update:
-            self._update_memballoon_xml(root, vm_update['memballoon_model'])
-
-        # 9. Обновление Hyper-V фич (для Windows)
-        if 'hyperv_features' in vm_update:
-            self._update_hyperv_xml(root, vm_update['hyperv_features'])
-
-    def _update_memory(self, vm_name: str, memory_mb: int, is_running: bool) -> bool:
-        """Обновление памяти ВМ"""
-        memory_kb = memory_mb * 1024
-
-        commands = []
-
-        # Для конфигурации
-        commands.append(['virsh', 'setmaxmem', vm_name, str(memory_kb), '--config'])
-
-        # Если ВМ запущена, применяем live изменения
-        if is_running:
-            commands.append(['virsh', 'setmem', vm_name, str(memory_kb), '--live'])
-
-        # Всегда обновляем и конфигурацию
-        commands.append(['virsh', 'setmem', vm_name, str(memory_kb), '--config'])
-
-        return self._execute_virsh_commands(commands, "обновление памяти")
-
-    def _update_current_memory(self, vm_name: str, current_memory_mb: int) -> bool:
-        """Обновление текущей памяти (только для запущенной ВМ)"""
-        memory_kb = current_memory_mb * 1024
-        cmd = ['virsh', 'setmem', vm_name, str(memory_kb), '--live']
-        return self._execute_virsh_command(cmd, "обновление текущей памяти")
-
-    def _update_vcpus(self, vm_name: str, vcpus: int, is_running: bool) -> bool:
-        """Обновление количества vCPU"""
-        commands = []
-
-        # Для конфигурации
-        commands.append(['virsh', 'setvcpus', vm_name, str(vcpus), '--config'])
-
-        # Если ВМ запущена, применяем live изменения
-        if is_running:
-            commands.append(['virsh', 'setvcpus', vm_name, str(vcpus), '--live'])
-
-        return self._execute_virsh_commands(commands, "обновление vCPU")
-
-    def _update_max_vcpus(self, vm_name: str, max_vcpus: int) -> bool:
-        """Обновление максимального количества vCPU"""
-        cmd = ['virsh', 'setvcpus', vm_name, str(max_vcpus), '--maximum', '--config']
-        return self._execute_virsh_command(cmd, "обновление максимального количества vCPU")
-
-    def _update_autostart(self, vm_name: str, autostart: bool) -> bool:
-        """Настройка автозапуска ВМ"""
-        if autostart:
-            cmd = ['virsh', 'autostart', vm_name]
-        else:
-            cmd = ['virsh', 'autostart', vm_name, '--disable']
-
-        return self._execute_virsh_command(cmd, "настройка автозапуска")
-
-    def _update_description(self, vm_name: str, description: str) -> bool:
-        """Обновление описания ВМ"""
-        # Экранируем специальные символы
-        description = description.replace("'", "'\"'\"'")
-        cmd = ['virsh', 'desc', vm_name, description]
-        return self._execute_virsh_command(cmd, "обновление описания")
-
-    def _rename_vm(self, old_name: str, new_name: str, is_running: bool) -> bool:
-        """Переименование ВМ"""
-        if is_running:
-            self.logger.error(f"Невозможно переименовать запущенную ВМ {old_name}")
-            return False
-
-        cmd = ['virsh', 'domrename', old_name, new_name]
-        return self._execute_virsh_command(cmd, "переименование ВМ")
-
-    def _update_qemu_agent(self, vm_name: str, enabled: bool, is_running: bool) -> bool:
-        """Включение/отключение QEMU Guest Agent"""
-        # QEMU Guest Agent настраивается через XML, но можно использовать virsh change-media
-        # Вместо этого будем модифицировать XML
-        self.logger.info(f"Включение QEMU Guest Agent: {enabled}")
-        # Эта настройка будет обработана в _modify_xml через обновление XML
-        return True
-
-    def _update_cpu_xml(self, root: ET.Element, vm_update: dict[str, Any]):
-        """Обновление CPU конфигурации в XML"""
-        # Находим или создаем элемент cpu
-        cpu_elem = root.find('./cpu')
-        if cpu_elem is None:
-            cpu_elem = ET.SubElement(root, 'cpu')
-            cpu_elem.set('mode', 'custom')
-            cpu_elem.set('match', 'exact')
-
-        # Обновляем модель CPU
-        if 'cpu_model' in vm_update:
-            model_elem = cpu_elem.find('./model')
-            if model_elem is None:
-                model_elem = ET.SubElement(cpu_elem, 'model')
-                model_elem.set('fallback', 'allow')
-            model_elem.text = vm_update['cpu_model']
-
-        # Обновляем CPU фичи
-        if 'cpu_features' in vm_update:
-            # Удаляем старые фичи
-            for feature in cpu_elem.findall('./feature'):
-                cpu_elem.remove(feature)
-
-            # Добавляем новые фичи
-            for feature_name in vm_update['cpu_features']:
-                feature_elem = ET.SubElement(cpu_elem, 'feature')
-                feature_elem.set('policy', 'require')
-                feature_elem.set('name', feature_name)
-
-    def _update_graphics_xml(self, root: ET.Element, graphics_config: dict[str, Any]):
-        """Обновление графики в XML"""
-        # Находим устройства
-        devices_elem = root.find('./devices')
+    def _modify_xml(self, root: ET.Element, vm_update: VmUpdateRequest):
+        devices_elem = root.find("./devices")
         if devices_elem is None:
-            devices_elem = ET.SubElement(root, 'devices')
+            devices_elem = ET.SubElement(root, "devices")
 
-        # Удаляем старую графику
-        for graphics in devices_elem.findall('./graphics'):
-            devices_elem.remove(graphics)
+        if vm_update.cpu_model is not None or vm_update.cpu_features is not None:
+            cpu_elem = root.find("./cpu")
+            if cpu_elem is None:
+                cpu_elem = ET.SubElement(root, "cpu")
+                cpu_elem.set("mode", "custom")
+                cpu_elem.set("match", "exact")
 
-        # Создаем новую графику
-        graphics_elem = ET.SubElement(devices_elem, 'graphics')
-        graphics_type = graphics_config.get('type', 'vnc')
-        graphics_elem.set('type', graphics_type)
+            if vm_update.cpu_model is not None:
+                model_elem = cpu_elem.find("./model")
+                if model_elem is None:
+                    model_elem = ET.SubElement(cpu_elem, "model")
+                    model_elem.set("fallback", "allow")
+                model_elem.text = vm_update.cpu_model
 
-        if graphics_type == 'vnc':
-            graphics_elem.set('autoport', 'yes')
-            if 'port' in graphics_config:
-                graphics_elem.set('port', str(graphics_config['port']))
-                graphics_elem.set('autoport', 'no')
-            if 'listen' in graphics_config:
-                graphics_elem.set('listen', graphics_config['listen'])
-        elif graphics_type == 'spice':
-            graphics_elem.set('autoport', 'yes')
+            if vm_update.cpu_features is not None:
+                for feature in cpu_elem.findall("./feature"):
+                    cpu_elem.remove(feature)
+                for feature_name in vm_update.cpu_features:
+                    feature_elem = ET.SubElement(cpu_elem, "feature")
+                    feature_elem.set("policy", "require")
+                    feature_elem.set("name", feature_name)
 
-    def _update_video_xml(self, root: ET.Element, video_model: str):
-        """Обновление видео модели в XML"""
-        devices_elem = root.find('./devices')
-        if devices_elem is None:
-            return
+        if vm_update.graphics is not None:
+            for graphics in devices_elem.findall("./graphics"):
+                devices_elem.remove(graphics)
 
-        # Удаляем старое видео
-        for video in devices_elem.findall('./video'):
-            devices_elem.remove(video)
+            graphics_elem = ET.SubElement(devices_elem, "graphics")
+            graphics_type = vm_update.graphics.get("type", "vnc")
+            graphics_elem.set("type", graphics_type)
 
-        # Создаем новое видео
-        video_elem = ET.SubElement(devices_elem, 'video')
-        model_elem = ET.SubElement(video_elem, 'model')
-        model_elem.set('type', video_model)
+            if graphics_type == "vnc":
+                graphics_elem.set("autoport", "yes")
+                if "port" in vm_update.graphics:
+                    graphics_elem.set("port", str(vm_update.graphics.get("port")))
+                    graphics_elem.set("autoport", "no")
+                if "listen" in vm_update.graphics:
+                    graphics_elem.set("listen", vm_update.graphics.get("listen"))
+            elif graphics_type == "spice":
+                graphics_elem.set("autoport", "yes")
 
-    def _update_machine_type_xml(self, root: ET.Element, machine_type: str):
-        """Обновление типа машины в XML"""
-        os_elem = root.find('./os')
-        if os_elem is None:
-            return
+        if vm_update.video_model is not None:
+            for video in devices_elem.findall("./video"):
+                devices_elem.remove(video)
 
-        type_elem = os_elem.find('./type')
-        if type_elem is None:
-            type_elem = ET.SubElement(os_elem, 'type')
-            type_elem.set('arch', 'x86_64')
-            type_elem.text = 'hvm'
+            video_elem = ET.SubElement(devices_elem, "video")
+            model_elem = ET.SubElement(video_elem, "model")
+            model_elem.set("type", vm_update.video_model)
 
-        type_elem.set('machine', machine_type)
+        if vm_update.machine_type is not None:
+            os_elem = root.find("./os")
+            if os_elem is not None:
+                type_elem = os_elem.find("./type")
+                if type_elem is None:
+                    type_elem = ET.SubElement(os_elem, "type")
+                    type_elem.set("arch", "x86_64")
+                    type_elem.text = "hvm"
+                type_elem.set("machine", vm_update.machine_type)
 
-    def _update_os_variant_xml(self, root: ET.Element, os_variant: str):
-        """Обновление варианта ОС в XML"""
-        # Вариант ОС обычно хранится в метаданных
-        # Добавляем или обновляем элемент os/variant
-        os_elem = root.find('./os')
-        if os_elem is None:
-            return
+        if vm_update.os_variant is not None:
+            os_elem = root.find("./os")
+            if os_elem is not None:
+                variant_elem = os_elem.find("./variant")
+                if variant_elem is None:
+                    variant_elem = ET.SubElement(os_elem, "variant")
+                variant_elem.text = vm_update.os_variant
 
-        variant_elem = os_elem.find('./variant')
-        if variant_elem is None:
-            variant_elem = ET.SubElement(os_elem, 'variant')
+        if vm_update.boot_devices is not None:
+            os_elem = root.find("./os")
+            if os_elem is None:
+                os_elem = ET.SubElement(root, "os")
+                type_elem = ET.SubElement(os_elem, "type")
+                type_elem.set("arch", "x86_64")
+                type_elem.text = "hvm"
 
-        variant_elem.text = os_variant
+            for boot in os_elem.findall("./boot"):
+                os_elem.remove(boot)
 
-    def _update_boot_order_xml(self, root: ET.Element, boot_devices: dict[str]):
-        """Обновление порядка загрузки в XML"""
-        os_elem = root.find('./os')
-        if os_elem is None:
-            os_elem = ET.SubElement(root, 'os')
-            type_elem = ET.SubElement(os_elem, 'type')
-            type_elem.set('arch', 'x86_64')
-            type_elem.text = 'hvm'
+            for device in vm_update.boot_devices:
+                boot_elem = ET.SubElement(os_elem, "boot")
+                boot_elem.set("dev", device)
 
-        # Удаляем старый порядок загрузки
-        for boot in os_elem.findall('./boot'):
-            os_elem.remove(boot)
+        if vm_update.features is not None:
+            features_elem = root.find("./features")
+            if features_elem is None:
+                features_elem = ET.SubElement(root, "features")
 
-        # Добавляем новый порядок
-        for i, device in enumerate(boot_devices):
-            boot_elem = ET.SubElement(os_elem, 'boot')
-            boot_elem.set('dev', device)
+            for feature in features_elem:
+                features_elem.remove(feature)
 
-    def _update_features_xml(self, root: ET.Element, features: dict[str, str]):
-        """Обновление фич ВМ в XML"""
-        features_elem = root.find('./features')
-        if features_elem is None:
-            features_elem = ET.SubElement(root, 'features')
+            for feature_name, feature_value in vm_update.features.items():
+                feature_elem = ET.SubElement(features_elem, feature_name)
+                feature_elem.set("state", feature_value)
 
-        # Очищаем старые фичи
-        for feature in features_elem:
-            features_elem.remove(feature)
+        if vm_update.memballoon_model is not None:
+            for memballoon in devices_elem.findall("./memballoon"):
+                devices_elem.remove(memballoon)
 
-        # Добавляем новые фичи
-        for feature_name, feature_value in features.items():
-            feature_elem = ET.SubElement(features_elem, feature_name)
-            feature_elem.set('state', feature_value)
+            memballoon_elem = ET.SubElement(devices_elem, "memballoon")
+            memballoon_elem.set("model", vm_update.memballoon_model)
 
-    def _update_memballoon_xml(self, root: ET.Element, memballoon_model: str):
-        """Обновление модели баллона памяти в XML"""
-        devices_elem = root.find('./devices')
-        if devices_elem is None:
-            return
+        if vm_update.hyperv_features is not None:
+            features_elem = root.find("./features")
+            if features_elem is None:
+                features_elem = ET.SubElement(root, "features")
 
-        # Удаляем старый memballoon
-        for memballoon in devices_elem.findall('./memballoon'):
-            devices_elem.remove(memballoon)
+            hyperv_elem = features_elem.find("./hyperv")
+            if hyperv_elem is not None:
+                features_elem.remove(hyperv_elem)
 
-        # Создаем новый memballoon
-        memballoon_elem = ET.SubElement(devices_elem, 'memballoon')
-        memballoon_elem.set('model', memballoon_model)
+            hyperv_elem = ET.SubElement(features_elem, "hyperv")
 
-    def _update_hyperv_xml(self, root: ET.Element, hyperv_features: dict[str, Any]):
-        """Обновление Hyper-V фич в XML"""
-        features_elem = root.find('./features')
-        if features_elem is None:
-            features_elem = ET.SubElement(root, 'features')
+            for feature_name, feature_value in vm_update.hyperv_features.items():
+                if feature_name == "relaxed":
+                    relaxed_elem = ET.SubElement(hyperv_elem, "relaxed")
+                    relaxed_elem.set("state", feature_value)
+                elif feature_name == "vapic":
+                    vapic_elem = ET.SubElement(hyperv_elem, 'vapic')
+                    vapic_elem.set("state", feature_value)
+                elif feature_name == "spinlocks":
+                    spinlocks_elem = ET.SubElement(hyperv_elem, "spinlocks")
+                    spinlocks_elem.set("state", feature_value)
 
-        # Удаляем старые hyperv фичи
-        hyperv_elem = features_elem.find('./hyperv')
-        if hyperv_elem is not None:
-            features_elem.remove(hyperv_elem)
+        if vm_update.qemu_agent is not None:
+            for channel in devices_elem.findall("./channel"):
+                target = channel.find("./target")
+                if target is not None and target.get("type") == "virtio":
+                    devices_elem.remove(channel)
 
-        # Создаем новые hyperv фичи
-        hyperv_elem = ET.SubElement(features_elem, 'hyperv')
+            if vm_update.qemu_agent:
+                channel_elem = ET.SubElement(devices_elem, "channel")
+                channel_elem.set("type", "unix")
+                source_elem = ET.SubElement(channel_elem, "source")
+                source_elem.set("mode", "bind")
+                target_elem = ET.SubElement(channel_elem, 'target')
+                target_elem.set("type", "virtio")
+                target_elem.set("name", "org.qemu.guest_agent.0")
 
-        for feature_name, feature_value in hyperv_features.items():
-            if feature_name == 'relaxed':
-                relaxed_elem = ET.SubElement(hyperv_elem, 'relaxed')
-                relaxed_elem.set('state', feature_value)
-            elif feature_name == 'vapic':
-                vapic_elem = ET.SubElement(hyperv_elem, 'vapic')
-                vapic_elem.set('state', feature_value)
-            elif feature_name == 'spinlocks':
-                spinlocks_elem = ET.SubElement(hyperv_elem, 'spinlocks')
-                spinlocks_elem.set('state', feature_value)
-
-    def _check_needs_reboot(self, vm_update: dict[str, Any]) -> bool:
-        """Проверяет, требуют ли изменения перезагрузки"""
-        # Изменения, которые обычно требуют перезагрузки:
-        reboot_params = [
-            'cpu_model', 'cpu_features', 'machine_type', 'video_model',
-            'os_variant', 'boot_devices', 'features', 'memballoon_model',
-            'hyperv_features'
-        ]
-
-        for param in reboot_params:
-            if param in vm_update:
-                self.logger.info(f"Изменение {param} требует перезагрузки ВМ")
-                return True
-
-        return False
-
-    def _reboot_vm(self, vm_name: str) -> bool:
-        """Перезагрузка ВМ"""
-        cmd = ['virsh', 'reboot', vm_name]
-        return self._execute_virsh_command(cmd, "перезагрузка ВМ")
-
-    def _has_xml_changes(self, vm_update: dict[str, Any]) -> bool:
-        """Проверяет, есть ли изменения, требующие модификации XML"""
-        xml_params = [
-            'cpu_model', 'cpu_features', 'graphics', 'video_model',
-            'machine_type', 'os_variant', 'boot_devices', 'features',
-            'memballoon_model', 'hyperv_features', 'qemu_agent'
-        ]
-
-        return any(param in vm_update for param in xml_params)
-
-    def _execute_virsh_command(self, cmd: list[str], description: str) -> bool:
-        """Выполнение одной команды virsh"""
+    def _execute_virsh_command(self, cmd: list[str]) -> bool:
         try:
-            self.logger.debug(f"Выполнение команды {description}: {' '.join(cmd)}")
+            self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode != 0:
-                self.logger.error(f"Ошибка при {description}: {result.stderr}")
+                self.logger.error(f"Ошибка: {result.stderr}")
                 return False
 
-            self.logger.info(f"{description} выполнена успешно")
             return True
 
         except subprocess.TimeoutExpired:
-            self.logger.error(f"Таймаут при {description}")
+            self.logger.error("Таймаут при выполнении команды")
             return False
         except Exception as e:
-            self.logger.error(f"Ошибка при {description}: {e}")
+            self.logger.error(f"Ошибка: {e}")
             return False
-
-    def _execute_virsh_commands(self, commands: list[list[str]], description: str) -> bool:
-        """Выполнение нескольких команд virsh"""
-        success = True
-        for cmd in commands:
-            if not self._execute_virsh_command(cmd, description):
-                success = False
-        return success
 
     #_______________________________________________Редактирование ВМ_______________________________________________
 

@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from pydantic import field_validator, BaseModel, Field, model_validator
 
@@ -224,7 +225,23 @@ class VMCreateRequest(BaseModel):
         Architecture(v)
         return v
 
-class VMUpdateRequest(BaseModel):
-    name: str | None = None
+class VmUpdateRequest(BaseModel):
     memory_mb: int | None = None
     vcpus: int | None = None
+    max_vcpus: int | None = None
+    current_memory_mb: int | None = None
+    cpu_model: str | None = None
+    cpu_features: list[str] | None = None
+    autostart: bool | None = None
+    description: str | None = None
+    name: str | None = None
+    graphics: dict[str, Any] | None = None
+    video_model: str | None = None
+    machine_type: str | None = None
+    os_variant: str | None = None
+    boot_devices: list[str] | None = None
+    features: dict[str, str] | None = None
+    memballoon_model: str | None = None
+    hyperv_features: dict[str, Any] | None = None
+    qemu_agent: bool | None = None
+    reboot_if_needed: bool = False
