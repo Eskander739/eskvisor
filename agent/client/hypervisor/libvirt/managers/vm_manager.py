@@ -586,6 +586,9 @@ class VmManager(LibvirtClient):
 
         return self.create_vm(config)
 
+
+    #_______________________________________________Редактирование ВМ_______________________________________________
+
     def edit_vm(self, vm_name: str, vm_update: dict[str, Any]) -> bool:
         """
         Редактирование свойств виртуальной машины с использованием virsh.
@@ -1081,10 +1084,7 @@ class VmManager(LibvirtClient):
                 success = False
         return success
 
-    def close(self):
-        """Закрытие соединения"""
-        if self.conn:
-            self.conn.close()
+    #_______________________________________________Редактирование ВМ_______________________________________________
 
     def list_vms(self, only_active: bool = False) -> list[VirtualMachine]:
         """
