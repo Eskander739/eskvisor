@@ -10,7 +10,7 @@ class VMDisk(BaseModel):
     path: str | None = None
     size_gb: int | None = 1
     bus: DiskBus | str = DiskBus.VIRTIO
-    device_type: DiskDeviceType | str = Field(default=DiskDeviceType.DISK, description="Тип устройства")
+    device_type: DiskDeviceType | str = Field(default=DiskDeviceType.DISK, description="Тип устройства") # TODO: Добавить поддержку в методах
     disk_type: DiskType = DiskType.FILE
     format: DiskFormat | str = DiskFormat.QCOW2
     cache: str = "none"
