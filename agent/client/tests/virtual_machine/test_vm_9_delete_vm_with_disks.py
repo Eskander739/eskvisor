@@ -12,7 +12,7 @@ from agent.client.tools import wait_while_not
 
 
 @pytest.mark.tags("VM‑09", "Удаление ВМ (с удалением дисков)")
-def test_vm_01_create_vm(vm_session, storage_session):
+def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
     """
     VM‑09: Удаление ВМ (с удалением дисков)
 

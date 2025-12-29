@@ -12,7 +12,7 @@ from agent.client.tools import wait_while_not
 
 
 @pytest.mark.tags("VM‑05", "Изменение ресурсов ВМ (CPU, RAM)")
-def test_vm_01_create_vm(vm_session):
+def test_vm_05_change_resource(vm_session):
     """
     VM‑01: Создание ВМ (без установки ОС)
 
