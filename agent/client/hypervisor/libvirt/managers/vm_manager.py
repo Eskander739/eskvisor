@@ -1331,7 +1331,7 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка получения XML для ВМ {name}, \nerr: {e}")
             return None
 
-    def delete_vm_with_force(self, name: str, request_id: str):
+    def delete_vm_with_force(self, name: str, request_id: str, delete_disks: bool = True):
         """
         Вспомогательная функция для принудительного удаления ВМ
         Используйте эту функцию если обычное удаление не работает
@@ -1339,12 +1339,13 @@ class VmManager(LibvirtClient):
         Args:
             name: Имя ВМ
             request_id: id запроса
+            delete_disks: удалять ли диски ВМ
         """
 
         methods = [
-            lambda: self.delete_vm(name, delete_nvram=True, request_id=request_id),
-            lambda: self.delete_vm(name, delete_nvram=False, request_id=request_id),
-            lambda: self._delete_vm_with_nvram_fallback(name, request_id)
+            lambda: self.delete_vm(name, delete_disks=delete_disks, delete_nvram=True, request_id=request_id),
+            lambda: self.delete_vm(name, delete_disks=delete_disks, delete_nvram=False, request_id=request_id),
+            lambda: self._delete_vm_with_nvram_fallback(name, request_id, delete_disks=delete_disks)
         ]
 
         for i, method in enumerate(methods, 1):
