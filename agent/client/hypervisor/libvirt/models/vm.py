@@ -223,3 +223,8 @@ class VMCreateRequest(BaseModel):
     def validate_architecture(cls, v):
         Architecture(v)
         return v
+
+class VMUpdateRequest(BaseModel):
+    name: str | None = None
+    memory_mb: int | None = None
+    vcpus: int | None = None
