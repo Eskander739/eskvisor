@@ -3,11 +3,13 @@ import pprint
 import shutil
 import subprocess
 import json
+import tempfile
 import time
 import uuid
 from typing import Any
 from pathlib import Path
 
+import libvirt
 from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 
 from agent.client.cli import CLIControl
@@ -584,32 +586,498 @@ class VmManager(LibvirtClient):
 
         return self.create_vm(config)
 
-    def edit_vm(self, vm_name: str, **changes) -> bool:
+    def edit_vm(self, vm_name: str, vm_update: dict[str, Any]) -> bool:
         """
-        Редактирование существующей ВМ
+        Редактирование виртуальной машины с использованием virsh.
+        Поддерживает изменения как в запущенном, так и в остановленном состоянии.
 
         Args:
-            vm_name: Имя ВМ для редактирования
-            **changes: Изменяемые параметры
+            vm_name: Имя виртуальной машины
+            vm_update: Словарь с параметрами для обновления
 
         Returns:
-            Успех операции
+            bool: True если успешно, False если ошибка
         """
         try:
-            domain = self.conn.lookupByName(vm_name)
-            xml_config = domain.XMLDesc(0)
+            self.logger.info(f"Редактирование ВМ {vm_name} с помощью virsh")
 
-            self.logger.logger.warning("Метод edit_vm требует реализации парсера XML")
+            # Проверяем существование ВМ
+            try:
+                vm = self.conn.lookupByName(vm_name)
+                state, _ = vm.state()
+                is_running = state == libvirt.VIR_DOMAIN_RUNNING
+                self.logger.debug(f"Состояние ВМ: {'запущена' if is_running else 'остановлена'}")
+            except libvirt.libvirtError as e:
+                self.logger.error(f"ВМ {vm_name} не найдена: {e}")
+                return False
 
-            if 'new_name' in changes:
-                new_name = changes.pop('new_name')
-                pass
+            # Генерируем XML для обновления
+            update_xml = self._generate_update_xml(vm_name, vm_update, vm.XMLDesc())
 
+            # Сохраняем XML во временный файл
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as tmp:
+                tmp.write(update_xml)
+                tmp_path = tmp.name
+
+            try:
+                # Применяем изменения в зависимости от состояния ВМ
+                if is_running:
+                    return self._apply_live_changes(vm_name, vm_update, tmp_path)
+                else:
+                    return self._apply_offline_changes(vm_name, tmp_path)
+
+            finally:
+                # Удаляем временный файл
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при редактировании ВМ: {e}")
             return False
 
-        except self.libvirtError as e:
-            self.logger.error(f"Ошибка редактирования ВМ '{vm_name}', \nerr: {e}")
+    def _generate_update_xml(self, vm_name: str, vm_update: dict[str, Any], current_xml: str) -> str:
+        """Генерация обновленного XML для ВМ"""
+        root = ET.fromstring(current_xml)
+
+        # Обновляем базовые параметры
+        self._update_xml_basic(root, vm_update)
+
+        # Обновляем ресурсы
+        self._update_xml_resources(root, vm_update)
+
+        # Обновляем устройства
+        self._update_xml_devices(root, vm_update)
+
+        # Обновляем другие настройки
+        self._update_xml_other(root, vm_update)
+
+        return ET.tostring(root, encoding='unicode')
+
+    def _apply_live_changes(self, vm_name: str, vm_update: dict[str, Any], xml_path: str) -> bool:
+        """Применение изменений к запущенной ВМ"""
+        self.logger.info(f"Применение live-изменений к ВМ {vm_name}")
+
+        success = True
+
+        # 1. Live-изменения (можно применить без перезагрузки)
+
+        # Обновление памяти (увеличение)
+        if 'memory_mb' in vm_update:
+            memory_kb = vm_update['memory_mb'] * 1024
+            cmd = ['virsh', 'setmem', vm_name, str(memory_kb), '--live']
+            if not self._run_virsh_command(cmd):
+                success = False
+                self.logger.warning(f"Не удалось обновить память в live-режиме")
+
+        # Обновление vCPU
+        if 'vcpus' in vm_update:
+            cmd = ['virsh', 'setvcpus', vm_name, str(vm_update['vcpus']), '--live']
+            if not self._run_virsh_command(cmd):
+                success = False
+                self.logger.warning(f"Не удалось обновить vCPU в live-режиме")
+
+        # 2. Комбинированные изменения (live + конфигурация)
+        # Для некоторых изменений применяем live и сохраняем в конфиг
+
+        # Обновляем конфигурацию с флагом --live --config
+        if 'memory_mb' in vm_update:
+            memory_kb = vm_update['memory_mb'] * 1024
+            cmd = ['virsh', 'setmem', vm_name, str(memory_kb), '--live', '--config']
+            self._run_virsh_command(cmd)
+
+        if 'vcpus' in vm_update:
+            cmd = ['virsh', 'setvcpus', vm_name, str(vm_update['vcpus']), '--live', '--config']
+            self._run_virsh_command(cmd)
+
+        # 3. Изменения, требующие перезагрузки
+        # Определяем, нужна ли перезагрузка для оставшихся изменений
+        needs_reboot = self._check_needs_reboot(vm_update)
+
+        if needs_reboot:
+            self.logger.info(f"Для некоторых изменений требуется перезагрузка ВМ")
+
+            # Обновляем конфигурацию (это будет применено после перезагрузки)
+            cmd = ['virsh', 'define', xml_path]
+            if not self._run_virsh_command(cmd):
+                success = False
+                self.logger.error(f"Не удалось обновить конфигурацию")
+
+            # Предлагаем перезагрузить ВМ
+            if vm_update.get('reboot_if_needed', False):
+                self.logger.info(f"Перезагрузка ВМ {vm_name} для применения изменений")
+                cmd = ['virsh', 'reboot', vm_name]
+                if not self._run_virsh_command(cmd):
+                    self.logger.warning(f"Не удалось перезагрузить ВМ, изменения применятся при следующем запуске")
+        else:
+            # Если перезагрузка не требуется, просто обновляем конфигурацию
+            cmd = ['virsh', 'define', xml_path]
+            if not self._run_virsh_command(cmd):
+                success = False
+
+        return success
+
+    def _apply_offline_changes(self, vm_name: str, xml_path: str) -> bool:
+        """Применение изменений к остановленной ВМ"""
+        self.logger.info(f"Применение изменений к остановленной ВМ {vm_name}")
+
+        # Просто обновляем конфигурацию
+        cmd = ['virsh', 'define', xml_path]
+        return self._run_virsh_command(cmd)
+
+    def _run_virsh_command(self, cmd: list) -> bool:
+        """Выполнение команды virsh"""
+        try:
+            self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                self.logger.error(f"Ошибка выполнения команды: {result.stderr}")
+                return False
+
+            self.logger.debug(f"Команда выполнена успешно: {result.stdout}")
+            return True
+
+        except subprocess.TimeoutExpired:
+            self.logger.error(f"Таймаут выполнения команды")
             return False
+        except Exception as e:
+            self.logger.error(f"Ошибка выполнения команды: {e}")
+            return False
+
+    def _check_needs_reboot(self, vm_update: dict[str, Any]) -> bool:
+        """Проверяет, требуют ли изменения перезагрузки"""
+        # Изменения, требующие перезагрузки:
+        reboot_changes = [
+            'os_type', 'architecture', 'machine_type', 'cpu_model',
+            'add_disk', 'remove_disk', 'add_network', 'remove_network',
+            'graphics_type', 'video_model'
+        ]
+
+        for change in reboot_changes:
+            if change in vm_update:
+                return True
+
+        # Изменение контроллеров также может требовать перезагрузки
+        if 'controllers' in vm_update:
+            return True
+
+        return False
+
+    def _update_xml_basic(self, root: ET.Element, vm_update: dict[str, Any]):
+        """Обновление базовых параметров в XML"""
+        # Обновление имени
+        if 'name' in vm_update:
+            name_elem = root.find('name')
+            if name_elem is not None:
+                name_elem.text = vm_update['name']
+
+        # Обновление описания
+        if 'description' in vm_update:
+            # Ищем или создаем элемент description
+            description_elem = root.find('description')
+            if description_elem is None:
+                description_elem = ET.SubElement(root, 'description')
+            description_elem.text = vm_update['description']
+
+        # Обновление UUID (осторожно!)
+        if 'uuid' in vm_update:
+            uuid_elem = root.find('uuid')
+            if uuid_elem is None:
+                uuid_elem = ET.SubElement(root, 'uuid')
+            uuid_elem.text = vm_update['uuid']
+
+    def _update_xml_resources(self, root: ET.Element, vm_update: dict[str, Any]):
+        """Обновление ресурсов в XML"""
+        # Обновление памяти
+        if 'memory_mb' in vm_update:
+            memory_elem = root.find('memory')
+            if memory_elem is not None:
+                memory_elem.text = str(vm_update['memory_mb'] * 1024)
+                memory_elem.set('unit', 'KiB')
+
+            current_memory_elem = root.find('currentMemory')
+            if current_memory_elem is not None:
+                current_memory_elem.text = str(vm_update['memory_mb'] * 1024)
+                current_memory_elem.set('unit', 'KiB')
+
+        # Обновление vCPU
+        if 'vcpus' in vm_update:
+            vcpu_elem = root.find('vcpu')
+            if vcpu_elem is not None:
+                vcpu_elem.text = str(vm_update['vcpus'])
+                if 'max_vcpus' in vm_update:
+                    vcpu_elem.set('current', str(vm_update['vcpus']))
+
+        if 'max_vcpus' in vm_update:
+            vcpu_elem = root.find('vcpu')
+            if vcpu_elem is not None:
+                vcpu_elem.text = str(vm_update['max_vcpus'])
+
+        # Обновление CPU модели
+        if 'cpu_model' in vm_update:
+            cpu_elem = root.find('cpu')
+            if cpu_elem is None:
+                cpu_elem = ET.SubElement(root, 'cpu')
+                cpu_elem.set('mode', 'custom')
+                cpu_elem.set('match', 'exact')
+
+            model_elem = cpu_elem.find('model')
+            if model_elem is None:
+                model_elem = ET.SubElement(cpu_elem, 'model')
+
+            model_elem.text = vm_update['cpu_model']
+            model_elem.set('fallback', 'allow')
+
+    def _update_xml_devices(self, root: ET.Element, vm_update: dict[str, Any]):
+        """Обновление устройств в XML"""
+        devices_elem = root.find('devices')
+        if devices_elem is None:
+            devices_elem = ET.SubElement(root, 'devices')
+
+        # Обновление дисков
+        if 'disks' in vm_update:
+            # Удаляем все существующие диски
+            for disk in devices_elem.findall('disk'):
+                devices_elem.remove(disk)
+
+            # Добавляем новые диски
+            for disk_info in vm_update['disks']:
+                disk_elem = ET.SubElement(devices_elem, 'disk')
+                disk_elem.set('type', 'file')
+                disk_elem.set('device', 'disk')
+
+                # Источник
+                driver_elem = ET.SubElement(disk_elem, 'driver')
+                driver_elem.set('name', 'qemu')
+                driver_elem.set('type', disk_info.get('format', 'qcow2'))
+                driver_elem.set('cache', disk_info.get('cache', 'none'))
+
+                source_elem = ET.SubElement(disk_elem, 'source')
+                source_elem.set('file', disk_info['path'])
+
+                target_elem = ET.SubElement(disk_elem, 'target')
+                target_elem.set('dev', disk_info.get('dev', 'vda'))
+                target_elem.set('bus', disk_info.get('bus', 'virtio'))
+
+        # Обновление сетевых интерфейсов
+        if 'networks' in vm_update:
+            # Удаляем все существующие интерфейсы
+            for interface in devices_elem.findall('interface'):
+                devices_elem.remove(interface)
+
+            # Добавляем новые интерфейсы
+            for net_info in vm_update['networks']:
+                interface_elem = ET.SubElement(devices_elem, 'interface')
+                interface_elem.set('type', 'network')
+
+                source_elem = ET.SubElement(interface_elem, 'source')
+                source_elem.set('network', net_info.get('source', 'default'))
+
+                model_elem = ET.SubElement(interface_elem, 'model')
+                model_elem.set('type', net_info.get('model', 'virtio'))
+
+                if 'mac_address' in net_info:
+                    mac_elem = ET.SubElement(interface_elem, 'mac')
+                    mac_elem.set('address', net_info['mac_address'])
+
+        # Обновление графики
+        if 'graphics' in vm_update:
+            # Удаляем старую графику
+            for graphics in devices_elem.findall('graphics'):
+                devices_elem.remove(graphics)
+
+            graphics_elem = ET.SubElement(devices_elem, 'graphics')
+            graphics_elem.set('type', vm_update['graphics'])
+
+            if vm_update['graphics'] == 'vnc':
+                graphics_elem.set('port', '-1')
+                graphics_elem.set('autoport', 'yes')
+                graphics_elem.set('listen', '0.0.0.0')
+            elif vm_update['graphics'] == 'spice':
+                graphics_elem.set('autoport', 'yes')
+
+        # Обновление видео
+        if 'video_model' in vm_update:
+            # Удаляем старое видео
+            for video in devices_elem.findall('video'):
+                devices_elem.remove(video)
+
+            video_elem = ET.SubElement(devices_elem, 'video')
+            model_elem = ET.SubElement(video_elem, 'model')
+            model_elem.set('type', vm_update['video_model'])
+
+    def _update_xml_other(self, root: ET.Element, vm_update: dict[str, Any]):
+        """Обновление других настроек в XML"""
+        # Обновление типа ОС
+        if 'os_type' in vm_update:
+            os_elem = root.find('os')
+            if os_elem is None:
+                os_elem = ET.SubElement(root, 'os')
+
+            type_elem = os_elem.find('type')
+            if type_elem is None:
+                type_elem = ET.SubElement(os_elem, 'type')
+
+            type_elem.text = vm_update['os_type']
+            type_elem.set('arch', vm_update.get('architecture', 'x86_64'))
+
+            # Машина type
+            if 'machine_type' in vm_update:
+                type_elem.set('machine', vm_update['machine_type'])
+
+        # Обновление автозапуска
+        if 'autostart' in vm_update:
+            # Это управляется через отдельную команду virsh, не через XML
+            pass
+
+        # Обновление features
+        if 'features' in vm_update:
+            features_elem = root.find('features')
+            if features_elem is None:
+                features_elem = ET.SubElement(root, 'features')
+
+            # Очищаем существующие фичи
+            for feature in features_elem:
+                features_elem.remove(feature)
+
+            # Добавляем новые фичи
+            for feature_name, feature_value in vm_update['features'].items():
+                feature_elem = ET.SubElement(features_elem, feature_name)
+                feature_elem.set('state', feature_value)
+
+    def edit_vm_direct_virsh(self, vm_name: str, vm_update: dict[str, Any]) -> bool:
+        """
+        Прямое редактирование ВМ через отдельные команды virsh.
+        Более гибкий метод, позволяет редактировать отдельные параметры.
+        """
+        try:
+            self.logger.info(f"Прямое редактирование ВМ {vm_name} через virsh команды")
+
+            # Проверяем существование ВМ
+            try:
+                vm = self.conn.lookupByName(vm_name)
+                state, _ = vm.state()
+                is_running = state == libvirt.VIR_DOMAIN_RUNNING
+            except libvirt.libvirtError:
+                self.logger.error(f"ВМ {vm_name} не найдена")
+                return False
+
+            success = True
+
+            # Применяем изменения в зависимости от параметров
+            for param, value in vm_update.items():
+                if not self._apply_single_param(vm_name, param, value, is_running):
+                    success = False
+                    self.logger.warning(f"Не удалось применить параметр {param}")
+
+            return success
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при прямом редактировании ВМ: {e}")
+            return False
+
+    def _apply_single_param(self, vm_name: str, param: str, value: Any, is_running: bool) -> bool:
+        """Применение одного параметра через virsh"""
+
+        virsh_commands = {
+            'memory_mb': lambda v: [
+                ['virsh', 'setmem', vm_name, str(v * 1024), '--config'],
+                ['virsh', 'setmaxmem', vm_name, str(v * 1024), '--config']
+            ],
+            'vcpus': lambda v: [
+                ['virsh', 'setvcpus', vm_name, str(v), '--config'],
+                ['virsh', 'setvcpus', vm_name, str(v), '--maximum', '--config']
+            ],
+            'autostart': lambda v: [
+                ['virsh', 'autostart', vm_name] if v else ['virsh', 'autostart', vm_name, '--disable']
+            ],
+            'description': lambda v: [
+                ['virsh', 'desc', vm_name, v]
+            ],
+            'cpu_model': lambda v: [
+                ['virsh', 'setvcpu', vm_name, '--config', '--model', v]
+            ],
+            'graphics': lambda v: self._create_graphics_commands(vm_name, v),
+            'add_disk': lambda v: self._create_add_disk_commands(vm_name, v),
+            'remove_disk': lambda v: [
+                ['virsh', 'detach-disk', vm_name, v['target'], '--config']
+            ]
+        }
+
+        # Live команды (если ВМ запущена)
+        if is_running:
+            live_commands = {
+                'memory_mb': lambda v: [
+                    ['virsh', 'setmem', vm_name, str(v * 1024), '--live']
+                ],
+                'vcpus': lambda v: [
+                    ['virsh', 'setvcpus', vm_name, str(v), '--live']
+                ]
+            }
+
+            if param in live_commands:
+                commands = live_commands[param](value)
+                for cmd in commands:
+                    if not self._run_virsh_command(cmd):
+                        return False
+
+        # Конфигурационные команды (всегда применяются)
+        if param in virsh_commands:
+            commands = virsh_commands[param](value)
+            for cmd in commands:
+                if not self._run_virsh_command(cmd):
+                    return False
+
+        return True
+
+    def _create_graphics_commands(self, vm_name: str, graphics_config: dict[str, Any]) -> list:
+        """Создание команд для настройки графики"""
+        commands = []
+
+        # Создаем временный XML для графики
+        graphics_xml = f'''<graphics type='{graphics_config.get("type", "vnc")}' autoport='yes'>
+            <listen type='address' address='{graphics_config.get("listen", "0.0.0.0")}'/>
+        </graphics>'''
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as tmp:
+            tmp.write(graphics_xml)
+            xml_path = tmp.name
+
+        commands.append(['virsh', 'change-media', vm_name, '--graphics', xml_path, '--config'])
+
+        # Удаляем временный файл после выполнения
+        import atexit
+        atexit.register(lambda: os.unlink(xml_path) if os.path.exists(xml_path) else None)
+
+        return commands
+
+    def _create_add_disk_commands(self, vm_name: str, disk_config: dict[str, Any]) -> list:
+        """Создание команд для добавления диска"""
+        commands = []
+
+        # Команда для создания диска
+        if 'size_gb' in disk_config:
+            cmd = ['qemu-img', 'create', '-f', disk_config.get('format', 'qcow2'),
+                   disk_config['path'], f"{disk_config['size_gb']}G"]
+            commands.append(cmd)
+
+        # Команда для подключения диска
+        attach_cmd = ['virsh', 'attach-disk', vm_name, disk_config['path'],
+                      disk_config.get('target', 'vdb'), '--config']
+
+        if 'bus' in disk_config:
+            attach_cmd.extend(['--bus', disk_config['bus']])
+        if 'cache' in disk_config:
+            attach_cmd.extend(['--cache', disk_config['cache']])
+
+        commands.append(attach_cmd)
+
+        return commands
 
     def list_vms(self, only_active: bool = False) -> list[VirtualMachine]:
         """
@@ -1071,6 +1539,10 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка при парсинге XML для поиска NVRAM: {e}")
             return None
 
+    @staticmethod
+    def _generate_uuid():
+        return str(uuid.uuid4())
+
     def clone_vm(self, source_name: str, new_name: str, new_uuid: bool = True) -> dict[str, Any]:
         """
         Клонирование существующей ВМ
@@ -1130,6 +1602,45 @@ class VmManager(LibvirtClient):
                 "success": False,
                 "error": error_msg
             }
+
+
+# Пример использования
+def edit_vm_example():
+    """Пример использования методов редактирования ВМ"""
+
+    # Настройка логирования
+
+    with VmManager() as vm_manager:
+        # Пример 1: Редактирование с помощью основного метода
+        vm_update = {
+            'name': 'updated-vm-name',
+            'memory_mb': 2048,  # Увеличиваем память до 2GB
+            'vcpus': 4,  # Увеличиваем vCPU до 4
+            'description': 'Обновленная виртуальная машина',
+            'graphics': {'type': 'vnc', 'listen': '0.0.0.0'},
+            'autostart': True,
+            'reboot_if_needed': True  # Автоматически перезагрузить если нужно
+        }
+
+        success = vm_manager.edit_vm('my-vm', vm_update)
+        print(f"Редактирование ВМ: {'Успешно' if success else 'Неудачно'}")
+
+        # Пример 2: Прямое редактирование отдельными командами
+        direct_update = {
+            'memory_mb': 4096,
+            'vcpus': 8,
+            'autostart': False,
+            'add_disk': {
+                'path': '/var/lib/libvirt/images/new-disk.qcow2',
+                'size_gb': 50,
+                'format': 'qcow2',
+                'target': 'vdc',
+                'bus': 'virtio'
+            }
+        }
+
+        success = vm_manager.edit_vm_direct_virsh('my-vm', direct_update)
+        print(f"Прямое редактирование ВМ: {'Успешно' if success else 'Неудачно'}")
 
 
 if __name__ == "__main__":
