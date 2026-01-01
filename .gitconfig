@@ -1,0 +1,15 @@
+[init]
+    defaultBranch = release-0.3
+
+[pull]
+    default = current
+    rebase = false
+
+[alias]
+    default = checkout release-0.3
+    main = checkout release-0.3
+    m = checkout release-0.3
+
+[branch "release-0.3"]
+    remote = origin
+    merge = refs/heads/release-0.3
