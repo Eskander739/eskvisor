@@ -16,7 +16,8 @@ pyproject.toml
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.iso
+*.img
 # C extensions
 *.so
 
