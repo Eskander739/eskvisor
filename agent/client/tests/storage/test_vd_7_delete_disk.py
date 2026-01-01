@@ -1,10 +1,9 @@
-import os
 import random
 
 import pytest
 
-from agent.client.hypervisor.models.disk import DiskQuery, DiskCreate, DiskFormat, DiskStatus
-from agent.client.hypervisor.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate, DiskFormat, DiskStatus
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("VD‑07", "Удаление диска")

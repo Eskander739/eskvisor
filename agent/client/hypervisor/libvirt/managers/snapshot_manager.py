@@ -1,7 +1,7 @@
 import libvirt
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.models.snapshots import SnapshotWithParent, Snapshot
+from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot
 
 
 class SnapshotManager(LibvirtClient):

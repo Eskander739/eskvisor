@@ -3,7 +3,7 @@ import getpass
 import libvirt
 import logging
 
-from agent.client.hypervisor.models.node import NodeInfo
+from agent.client.hypervisor.libvirt.models.node import NodeInfo
 
 
 class LibvirtClient:

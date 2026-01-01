@@ -32,18 +32,6 @@ class OSType(str, Enum):
     GENERIC = "generic"
 
 
-class DiskBus(str, Enum):
-    """Типы шин для дисков"""
-    VIRTIO = "virtio"
-    SATA = "sata"
-    SCSI = "scsi"
-    IDE = "ide"
-    USB = "usb"
-    SD = "sd"
-    XEN = "xen"
-    NVDIMM = "nvdimm"
-
-
 class DiskType(str, Enum):
     """Типы дисков"""
     FILE = "file"
@@ -56,13 +44,6 @@ class DiskType(str, Enum):
     FLOPPY = "floppy"  # Дискета
 
 
-class DiskDeviceType(str, Enum):
-    """Типы устройств (target dev type в libvirt)"""
-    DISK = "disk"           # Основной диск
-    CDROM = "cdrom"         # CD/DVD привод
-    FLOPPY = "floppy"       # Дискета
-
-
 class DiskFormat(str, Enum):
     """Форматы дисков"""
     QCOW2 = "qcow2"
@@ -71,6 +52,7 @@ class DiskFormat(str, Enum):
     VDI = "vdi"
     VHD = "vhd"
     VHDX = "vhdx"
+    ISO = "iso" # Для образов
 
 
 class NetworkType(str, Enum):

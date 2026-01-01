@@ -2,8 +2,8 @@ from enum import Enum
 
 from pydantic import BaseModel, model_validator
 
-from agent.client.hypervisor.models.disk import Disk
-from agent.client.hypervisor.models.vm import VirtualMachine
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import Disk
+from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
 class CommandMessagesEnum(Enum):
@@ -37,6 +37,7 @@ class CommandMessagesEnum(Enum):
     disk_successfully_attached = "Disk successfully attached"
     disk_attach_error = "Disk attach error"
     disk_already_attached_error = "Disk already attached error"
+    disk_already_created = "Disk already created"
     disk_attach_libvirt_error = "Disk attach libvirt error"
     disk_attach_unexpected_error = "Disk attach unexpected error"
     disk_convert_successfully = "Disk convert successfully"

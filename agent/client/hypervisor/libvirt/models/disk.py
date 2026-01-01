@@ -1,23 +1,22 @@
 from pathlib import Path
 
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator
 
-from agent.client.hypervisor.libvirt.models.enum import DiskBus, DiskType, DiskFormat, DiskDeviceType
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import BusType
+from agent.client.hypervisor.libvirt.models.enum import DiskType, DiskFormat
 
 
 class VMDisk(BaseModel):
     """Модель диска ВМ"""
     path: str | None = None
     size_gb: int | None = 1
-    bus: DiskBus | str = DiskBus.VIRTIO
-    device_type: DiskDeviceType | str = Field(default=DiskDeviceType.DISK, description="Тип устройства") # TODO: Добавить поддержку в методах
-    disk_type: DiskType = DiskType.FILE
-    format: DiskFormat | str = DiskFormat.QCOW2
+    bus: BusType | str = BusType.VIRTIO
+    disk_type: DiskType | str = DiskType.FILE
+    format: DiskFormat | str = DiskFormat.ISO
     cache: str = "none"
     readonly: bool = False
     shareable: bool = False
     serial: str | None = None
-    boot_order: int | None = None
 
     @field_validator('path')
     def validate_path(cls, v):
@@ -33,7 +32,7 @@ class VMDisk(BaseModel):
 
     @field_validator("bus")
     def validate_bus(cls, v):
-        DiskBus(v)
+        BusType(v)
         return v
 
 

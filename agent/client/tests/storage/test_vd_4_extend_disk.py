@@ -2,8 +2,8 @@ import random
 
 import pytest
 
-from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus, DiskUpdate
-from agent.client.hypervisor.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskFormat, DiskCreate, DiskStatus, DiskUpdate
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("VD‑04", "Расширение диска")

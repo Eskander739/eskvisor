@@ -5,10 +5,11 @@ from pydantic import field_validator, BaseModel, Field, model_validator
 
 from agent.client.hypervisor.libvirt.models.controller import VMController
 from agent.client.hypervisor.libvirt.models.disk import VMDisk
-from agent.client.hypervisor.libvirt.models.enum import Architecture, EmulatorType, OSType, GraphicsType, DiskBus, \
-    ControllerType
-from agent.client.hypervisor.libvirt.models.network import VMNetwork
-from agent.client.hypervisor.models.general import MachineType
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import BusType, Disk, DiskCreate
+from agent.client.hypervisor.libvirt.models.enum import Architecture, EmulatorType, OSType, GraphicsType, \
+    ControllerType, DiskType
+from agent.client.hypervisor.libvirt.models.general import MachineType, VMState
+from agent.client.hypervisor.libvirt.models.network import NetworkParameters
 
 
 class VMCreateRequest(BaseModel):
@@ -23,6 +24,7 @@ class VMCreateRequest(BaseModel):
     emulator_type: EmulatorType = EmulatorType.KVM
     os_type: OSType | str = OSType.LINUX
     os_variant: str | None = "generic"  # ubuntu22.04, centos8, win10 и т.д.
+    noautoconsole: bool = True
 
     # Ресурсы
     memory_mb: int = 1024
@@ -33,8 +35,8 @@ class VMCreateRequest(BaseModel):
     cpu_features: list[str] | None = None
 
     # Устройства
-    disks: list[VMDisk] = Field(default_factory=list)
-    networks: list[VMNetwork] = Field(default_factory=list)
+    disks: list[DiskCreate] = Field(default_factory=list)
+    networks: list[NetworkParameters] = Field(default_factory=list)
     controllers: list[VMController] = Field(default_factory=list)
 
     # Графика и консоль
@@ -48,8 +50,6 @@ class VMCreateRequest(BaseModel):
     autostart: bool = False
     boot_devices: list[str] | None = None
     extra_args: str | None = None
-    location: str | None = None  # Путь к ISO для установки
-    cdrom: str | None = None
     video_model: str = "qxl"
 
     machine_type: MachineType = Field(
@@ -100,7 +100,6 @@ class VMCreateRequest(BaseModel):
         if values.boot_devices is None and values.install_method is None:
             raise ValueError("Несовместимые параметры "
                              "нельзя использовать boot_devices=None и диски с install_method=None")
-
 
         return values
 
@@ -165,7 +164,7 @@ class VMCreateRequest(BaseModel):
 
         # Добавляем SCSI контроллер если есть SCSI диски
         disks = values.get('disks', [])
-        if any(disk.bus == DiskBus.SCSI for disk in disks):
+        if any(disk.bus == BusType.SCSI for disk in disks):
             scsi_controller = VMController(
                 controller_type=ControllerType.SCSI,
                 index=0,
@@ -174,7 +173,7 @@ class VMCreateRequest(BaseModel):
             controllers.append(scsi_controller)
 
         # Добавляем SATA контроллер если есть SATA диски
-        if any(disk.bus == DiskBus.SATA for disk in disks):
+        if any(disk.bus == BusType.SATA for disk in disks):
             sata_controller = VMController(
                 controller_type=ControllerType.SATA,
                 index=0,
@@ -184,7 +183,7 @@ class VMCreateRequest(BaseModel):
 
         # Добавляем IDE контроллер если есть IDE диски или CDROM
         cdrom = values.get("cdrom")
-        if any(disk.bus == DiskBus.IDE for disk in disks) or cdrom:
+        if any(disk.bus == BusType.IDE for disk in disks) or cdrom:
             ide_controller = VMController(
                 controller_type=ControllerType.IDE,
                 index=0,
@@ -199,12 +198,6 @@ class VMCreateRequest(BaseModel):
         """Валидация дисков"""
         if not v:
             raise ValueError("Хотя бы один диск должен быть указан")
-
-        # Проверяем уникальность boot_order
-        boot_orders = [d.boot_order for d in v if d.boot_order is not None]
-        if len(boot_orders) != len(set(boot_orders)):
-            raise ValueError("Boot order должен быть уникальным для каждого диска")
-
         return v
 
 
@@ -245,3 +238,15 @@ class VmUpdateRequest(BaseModel):
     hyperv_features: dict[str, Any] | None = None
     qemu_agent: bool | None = None
     reboot_if_needed: bool = False
+
+
+class VirtualMachine(BaseModel):
+    """Информация о виртуальной машине"""
+    name: str
+    state: VMState
+    id: int
+    uuid: str
+    vcpus: int
+    memory: int  # в килобайтах
+    max_memory: int  # в килобайтах
+    cpu_time: int  # в наносекундах

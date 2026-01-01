@@ -1,9 +1,8 @@
 import random
-import uuid
 
 import pytest
-from agent.client.hypervisor.models.disk import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
-from agent.client.hypervisor.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 RANDOM_NAME = random.randint(10000, 99999)
 
@@ -22,8 +21,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
     Убедиться, что ВМ видит диск.
     """
 
-    vm_name = create_stopped_vm.name
-    request_id = str(uuid.uuid4())
+    vm_name, request_id = create_stopped_vm
     target_dev = "vdb"
     disk_path = None
     try:

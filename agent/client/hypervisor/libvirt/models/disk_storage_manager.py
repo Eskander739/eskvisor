@@ -17,7 +17,8 @@ class DiskFormat(Enum):
     QCOW = "qcow"  # QEMU Copy-On-Write v1 (устаревший)
     RAW = "raw"  # Сырой образ (raw image)
     QED = "qed"  # QEMU Enhanced Disk (устаревший)
-
+    ISO = "iso" # Для образов
+    IMG = "img" # Для образов
     # Форматы VMware
     VMDK = "vmdk"  # VMware Virtual Machine Disk
     VDI = "vdi"  # VirtualBox Virtual Disk Image
@@ -55,6 +56,26 @@ class DiskFormat(Enum):
 
     # Неизвестный/неопределенный формат
     UNKNOWN = "unknown"
+
+
+def disk_format_by_path(disk_path: str) -> DiskFormat:
+    print("УФФФФ БЛЯ: ", disk_path)
+    if disk_path.endswith(".qcow2"):
+        return DiskFormat.QCOW2
+    elif disk_path.endswith(".raw") or disk_path.endswith(".img"):
+        return DiskFormat.RAW
+    elif disk_path.endswith(".vmdk"):
+        return DiskFormat.VMDK
+    elif disk_path.endswith(".vdi"):
+        return DiskFormat.VDI
+    elif disk_path.endswith(".vhd") or disk_path.endswith(".vhdx"):
+        return DiskFormat.VHDX
+    elif disk_path.endswith(".iso"):
+        return DiskFormat.ISO
+    elif disk_path.endswith(".img"):
+        return DiskFormat.IMG
+    return DiskFormat.UNKNOWN
+
 
 # Enum для типов шин
 class BusType(Enum):
@@ -158,6 +179,8 @@ class Disk(BaseModel):
     io_mode: IoMode | None = Field(None, description="Режим ввода-вывода")
     discard: DiscardMode | None = Field(None, description="Поддержка discard")
     detect_zeroes: DetectZeroesMode | None = Field(None, description="Обнаружение нулей")
+    shareable: bool = False # TODO: Не реализовано
+    serial: str | None = None
 
     @field_validator("allocation_gb")
     def validate_allocation_gb(cls, v, values):
@@ -239,6 +262,29 @@ class Disk(BaseModel):
             return self.allocation_bytes < self.capacity_bytes
         return False
 
+
+    @field_validator("path")
+    def validate_path(cls, v):
+        path = Path(v)
+        # Если это новый диск (есть size_gb), проверяем директорию
+        # Если это существующий диск, проверяем наличие файла
+        if path.exists():
+            if not path.is_file():
+                raise ValueError(f"Путь {v} существует, но не является файлом")
+        return str(path)
+
+
+    @field_validator("bus_type")
+    def validate_bus(cls, v):
+        BusType(v)
+        return v
+
+
+    @field_validator("format")
+    def validate_format(cls, v):
+        DiskFormat(v)
+        return v
+
     # Конфигурация Pydantic
     class Config:
         use_enum_values = False  # Сохранять enum объекты, а не строки
@@ -250,15 +296,23 @@ class Disk(BaseModel):
 
 # Дополнительная модель для создания диска (без опциональных полей)
 class DiskCreate(BaseModel):
-    """Модель для создания нового диска"""
+    """
+    Модель для создания нового диска
+    """
     request_id: str = str(uuid.uuid4())
     name: str = Field(f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255)
-    path: str = f"/home/eska/.local/share/libvirt/images/"
+    path: str | None = f"/home/eska/.local/share/libvirt/images/"
     pool: str | None = Field(None, description="Пул для создания диска")
-    size_gb: float = Field(..., gt=0, le=65536, description="Размер в GB")
+    size_gb: float = Field(1, gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(None, max_length=500)
     sparse: bool = Field(default=True, description="Создать разреженный диск") # Если False = занимает сразу все указанное место
+    disk_type: DiskType | str = DiskType.EXTERNAL_DISK
+    bus_type: BusType | None = Field(None, description="Тип шины подключения")
+    cache: str = "none"
+    readonly: bool = False
+    shareable: bool = False
+    serial: str | None = None
     #RAW с sparse=True — должен создавать разреженный файл (sparse file)
     #RAW с sparse=False — должен создавать полный файл, заполненный нулями
 
@@ -267,7 +321,17 @@ class DiskCreate(BaseModel):
     def validate_query(self) -> Self:
         """Валидация запроса"""
         self.name = self.name.split(".").pop(0)
-        self.path = str(Path(self.path) / f"{self.name}.{self.format.value}")
+        if self.path is not None:
+            if self.format.value not in self.path and self.name not in self.path:
+                current_format = disk_format_by_path(self.path)
+                if current_format.value == self.format.value:
+                    self.path = str(Path(self.path) / f"{self.name}.{self.format.value}")
+                elif current_format.value == DiskFormat.UNKNOWN.value:
+                    self.path = str(Path(self.path) / f"{self.name}.{self.format.value}")
+                else:
+                    if current_format.value in (DiskFormat.ISO.value, DiskFormat.IMG.value):
+                        self.disk_type = DiskType.CDROM
+                    self.format = current_format
         return self
 
 # Модель для обновления диска
@@ -285,7 +349,7 @@ class DiskAttach(BaseModel):
     path: str | None = None
     target_dev: str = Field(default="vdb")
     bus_type: BusType = Field(default=BusType.VIRTIO)
-    cache_mode: CacheMode = Field(default=CacheMode.WRITEBACK)
+    cache_mode: CacheMode | str = Field(default=CacheMode.WRITEBACK)
 
 
 class DiskDetach(BaseModel):

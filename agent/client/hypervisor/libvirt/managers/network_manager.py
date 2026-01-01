@@ -3,8 +3,7 @@ import ipaddress
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, NetworkForward, \
-    NetworkBridge, NetworkDHCPRange
+from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo
 
 
 class NetworkManager(LibvirtClient):

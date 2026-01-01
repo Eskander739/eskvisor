@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from agent.client.hypervisor.models.disk import DiskFormat
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskFormat
 
 
 class LibvirtConfig:
@@ -46,4 +46,8 @@ class LibvirtConfig:
             return DiskFormat.VDI
         elif disk_path.endswith(".vhd") or disk_path.endswith(".vhdx"):
             return DiskFormat.VHDX
+        elif disk_path.endswith(".iso"):
+            return DiskFormat.ISO
+        elif disk_path.endswith(".img"):
+            return DiskFormat.IMG
         return DiskFormat.UNKNOWN

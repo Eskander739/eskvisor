@@ -10,12 +10,12 @@ from typing import List
 import logging
 import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
-from agent.client.hypervisor.models.disk import (
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import (
     Disk, DiskCreate, DiskUpdate, DiskAttach, DiskDetach, DiskQuery,
     DiskFormat, DiskType, DiskStatus, BusType, CacheMode
 )
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.models.msg import StorageMessage, CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.msg import StorageMessage, CommandMessagesEnum
 
 
 class StorageManager(LibvirtClient):
@@ -55,15 +55,16 @@ class StorageManager(LibvirtClient):
             create_raw_info = None
             disk_path = self._get_disk_path(disk_create)
             disk_dir = os.path.dirname(disk_path)
-
-            if not os.path.exists(disk_dir):
-                os.makedirs(disk_dir, exist_ok=True)
-
             self.logger.info(f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB")
+            if os.path.isfile(disk_dir):
+                self.logger.info(f"Файл уже существует: {disk_path}")
+                return StorageMessage(request_id=request_id,
+                                      message=CommandMessagesEnum.disk_already_created.value,
+                                      code=CommandMessagesEnum.disk_already_created.name)
 
             size_bytes = int(disk_create.size_gb * 1024 * 1024 * 1024)
-
-            if disk_create.format == DiskFormat.QCOW2:
+            disk_format = disk_create.format.value if isinstance(disk_create.format, DiskFormat) else disk_create.format
+            if disk_format == DiskFormat.QCOW2.value:
                 create_qcow2_info = self._create_qcow2_disk(disk_path,
                                                             disk_create.size_gb,
                                                             request_id,
@@ -436,10 +437,22 @@ class StorageManager(LibvirtClient):
 
     def attach_disk(self, disk_attach: DiskAttach, request_id: str) -> StorageMessage:
         try:
-
             self.logger.info(f"Подключение диска {disk_attach.path} к ВМ {disk_attach.vm_name}")
 
             vm = self.conn.lookupByName(disk_attach.vm_name)
+
+            # Определяем тип устройства на основе расширения файла
+            device_format = self.libvirt_config.disk_format_by_path(disk_attach.path)
+            if device_format.value in (DiskFormat.ISO.value, DiskFormat.IMG.value):
+                device_type = "cdrom"
+                # Для CDROM обычно используется readonly
+                if not hasattr(disk_attach, 'readonly') or disk_attach.readonly is None:
+                    readonly = True
+                else:
+                    readonly = disk_attach.readonly
+            else:
+                device_type = "disk" # TODO: Костыль, доработать
+                readonly = disk_attach.readonly if hasattr(disk_attach, 'readonly') else False
 
             get_vm_by_path = self._find_vm_by_disk_path(disk_attach.path)
             if get_vm_by_path:
@@ -454,17 +467,30 @@ class StorageManager(LibvirtClient):
                 return disk_info
             disk_info = disk_info.disk_info
 
-            bus_type = disk_attach.bus_type or BusType.VIRTIO
-            cache_mode = disk_attach.cache_mode.value if disk_attach.cache_mode else "writethrough"
+            bus_type = disk_attach.bus_type or BusType.IDE  # Для CDROM чаще используется IDE
+            cache_mode = disk_attach.cache_mode.value if disk_attach.cache_mode else "none"
             target_dev = disk_attach.target_dev or self._find_free_disk_device(vm, bus_type)
 
-            disk_xml = f'''
-            <disk type='file' device='disk'>
-                <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
-                <source file='{disk_attach.path}'/>
-                <target dev='{target_dev}' bus='{bus_type.value}'/>
-            </disk>
-            '''
+            # Формируем XML в зависимости от типа устройства
+            if device_type == "cdrom":
+                print("БЛЯЯЯЯЯ МЫ ТУТ")
+                disk_xml = f'''
+                <disk type='file' device='cdrom'>
+                    <driver name='qemu' type='raw' cache='{cache_mode}'/>
+                    <source file='{disk_attach.path}'/>
+                    <target dev='{target_dev}' bus='{bus_type.value}'/>
+                    <readonly/>
+                </disk>
+                '''
+            else:
+                disk_xml = f'''
+                <disk type='file' device='disk'>
+                    <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
+                    <source file='{disk_attach.path}'/>
+                    <target dev='{target_dev}' bus='{bus_type.value}'/>
+                    {"<readonly/>" if readonly else ""}
+                </disk>
+                '''
 
             vm_state, _ = vm.state()
 
@@ -474,7 +500,7 @@ class StorageManager(LibvirtClient):
             else:
                 vm.attachDeviceFlags(disk_xml, libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
 
-            self.logger.info(f"Диск успешно подключен как {target_dev}")
+            self.logger.info(f"Диск успешно подключен как {target_dev} (тип: {device_type})")
             return StorageMessage(request_id=request_id,
                                   message=CommandMessagesEnum.disk_successfully_attached.value,
                                   code=CommandMessagesEnum.disk_successfully_attached.name
@@ -835,10 +861,17 @@ class StorageManager(LibvirtClient):
                     if match:
                         used_devices.add(match.group(1))
 
-            for letter in "abcdefghijklmnopqrstuvwxyz":
-                device = f"{prefix}{letter}"
-                if device not in used_devices:
-                    return device
+            # Для IDE устройств (hd) используем традиционные имена
+            if bus_type == BusType.IDE:
+                for letter in "abcd":
+                    device = f"{prefix}{letter}"
+                    if device not in used_devices:
+                        return device
+            else:
+                for letter in "abcdefghijklmnopqrstuvwxyz":
+                    device = f"{prefix}{letter}"
+                    if device not in used_devices:
+                        return device
 
             return f"{prefix}z1"
 
@@ -926,10 +959,14 @@ class StorageManager(LibvirtClient):
         try:
             file_path_exists = os.path.exists(path)
             disk_format = DiskFormat.UNKNOWN
+
+            # Определяем формат по расширению
             if path.endswith('.qcow2'):
                 disk_format = DiskFormat.QCOW2
             elif path.endswith(('.raw', '.img')):
                 disk_format = DiskFormat.RAW
+            elif path.endswith('.iso'):
+                disk_format = DiskFormat.ISO
             elif path.endswith('.vmdk'):
                 disk_format = DiskFormat.VMDK
             elif path.endswith('.vdi'):
@@ -965,6 +1002,9 @@ class StorageManager(LibvirtClient):
             else:
                 status = DiskStatus.DETACHED
 
+            # Определяем, является ли диск CDROM
+            readonly = path.lower().endswith('.iso')  # ISO файлы по умолчанию readonly
+
             disk = Disk(
                 name=disk_name,
                 path=path,
@@ -974,7 +1014,8 @@ class StorageManager(LibvirtClient):
                 capacity_bytes=size_bytes,
                 allocation_bytes=size_bytes,
                 status=status,
-                vm_name=vm_name
+                vm_name=vm_name,
+                readonly=readonly
             )
 
             return disk
@@ -1113,8 +1154,9 @@ class StorageManager(LibvirtClient):
         return disks
 
     def _is_disk_file(self, file_path: str) -> bool:
+        disk_extensions = list(self.libvirt_config.disk_extensions) + ['.iso', '.img']
         return (os.path.isfile(file_path) and
-                any(file_path.endswith(ext) for ext in self.libvirt_config.disk_extensions))
+                any(file_path.endswith(ext) for ext in disk_extensions))
 
     def _get_attached_disks(self, query: DiskQuery | None, existing_disks: List[Disk] | None = None) -> List[Disk]:
         attached_disks = []
@@ -1363,7 +1405,7 @@ if __name__ == "__main__":
 
         # Получение списка всех дисков
 
-        for vm_disk in manager.get_disks_by_vm("test-vm-03", str(uuid.uuid4())):
+        for vm_disk in manager.get_disks_by_vm("VM-TEST-14265", str(uuid.uuid4())):
             print(vm_disk)
         disks = manager.list_disks()
         for current_disk in disks:

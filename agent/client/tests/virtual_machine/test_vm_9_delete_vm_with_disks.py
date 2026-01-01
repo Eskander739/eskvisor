@@ -4,10 +4,9 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.disk import VMDisk
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
-from agent.client.hypervisor.models.general import VMState
-from agent.client.hypervisor.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.models.vm import VirtualMachine
+from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VirtualMachine
+from agent.client.hypervisor.libvirt.models.general import VMState
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.tools import wait_while_not
 
 

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from agent.client.hypervisor.models.general import VMState
+from agent.client.hypervisor.libvirt.models.general import VMState
 
 
 class Snapshot(BaseModel):

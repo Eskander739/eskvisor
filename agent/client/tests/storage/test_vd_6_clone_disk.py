@@ -1,11 +1,9 @@
-import os
 import random
-import shutil
 
 import pytest
 
-from agent.client.hypervisor.models.disk import DiskFormat, DiskCreate, DiskStatus, DiskType
-from agent.client.hypervisor.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskFormat, DiskCreate, DiskStatus, DiskType
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("VD‑07", "Клонирование диска")

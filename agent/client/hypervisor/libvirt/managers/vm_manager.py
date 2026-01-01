@@ -1,12 +1,10 @@
 import os
-import pprint
 import shutil
 import subprocess
-import json
 import tempfile
 import time
 import uuid
-from typing import Any
+from typing import Any, List
 from pathlib import Path
 
 import libvirt
@@ -17,16 +15,15 @@ from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
 import xml.dom.minidom as minidom
 import xml.etree.ElementTree as ET
-from agent.client.hypervisor.libvirt.models.disk import VMDisk
-from agent.client.hypervisor.libvirt.models.enum import DiskBus, DiskFormat, NetworkType, NetworkModel, OSType, \
-    GraphicsType, ControllerType, Architecture
-from agent.client.hypervisor.libvirt.models.network import VMNetwork
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VmUpdateRequest
-from agent.client.hypervisor.models.general import VMState
-from agent.client.hypervisor.models.msg import VmError, CommandMessagesEnum, VmMessage
-from agent.client.hypervisor.models.vm import VirtualMachine
-from agent.client.hypervisor.templates.vm import simple_config, simple_config_without_net, simple_hotplug_vm_config
+
+from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
+from agent.client.hypervisor.libvirt.models.enum import DiskFormat, NetworkType, GraphicsType, DiskType
+from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VmUpdateRequest, VirtualMachine
+from agent.client.hypervisor.libvirt.models.general import VMState
+from agent.client.hypervisor.libvirt.models.msg import VmError, CommandMessagesEnum, VmMessage
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate, DiskFormat as StorageDiskFormat, Disk
 from agent.client.logger_config import DefaultLogger
+
 
 
 class VmManager(LibvirtClient):
@@ -36,15 +33,21 @@ class VmManager(LibvirtClient):
 
     libvirtError = None
 
-    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None, password: str | None = None):
+    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None,
+                 password: str | None = None):
         self.cli = CLIControl()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger()
         super().__init__(connection_uri, username, password)
+        self.storage_manager = StorageManager(connection_uri, username, password)
+        self.storage_manager.connect()
 
     def create_vm(self, config: VMCreateRequest, dry_run: bool = False) -> dict[str, Any] | VmError | VmMessage:
         """
         Создание виртуальной машины через virt-install
+
+
+        U.P.D - Порядок загрузки дисков происходит в соответствии с их порядком в переданном списке
 
         Args:
             config: Конфигурация ВМ
@@ -53,8 +56,36 @@ class VmManager(LibvirtClient):
         Returns:
             Словарь с результатом выполнения
         """
+        all_disks = []
+        command = ""
+
         try:
             self.logger.info(f"Запуск создания ВМ: {config.name}")
+
+            # Проверка несовместимых параметров для ISO
+            for current_disk in config.disks:
+                if current_disk.disk_type == DiskType.CDROM.value:
+                    # Проверяем существование ISO файла
+                    if not os.path.exists(config.cdrom):
+                        return VmMessage(
+                            request_id=config.request_id,
+                            success=False,
+                            message=f"ISO файл не найден: {config.cdrom}",
+                            code="ISO_FILE_NOT_FOUND"
+                        )
+
+                    # Проверяем, что файл действительно ISO
+                    if not current_disk.path.lower().endswith('.iso'):
+                        self.logger.warning(f"Файл {config.cdrom} не имеет расширения .iso")
+
+                    # Если указан ISO, проверяем совместимость с другими параметрами
+                    if config.install_method == "location":
+                        return VmMessage(
+                            request_id=config.request_id,
+                            success=False,
+                            message="Нельзя одновременно указывать cdrom и location",
+                            code="CDROM_AND_LOCATION_CONFLICT"
+                        )
 
             existing_vm = self.get_vm_by_name(config.name, config.request_id)
             if existing_vm.message == CommandMessagesEnum.vm_successfully_found.value:
@@ -62,24 +93,76 @@ class VmManager(LibvirtClient):
                                code=CommandMessagesEnum.vm_with_name_already_exists.name,
                                request_id=config.request_id)
 
-            # Создаем директории для дисков если нужно
-            for disk in config.disks:
-                if disk.path is not None:
-                    disk_path = Path(disk.path)
-                    if not disk_path.exists() and disk_path.parent:
-                        disk_path.parent.mkdir(parents=True, exist_ok=True)
-                        self.logger.info(f"Создана директория: {disk_path.parent}")
+            # Создаем диски через StorageManager
+            try:
+                for i, disk in enumerate(config.disks):
+                    # Если диск существует, проверяем его
+                    if disk.path and os.path.exists(disk.path):
+                        self.logger.info(f"Диск {disk.path} уже существует, используем существующий")
+                        disk.format = self.config.disk_format_by_path(disk.path)
+                        continue
 
-            if not (config.cdrom or config.location):
-                if config.disks:
-                    main_disk = config.disks[0]
-                    if main_disk.path is not None:
-                        disk_path = Path(main_disk.path)
-                        if disk_path.exists():
-                            config.install_method = "import"
+                    # Создаем новый диск через StorageManager
+                    disk_name = f"{config.name}-disk-{i + 1}"
+                    if disk.path:
+                        disk_name = Path(disk.path).stem
+
+                    # Определяем формат для StorageManager
+                    storage_format = StorageDiskFormat.QCOW2
+                    if disk.format == DiskFormat.RAW:
+                        storage_format = StorageDiskFormat.RAW
+                    elif disk.format == DiskFormat.QCOW2:
+                        storage_format = StorageDiskFormat.QCOW2
+
+                    # Создаем диск
+                    disk_create = DiskCreate(
+                        name=disk_name,
+                        size_gb=disk.size_gb or 1,
+                        disk_type=disk.disk_type,
+                        bus_type=disk.bus_type,
+                        description=disk.description,
+                        pool=disk.pool,
+                        format=storage_format,
+                        path=disk.path or None,
+                        sparse=True
+                    )
+
+                    self.logger.info(f"Создание диска через StorageManager: {disk_create.name}")
+                    result = self.storage_manager.create_disk(disk_create, config.request_id)
+
+                    if hasattr(result, 'disk_info') and result.disk_info:
+                        # Обновляем путь диска в конфигурации
+                        disk.path = result.disk_info.path
+                        all_disks.append(result.disk_info.path)
+                        self.logger.info(f"Диск создан: {result.disk_info.path}")
                     else:
-                        self.logger.warning(
-                            f"Диск {main_disk.path} не существует. Используем --import для создания пустой ВМ")
+                        self.logger.error(f"Ошибка создания диска: {result}")
+                        # Откатываем созданные диски
+                        for created_disk_path in all_disks:
+                            try:
+                                self.storage_manager.delete_disk(path=created_disk_path)
+                            except Exception as e:
+                                self.logger.error(f"Ошибка при откате диска {created_disk_path}: {e}")
+                        return VmMessage(
+                            request_id=config.request_id,
+                            success=False,
+                            message=f"Ошибка создания диска: {result.message if hasattr(result, 'message') else 'Unknown error'}",
+                            code="DISK_CREATION_FAILED"
+                        )
+            except Exception as e:
+                self.logger.exception(f"Ошибка при создании дисков: {e}")
+                # Откатываем созданные диски
+                for created_disk_path in all_disks:
+                    try:
+                        self.storage_manager.delete_disk(path=created_disk_path)
+                    except Exception as e:
+                        self.logger.error(f"Ошибка при откате диска {created_disk_path}: {e}")
+                return VmMessage(
+                    request_id=config.request_id,
+                    success=False,
+                    message=f"Ошибка при создании дисков: {str(e)}",
+                    code="DISK_CREATION_EXCEPTION"
+                )
 
             command = self._build_virt_install_command(config)
             self.logger.info(f"Команда virt-install: {command}")
@@ -97,7 +180,7 @@ class VmManager(LibvirtClient):
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=600
             )
 
             if result.returncode == 0:
@@ -158,7 +241,7 @@ class VmManager(LibvirtClient):
                                              message=CommandMessagesEnum.vm_successfully_created.value,
                                              code=CommandMessagesEnum.vm_successfully_created.name,
                                              command=import_command,
-                                             vm_info=vm_info,
+                                             vm_info=vm_info.vm_info,
                                              stdout=result.stdout,
                                              stderr=result.stderr,
                                              note="Использован флаг --import для создания пустой ВМ"
@@ -169,7 +252,7 @@ class VmManager(LibvirtClient):
                                              message=CommandMessagesEnum.vm_created_but_not_found_in_libvirt.value,
                                              code=CommandMessagesEnum.vm_created_but_not_found_in_libvirt.name,
                                              command=import_command,
-                                             vm_info=vm_info,
+                                             vm_info=vm_info.vm_info,
                                              stdout=result.stdout,
                                              stderr=result.stderr,
                                              note="Использован флаг --import для создания пустой ВМ"
@@ -200,6 +283,11 @@ class VmManager(LibvirtClient):
         except subprocess.TimeoutExpired:
             error_msg = f"Таймаут при создании ВМ '{config.name}'"
             self.logger.error(error_msg)
+            for created_disk_path in all_disks:
+                try:
+                    self.storage_manager.delete_disk(path=created_disk_path)
+                except Exception as e:
+                    self.logger.error(f"Ошибка при откате диска {created_disk_path}: {e}")
             return VmMessage(request_id=config.request_id,
                              success=False,
                              message=CommandMessagesEnum.vm_create_subprocess_timeout_error.value,
@@ -209,6 +297,12 @@ class VmManager(LibvirtClient):
         except Exception as e:
             error_msg = f"Неожиданная ошибка при создании ВМ: {str(e)}"
             self.logger.error(error_msg, exc_info=True)
+            # Откатываем созданные диски при исключении
+            for created_disk_path in all_disks:
+                try:
+                    self.storage_manager.delete_disk(path=created_disk_path)
+                except Exception as e:
+                    self.logger.error(f"Ошибка при откате диска {created_disk_path}: {e}")
             return VmMessage(request_id=config.request_id,
                              success=False,
                              message=CommandMessagesEnum.vm_create_unexpected_error.value,
@@ -227,6 +321,9 @@ class VmManager(LibvirtClient):
             Строка команды для выполнения
         """
         cmd_parts = ["virt-install"]
+        controller_params = []
+        graphics_params = []
+        boot_params = []
 
         cmd_parts.extend(["--name", config.name])
 
@@ -269,23 +366,29 @@ class VmManager(LibvirtClient):
             if disk.path:
                 disk_path = Path(disk.path)
                 if disk_path.exists():
-                    disk_params.append(f"path={disk.path}")
+                    if disk.disk_type.value == DiskType.CDROM.value:
+                        disk_params.append(f"--cdrom {disk.path}")
+                    else:
+                        print("БЛЯЯЯЯ МЫ ТУТ")
+                        disk_params.append(f"path={disk.path}")
+                        disk_params.append(f"format={disk.format.value}")
                 else:
                     if disk.size_gb:
                         disk_params.append(f"size={disk.size_gb}")
                     if disk.format:
+                        print("БЛЯЯЯЯ МЫ ТУТ 222222222222")
                         disk_params.append(f"format={disk.format.value}")
                     disk_params.append(f"path={disk.path}")
             else:
                 if disk.size_gb:
                     disk_params.append(f"size={disk.size_gb}")
                 if disk.format:
+                    print("БЛЯЯЯЯ МЫ ТУТ 3333333333333333")
                     disk_params.append(f"format={disk.format.value}")
+            if disk.bus_type:
+                disk_params.append(f"bus={disk.bus_type.value}")
 
-            if disk.bus:
-                disk_params.append(f"bus={disk.bus.value}")
-
-            if disk.cache:
+            if disk.cache and disk.disk_type.value != DiskType.CDROM.value:
                 disk_params.append(f"cache={disk.cache}")
 
             if disk.readonly:
@@ -297,9 +400,8 @@ class VmManager(LibvirtClient):
             if disk.serial:
                 disk_params.append(f"serial={disk.serial}")
 
-            if disk.boot_order:
-                disk_params.append(f"bootindex={disk.boot_order}")
-
+            if disk.disk_type.value == DiskType.CDROM.value:
+                disk_cmd = disk_cmd.replace("--disk", "")
             disk_cmd += ",".join(disk_params)
             cmd_parts.append(disk_cmd)
 
@@ -323,16 +425,12 @@ class VmManager(LibvirtClient):
             if net.mac_address:
                 net_params.append(f"mac={net.mac_address}")
 
-            if net.boot_order:
-                net_params.append(f"bootindex={net.boot_order}")
-
             net_cmd += ",".join(net_params)
             cmd_parts.append(net_cmd)
 
         for controller in config.controllers:
             controller_cmd = f"--controller "
 
-            controller_params = []
             controller_params.append(f"type={controller.controller_type.value}")
 
             if controller.index is not None:
@@ -340,9 +438,6 @@ class VmManager(LibvirtClient):
 
             if controller.model:
                 controller_params.append(f"model={controller.model}")
-
-            # if controller.ports:
-            #     controller_params.append(f"ports={controller.ports}")
 
             controller_cmd += ",".join(controller_params)
             cmd_parts.append(controller_cmd)
@@ -352,7 +447,6 @@ class VmManager(LibvirtClient):
         else:
             graphics_cmd = f"--graphics {config.graphics.value}"
 
-            graphics_params = []
             if config.graphics_port:
                 graphics_params.append(f"port={config.graphics_port}")
 
@@ -371,7 +465,6 @@ class VmManager(LibvirtClient):
 
         if config.boot_devices:
             boot_cmd = "--boot "
-            boot_params = []
 
             for i, device in enumerate(config.boot_devices):
                 boot_params.append(device)
@@ -384,14 +477,13 @@ class VmManager(LibvirtClient):
         if config.autostart:
             cmd_parts.append("--autostart")
 
-        if config.cdrom:
-            cmd_parts.extend(["--cdrom", config.cdrom])
-        elif config.location:
-            cmd_parts.extend(["--location", config.location])
-
         elif hasattr(config, 'install_method') and config.install_method:
             if config.install_method == "import":
-                cmd_parts.append("--import")
+                for current_disk in config.disks:
+                    if current_disk.disk_type.value == DiskType.CDROM.value:
+                        break
+                else:
+                    cmd_parts.append("--import")
             elif config.install_method == "pxe":
                 cmd_parts.append("--pxe")
             elif config.install_method == "boot":
@@ -400,14 +492,196 @@ class VmManager(LibvirtClient):
         if config.extra_args:
             cmd_parts.extend(["--extra-args", f"'{config.extra_args}'"])
 
-        for current_disk in config.disks:
-            if current_disk.path is not None:
-                cmd_parts.append("--wait -1")
-                break
-
-        cmd_parts.append("--noautoconsole")
+        if config.noautoconsole:
+            cmd_parts.append("--noautoconsole")
 
         return " ".join(cmd_parts)
+
+    def attach_iso_to_vm(self, vm_name: str, iso_path: str, bus_type: str = "ide", target_dev: str = None) -> VmMessage:
+        """
+        Подключить ISO образ к существующей ВМ
+
+        Args:
+            vm_name: Имя ВМ
+            iso_path: Путь к ISO файлу
+            bus_type: Тип шины (ide, sata, scsi)
+            target_dev: Целевое устройство (hdX, sdX и т.д.)
+
+        Returns:
+            Результат операции
+        """
+        request_id = str(uuid.uuid4())
+
+        try:
+            # Проверяем существование ВМ
+            vm_info = self.get_vm_by_name(vm_name, request_id)
+            if not vm_info.success:
+                return vm_info
+
+            # Проверяем существование ISO файла
+            if not os.path.exists(iso_path):
+                return VmMessage(
+                    request_id=request_id,
+                    success=False,
+                    message=f"ISO файл не найден: {iso_path}",
+                    code="ISO_FILE_NOT_FOUND"
+                )
+
+            # Используем StorageManager для получения информации о диске
+            disk_info = self.storage_manager.get_disk_info(path=iso_path, request_id=request_id)
+
+            # Подготавливаем конфигурацию для подключения
+            from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskAttach, BusType
+
+            # Преобразуем строковый bus_type в enum
+            bus_type_enum = BusType.IDE
+            if bus_type.lower() == "sata":
+                bus_type_enum = BusType.SATA
+            elif bus_type.lower() == "scsi":
+                bus_type_enum = BusType.SCSI
+            elif bus_type.lower() == "virtio":
+                bus_type_enum = BusType.VIRTIO
+
+            disk_attach = DiskAttach(
+                vm_name=vm_name,
+                path=iso_path,
+                target_dev=target_dev or self._get_free_cdrom_device(vm_name),
+                bus_type=bus_type_enum,
+                cache_mode="none"
+            )
+
+            # Подключаем диск через StorageManager
+            result = self.storage_manager.attach_disk(disk_attach, request_id)
+
+            if hasattr(result, 'success') and result.success:
+                return VmMessage(
+                    request_id=request_id,
+                    success=True,
+                    message=f"ISO успешно подключен к ВМ {vm_name}",
+                    code="ISO_ATTACH_SUCCESS"
+                )
+            else:
+                return VmMessage(
+                    request_id=request_id,
+                    success=False,
+                    message=f"Ошибка подключения ISO: {result.message if hasattr(result, 'message') else 'Unknown error'}",
+                    code="ISO_ATTACH_FAILED"
+                )
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при подключении ISO к ВМ: {e}")
+            return VmMessage(
+                request_id=request_id,
+                success=False,
+                message=f"Ошибка при подключении ISO: {str(e)}",
+                code="ISO_ATTACH_EXCEPTION"
+            )
+
+    def _get_free_cdrom_device(self, vm_name: str) -> str:
+        """
+        Получить свободное устройство CDROM для ВМ
+
+        Args:
+            vm_name: Имя ВМ
+
+        Returns:
+            Имя свободного устройства (hdc, hdd и т.д.)
+        """
+        try:
+            vm = self.conn.lookupByName(vm_name)
+            xml_desc = vm.XMLDesc()
+
+            # Ищем используемые CDROM устройства
+            used_devices = set()
+            root = ET.fromstring(xml_desc)
+
+            for disk in root.findall(".//disk"):
+                if disk.get("device") == "cdrom":
+                    target = disk.find("target")
+                    if target is not None:
+                        used_devices.add(target.get("dev"))
+
+            # Для IDE устройств (hdX)
+            for letter in ["c", "d", "e", "f", "g", "h"]:
+                device = f"hd{letter}"
+                if device not in used_devices:
+                    return device
+
+            # Если все заняты, используем следующий доступный
+            return "hdi"
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при поиске свободного CDROM устройства: {e}")
+            return "hdc"
+
+    def detach_iso_from_vm(self, vm_name: str, target_dev: str) -> VmMessage:
+        """
+        Отключить ISO образ от ВМ
+
+        Args:
+            vm_name: Имя ВМ
+            target_dev: Целевое устройство для отключения
+
+        Returns:
+            Результат операции
+        """
+        request_id = str(uuid.uuid4())
+
+        try:
+            from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskDetach
+
+            disk_detach = DiskDetach(
+                vm_name=vm_name,
+                target_dev=target_dev
+            )
+
+            # Отключаем диск через StorageManager
+            result = self.storage_manager.detach_disk(disk_detach)
+
+            if result:
+                return VmMessage(
+                    request_id=request_id,
+                    success=True,
+                    message=f"ISO успешно отключен от ВМ {vm_name}",
+                    code="ISO_DETACH_SUCCESS"
+                )
+            else:
+                return VmMessage(
+                    request_id=request_id,
+                    success=False,
+                    message="Ошибка отключения ISO",
+                    code="ISO_DETACH_FAILED"
+                )
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при отключении ISO от ВМ: {e}")
+            return VmMessage(
+                request_id=request_id,
+                success=False,
+                message=f"Ошибка при отключении ISO: {str(e)}",
+                code="ISO_DETACH_EXCEPTION"
+            )
+
+    def list_vm_disks(self, vm_name: str) -> List[Disk]:
+        """
+        Получить список всех дисков ВМ (включая ISO)
+
+        Args:
+            vm_name: Имя ВМ
+
+        Returns:
+            Список дисков ВМ
+        """
+        request_id = str(uuid.uuid4())
+
+        try:
+            # Используем StorageManager для получения дисков ВМ
+            disks = self.storage_manager.get_disks_by_vm(vm_name, request_id)
+            return disks
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка при получении дисков ВМ: {e}")
+            return []
 
     def create_vm_from_xml(self, xml_config: str, autostart: bool = False) -> bool:
         """
@@ -455,139 +729,7 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка установки автостарта для ВМ '{vm_name}', \nerr: {e}")
             return False
 
-    def create_vm_from_template(self, template_name: str, vm_name: str, **overrides) -> dict[str, Any]:
-        """
-        Создание ВМ из шаблона
-
-        Args:
-            template_name: Имя шаблона (из предустановленных или путь к файлу)
-            vm_name: Имя новой ВМ
-            **overrides: Переопределения параметров
-
-        Returns:
-            Результат создания
-        """
-        templates = {
-            "ubuntu-server": VMCreateRequest(
-                name=vm_name,
-                os_variant="ubuntu22.04",
-                memory_mb=2048,
-                vcpus=2,
-                disks=[
-                    VMDisk(
-                        path=f"/var/lib/libvirt/images/{vm_name}.qcow2",
-                        size_gb=20,
-                        bus=DiskBus.VIRTIO,
-                        format=DiskFormat.QCOW2
-                    )
-                ],
-                networks=[
-                    VMNetwork(
-                        network_type=NetworkType.NETWORK,
-                        source="default",
-                        model=NetworkModel.VIRTIO
-                    )
-                ]
-            ),
-            "centos-server": VMCreateRequest(
-                name=vm_name,
-                os_variant="centos8",
-                memory_mb=2048,
-                vcpus=2,
-                disks=[
-                    VMDisk(
-                        path=f"/var/lib/libvirt/images/{vm_name}.qcow2",
-                        size_gb=20,
-                        bus=DiskBus.VIRTIO,
-                        format=DiskFormat.QCOW2
-                    )
-                ],
-                networks=[
-                    VMNetwork(
-                        network_type=NetworkType.NETWORK,
-                        source="default",
-                        model=NetworkModel.VIRTIO
-                    )
-                ]
-            ),
-            "windows-10": VMCreateRequest(
-                name=vm_name,
-                os_type=OSType.WINDOWS,
-                os_variant="win10",
-                memory_mb=4096,
-                vcpus=4,
-                disks=[
-                    VMDisk(
-                        path=f"/var/lib/libvirt/images/{vm_name}.qcow2",
-                        size_gb=50,
-                        bus=DiskBus.SATA,
-                        format=DiskFormat.QCOW2
-                    )
-                ],
-                networks=[
-                    VMNetwork(
-                        network_type=NetworkType.NETWORK,
-                        source="default",
-                        model=NetworkModel.E1000
-                    )
-                ],
-                video_model="qxl"
-            ),
-            "debian-minimal": VMCreateRequest(
-                name=vm_name,
-                os_variant="debian10",
-                memory_mb=1024,
-                vcpus=1,
-                disks=[
-                    VMDisk(
-                        path=f"/var/lib/libvirt/images/{vm_name}.qcow2",
-                        size_gb=10,
-                        bus=DiskBus.VIRTIO,
-                        format=DiskFormat.QCOW2
-                    )
-                ],
-                networks=[
-                    VMNetwork(
-                        network_type=NetworkType.NETWORK,
-                        source="default",
-                        model=NetworkModel.VIRTIO
-                    )
-                ],
-                graphics=GraphicsType.NONE,
-                extra_args="console=ttyS0"
-            ),
-        }
-
-        if template_name in templates:
-            config = templates[template_name]
-            config.name = vm_name  # Обновляем имя
-        else:
-            try:
-                template_path = Path(template_name)
-                if template_path.exists():
-                    with open(template_path, 'r') as f:
-                        template_data = json.load(f)
-                    config = VMCreateRequest(**template_data)
-                    config.name = vm_name
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Шаблон '{template_name}' не найден"
-                    }
-            except Exception as e:
-                return {
-                    "success": False,
-                    "error": f"Ошибка загрузки шаблона: {str(e)}"
-                }
-
-        for key, value in overrides.items():
-            if hasattr(config, key):
-                setattr(config, key, value)
-
-        return self.create_vm(config)
-
-
-    #_______________________________________________Редактирование ВМ_______________________________________________
+    # _______________________________________________Редактирование ВМ_______________________________________________
 
     def edit_vm(self, vm_name: str, vm_update: VmUpdateRequest, request_id: str) -> VmMessage:
         try:
@@ -666,7 +808,7 @@ class VmManager(LibvirtClient):
                 code=CommandMessagesEnum.vm_edit_success.name
             )
 
-        except libvirt.libvirtError as e:
+        except self.libvirtError as e:
             self.logger.error(f"ВМ {vm_name} не найдена: {e}")
             return VmMessage(
                 request_id=request_id,
@@ -934,7 +1076,7 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка: {e}")
             return False
 
-    #_______________________________________________Редактирование ВМ_______________________________________________
+    # _______________________________________________Редактирование ВМ_______________________________________________
 
     def list_vms(self, only_active: bool = False) -> list[VirtualMachine]:
         """
@@ -1195,8 +1337,15 @@ class VmManager(LibvirtClient):
             for disk_path in disks_to_delete:
                 if os.path.exists(disk_path):
                     try:
-                        os.remove(disk_path)
-                        self.logger.info(f"Диск удален: {disk_path}")
+                        # Используем StorageManager для удаления дисков
+                        if disk_path.lower().endswith('.iso'):
+                            # Для ISO файлов просто удаляем файл
+                            os.remove(disk_path)
+                            self.logger.info(f"ISO файл удален: {disk_path}")
+                        else:
+                            # Для обычных дисков используем StorageManager
+                            self.storage_manager.delete_disk(path=disk_path)
+                            self.logger.info(f"Диск удален через StorageManager: {disk_path}")
                     except OSError as e:
                         self.logger.error(f"Не удалось удалить диск {disk_path}, \nerr: {e}")
 
@@ -1350,7 +1499,8 @@ class VmManager(LibvirtClient):
 
         for i, method in enumerate(methods, 1):
             print(f"Попытка {i} удаления ВМ {name}...")
-            if method():
+            result = method()
+            if result.success:
                 print(f"ВМ {name} успешно удалена")
                 return VmMessage(request_id=request_id,
                                  message=CommandMessagesEnum.vm_successfully_deleted.value,
@@ -1437,7 +1587,13 @@ class VmManager(LibvirtClient):
                         base_name = os.path.basename(old_path)
                         new_path = os.path.join(dir_name, f"{new_name}_{base_name}")
 
-                        shutil.copy2(old_path, new_path)
+                        # Используем StorageManager для клонирования диска
+                        if old_path.lower().endswith('.iso'):
+                            # Для ISO файлов просто копируем
+                            shutil.copy2(old_path, new_path)
+                        else:
+                            # Для обычных дисков используем StorageManager
+                            self.storage_manager.clone_disk(old_path, new_path, new_name)
 
                         source_elem.set('file', new_path)
 
@@ -1490,7 +1646,7 @@ def edit_vm_example():
             'autostart': False,
             'add_disk': {
                 'path': '/var/lib/libvirt/images/new-disk.qcow2',
-                'size_gb': 50,
+                'capacity_gb': 50,
                 'format': 'qcow2',
                 'target': 'vdc',
                 'bus': 'virtio'
@@ -1503,7 +1659,6 @@ def edit_vm_example():
 
 if __name__ == "__main__":
     # Пример создания ВМ с использованием нового API
-
 
     # Инициализация менеджера
     with VmManager().with_default_user() as vm_manager:

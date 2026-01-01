@@ -1,9 +1,8 @@
 import random
-import uuid
 
 import pytest
-from agent.client.hypervisor.models.disk import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
-from agent.client.hypervisor.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 RANDOM_NAME = random.randint(10000, 99999)
 
@@ -17,7 +16,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
     """
 
     target_dev_list = ["vdb", "vdd"]
-    request_id = str(uuid.uuid4())
+    vm_config_names, request_id = multi_create_stopped_vm
     disk_path = None
     vm_name_to_detach = None
     target_dev_to_detach = None
@@ -38,11 +37,10 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
         assert attach_disk_create.format == DiskFormat.QCOW2
 
         disk_attach_list = []
-        for vm_config_name, target_dev in zip(multi_create_stopped_vm, target_dev_list):
+        for vm_config_name, target_dev in zip(vm_config_names, target_dev_list):
             disk_attach_list.append(DiskAttach(vm_name=vm_config_name, path=vm_disk.path, target_dev=target_dev))
 
         for index, disk_attach in enumerate(disk_attach_list):
-            print("ИТЕРАЦИЯ УЕБИЩ СУКА: ", disk_attach.vm_name)
             attach_disk_result = storage_session.attach_disk(disk_attach, request_id=request_id)
             if index == 0:
 
