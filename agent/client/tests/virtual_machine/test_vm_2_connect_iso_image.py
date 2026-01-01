@@ -10,6 +10,8 @@ from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.tools import wait_while_not
 
+IMG_PATH = "/home/eska/alpine-standard-3.19.0-x86_64.iso"
+
 
 @pytest.mark.tags("VM‑02", "Установка ОС на ВМ (загрузка с ISO)")
 def test_vm_10_connect_vm_console(vm_session, storage_session):
@@ -23,7 +25,7 @@ def test_vm_10_connect_vm_console(vm_session, storage_session):
     get_state = vm_session.get_vm_state_by_name
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     vm_template = VMCreateRequest(name=random_name, autostart_vm=True,
-                                  disks=[DiskCreate(path="/home/eska/eskvisor/agent/images/alpine-standard-3.19.0-x86_64.iso"),
+                                  disks=[DiskCreate(path=IMG_PATH),
                                          DiskCreate()])
     try:
         # ____________________________________Создание ВМ____________________________________
