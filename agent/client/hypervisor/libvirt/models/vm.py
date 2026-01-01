@@ -9,7 +9,7 @@ from agent.client.hypervisor.libvirt.models.disk_storage_manager import BusType,
 from agent.client.hypervisor.libvirt.models.enum import Architecture, EmulatorType, OSType, GraphicsType, \
     ControllerType, DiskType
 from agent.client.hypervisor.libvirt.models.general import MachineType, VMState
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters
+from agent.client.hypervisor.libvirt.models.network import NetworkParameters, VmNetAdapter
 
 
 class VMCreateRequest(BaseModel):
@@ -36,7 +36,7 @@ class VMCreateRequest(BaseModel):
 
     # Устройства
     disks: list[DiskCreate] = Field(default_factory=list)
-    networks: list[NetworkParameters] = Field(default_factory=list)
+    networks: list[VmNetAdapter] = Field(default_factory=list)
     controllers: list[VMController] = Field(default_factory=list)
 
     # Графика и консоль

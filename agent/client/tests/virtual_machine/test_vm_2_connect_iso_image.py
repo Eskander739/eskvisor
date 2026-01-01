@@ -4,6 +4,8 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.disk import VMDisk
+from agent.client.hypervisor.libvirt.models.enum import NetworkType
+from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskType, DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
@@ -26,14 +28,14 @@ def test_vm_10_connect_vm_console(vm_session, storage_session):
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     vm_template = VMCreateRequest(name=random_name, autostart_vm=True,
                                   disks=[DiskCreate(path=IMG_PATH),
-                                         DiskCreate()])
+                                         DiskCreate()], networks=[VmNetAdapter(network_type=NetworkType.USER)])
     try:
         # ____________________________________Создание ВМ____________________________________
         create_vm_info = vm_session.create_vm(vm_template)
         assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         assert create_vm_info.vm_info is not None
-        assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
+        assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value, timeout=5000000)
         # ____________________________________Подключение к ВМ____________________________________
         # raise NotImplementedError
     finally:

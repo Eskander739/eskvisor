@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, IPvAnyAddress, IPvAnyNetwork, validator, field_validator, model_validator
 
+from agent.client.hypervisor.libvirt.models.enum import NetworkType, NetworkModel
+
 
 # Дополнительные модели для типов сетей
 class NetworkTypeInfo(BaseModel):
@@ -132,3 +134,33 @@ class NetworkInfo(BaseModel):
     autostart: bool
     network_type: NetworkTypeInfo
     xml: str
+
+class VmNetAdapter(BaseModel):
+    """
+            for i, net in enumerate(config.networks):
+            net_cmd = f"--network "
+
+            net_params = []
+
+            if net.network_type == NetworkType.BRIDGE:
+                net_params.append(f"bridge={net.source}")
+            elif net.network_type == NetworkType.NETWORK:
+                net_params.append(f"network={net.source}")
+            elif net.network_type == NetworkType.USER:
+                net_params.append("user")
+            elif net.network_type == NetworkType.DIRECT:
+                net_params.append(f"direct={net.source}")
+
+            if net.model:
+                net_params.append(f"model={net.model.value}")
+
+            if net.mac_address:
+                net_params.append(f"mac={net.mac_address}")
+
+            net_cmd += ",".join(net_params)
+            cmd_parts.append(net_cmd)
+    """
+    network_type: NetworkType = NetworkType.NETWORK
+    model: NetworkModel = NetworkModel.VIRTIO
+    mac_address: str | None = None
+    source: str | None = "default"

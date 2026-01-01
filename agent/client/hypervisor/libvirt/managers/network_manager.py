@@ -3,7 +3,8 @@ import ipaddress
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo
+from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, \
+    NetworkForward, NetworkBridge
 
 
 class NetworkManager(LibvirtClient):
@@ -601,6 +602,16 @@ if __name__ == "__main__":
             print(f"  DHCP: {network.network_type.has_dhcp}")
 
         # # Пример создания разных типов сетей
+
+        simple_nat_params = NetworkParameters(
+            name="simple-nat-network",
+            forward=NetworkForward(mode="nat"),
+            bridge=NetworkBridge(name="virbr-simple-nat"),
+            ipv4=True,
+            ipv4_address="192.168.123.0/24",
+            # DHCP будет использовать автоматический диапазон по умолчанию
+        )
+
         # print("\n=== Пример создания различных типов сетей ===")
         #
         # 1. NAT сеть
@@ -613,7 +624,7 @@ if __name__ == "__main__":
         #         NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
         #     ]
         # )
-        # nm.create_network(nat_params)
+        # nm.delete_network("nat-network")
 
         # # 2. Изолированная сеть
         # isolated_params = NetworkParameters(
