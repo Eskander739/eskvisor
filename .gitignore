@@ -1,6 +1,7 @@
 ../eskvisor/.idea
 .pytest_cache/
 .pyc
+.idea
 **/__pycache__/
 allure*
 test-file.txt
