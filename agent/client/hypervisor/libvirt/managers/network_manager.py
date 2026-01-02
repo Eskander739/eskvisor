@@ -234,9 +234,11 @@ class NetworkManager(LibvirtClient):
             bridge_elem = ET.SubElement(root, "bridge")
             if params.bridge.name:
                 bridge_elem.set("name", params.bridge.name)
-            bridge_elem.set("stp", params.bridge.stp)
-            bridge_elem.set("delay", str(params.bridge.delay))
-            if params.bridge.zone:
+            if params.bridge.stp is not None:
+                bridge_elem.set("stp", params.bridge.stp)
+            if params.bridge.delay is not None:
+                bridge_elem.set("delay", str(params.bridge.delay))
+            if params.bridge.zone is not None:
                 bridge_elem.set("zone", params.bridge.zone)
 
         # Форвардинг

@@ -5,39 +5,35 @@ import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkForward, NetworkBridge, \
-    NetworkDHCPRange
+    NetworkDHCPRange, NetworkTypeInfo
 
 
-@pytest.mark.tags("VN‑02", "Создание NAT-сети")
-def test_vn_02_create_nat_network(network_session):
+@pytest.mark.tags("VN‑03", "Создание bridge-сети")
+def test_vn_03_create_bridge_network(network_session):
     """
-    VN‑02: Создание NAT-сети
+    VN‑03: Создание bridge-сети
 
-    Создать сеть с NAT и DHCP. Убедиться, что ВМ получают IP-адреса и имеют выход в интернет.
+    Привязать виртуальную сеть к физическому интерфейсу. Проверить, что ВМ видны в физической сети.
     """
     request_id = str(uuid.uuid4())
     network_name = None
     try:
         # ____________________________________Создание виртуальной сети____________________________________
-        nat_params = NetworkParameters(
-            name=f"nat-{random.randint(1000, 9999)}",
-            forward=NetworkForward(mode="nat"),
-            bridge=NetworkBridge(name="virbr-test-ntt", stp="on", delay=0),
-            ipv4_address="192.168.100.0/24",
-            dhcp_ranges=[
-                NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
-            ],
-            autostart=True,
+        bridge_params = NetworkParameters(
+            name=f"bridge-{random.randint(1000, 9999)}",
+            forward=NetworkForward(mode="bridge"),
+            bridge=NetworkBridge(name="virbr-test-bridge"),
+            autostart=True
         )
-        network_name = nat_params.name
-        created_network_info = network_session.create_network(nat_params, request_id)
+        network_name = bridge_params.name
+        created_network_info = network_session.create_network(bridge_params, request_id)
         assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
         assert created_network_info.code == CommandMessagesEnum.virtual_network_successfully_created.name
-        nat_network = created_network_info.net_info
-        assert nat_network.network_type.type == "nat"
-        assert nat_network.name == nat_params.name
-        assert nat_network.active is True
-        assert nat_network.autostart is True
+        bridge_network = created_network_info.net_info
+        assert bridge_network.network_type.type == "bridge"
+        assert bridge_network.name == bridge_params.name
+        assert bridge_network.active is True
+        assert bridge_network.autostart is True
 
     finally:
         # ____________________________________Удаление диска(постусловие)____________________________________

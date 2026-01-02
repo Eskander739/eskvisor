@@ -42,8 +42,8 @@ class NetworkForward(BaseModel):
 
 class NetworkBridge(BaseModel):
     name: str | None = None
-    stp: str | None = Field(default="on", pattern="^(on|off)$")
-    delay: str | None = Field(default=0, ge=0)
+    stp: str | None = Field(None, pattern="^(on|off)$")  # default="on"
+    delay: int | None = Field(None, ge=0) # default=0
     zone: str | None = None
 
 
@@ -99,6 +99,15 @@ class NetworkParameters(BaseModel):
     isolated: bool | None = False
     domain_name: str | None = None
     autostart: bool = False
+
+    @model_validator(mode="after")
+    def validate_mode(cls, values):
+        if values.forward and values.forward.dev and values.bridge and values.bridge.name:
+            raise ValueError("Для bridge-сети нужно указать либо <bridge name>, либо <forward dev>, но не оба одновременно")
+        if values.forward and values.forward.mode == "bridge":
+            if values.bridge.delay is not None or values.bridge.stp is not None or values.bridge.zone is not None:
+                raise ValueError("Параметры delay, stp, zone не поддерживаются в режиме forward mode='bridge'")
+        return values
 
     @field_validator("isolated")
     def validate_isolated(cls, v, values):
