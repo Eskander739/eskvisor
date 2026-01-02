@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 
+from agent.client.hypervisor.libvirt.managers.network_manager import NetworkManager
 from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
 from agent.client.hypervisor.libvirt.managers.virsh_manager import VirshConsoleController
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
@@ -60,7 +61,8 @@ def multi_create_stopped_vm():
         request_id = str(uuid.uuid4())
         for _ in range(2):
             current_vm_name = f"TEST-VM_{random.randint(10000, 99999)}"
-            vm_config = VMCreateRequest(name=current_vm_name, disks=[DiskCreate()])
+            new_disk_name = f"disk-{str(random.randint(100000, 999999))}"
+            vm_config = VMCreateRequest(name=current_vm_name, disks=[DiskCreate(name=new_disk_name)])
             vm_config.name = current_vm_name
             vm_manager.create_vm(vm_config)
             assert wait_while_not(lambda: vm_manager.get_vm_state_by_name(vm_config.name) == VMState.SHUTOFF.value,
@@ -83,6 +85,11 @@ def storage_session():
 def vm_session():
     with VmManager().with_default_user() as vm_manager:
         yield vm_manager
+
+@pytest.fixture(scope="session", autouse=True)
+def network_session():
+    with NetworkManager().with_default_user() as vn_manager:
+        yield vn_manager
 
 @pytest.fixture(scope="session", autouse=True)
 def virsh_console_session():

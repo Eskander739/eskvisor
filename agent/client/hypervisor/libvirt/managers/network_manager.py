@@ -1,8 +1,10 @@
+import uuid
 from xml.etree import ElementTree as ET
 import ipaddress
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.hypervisor.libvirt.models.msg import NetworkMessage, CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, \
     NetworkForward, NetworkBridge
 
@@ -26,7 +28,7 @@ class NetworkManager(LibvirtClient):
         "no-forward": "Сеть без форвардинга - только внутренняя коммуникация"
     }
 
-    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None, password: str | None = None):
+    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None, password: str | None = None):
         super().__init__(connection_uri, username, password)
         self.cli = CLIControl()
 
@@ -39,7 +41,7 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка получения списка сетей: {e}")
             return []
 
-    def create_network(self, params: NetworkParameters) -> bool:
+    def create_network(self, params: NetworkParameters, request_id: str) -> NetworkMessage:
         """Создание виртуальной сети"""
         try:
             # Определяем тип сети перед созданием
@@ -61,23 +63,41 @@ class NetworkManager(LibvirtClient):
             if params.uuid:
                 network.setUUID(params.uuid)
 
-            network.setAutostart(False)  # По умолчанию автозапуск выключен
+            if params.autostart:
+                network.setAutostart(True)  # По умолчанию автозапуск включен
+            else:
+                network.setAutostart(False)  # По умолчанию автозапуск выключен
             network.create()  # Активируем сеть
 
             self.logger.info(
                 f"Сеть '{params.name}' успешно создана "
                 f"(тип: {network_type_info.type}, активна: True)"
             )
-            return True
+
+            created_network = self.get_network_info(params.name, request_id)
+            assert created_network.message == CommandMessagesEnum.virtual_network_founded.value
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.virtual_network_successfully_created.value,
+                                  code=CommandMessagesEnum.virtual_network_successfully_created.name,
+                                  net_info=created_network.net_info,
+                                  success=True)
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка создания сети '{params.name}': {e}")
-            return False
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.virtual_network_create_error.value,
+                                  code=CommandMessagesEnum.virtual_network_create_error.name,
+                                  success=False,
+                                  note=str(e))
         except Exception as e:
             self.logger.error(f"Неожиданная ошибка при создании сети '{params.name}': {e}")
-            return False
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.virtual_network_create_error.value,
+                                  code=CommandMessagesEnum.virtual_network_create_error.name,
+                                  success=False,
+                                  note=str(e))
 
-    def delete_network(self, network_name: str, force: bool = False) -> bool:
+    def delete_network(self, network_name: str, request_id: str, force: bool = False) -> NetworkMessage:
         """Удаление виртуальной сети"""
         try:
             network = self.conn.networkLookupByName(network_name)
@@ -93,15 +113,26 @@ class NetworkManager(LibvirtClient):
                     self.logger.error(
                         f"Сеть '{network_name}' активна. Используйте force=True для принудительного удаления"
                     )
-                    return False
+                    return NetworkMessage(request_id=request_id,
+                                          message=CommandMessagesEnum.virtual_network_delete_error.value,
+                                          code=CommandMessagesEnum.virtual_network_delete_error.name,
+                                          success=False,
+                                          note="use force=True for force delete")
 
             network.undefine()
             self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) успешно удалена")
-            return True
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.virtual_network_successfully_deleted.value,
+                                  code=CommandMessagesEnum.virtual_network_successfully_deleted.name,
+                                  success=True)
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления сети '{network_name}': {e}")
-            return False
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.virtual_network_delete_error.value,
+                                  code=CommandMessagesEnum.virtual_network_delete_error.name,
+                                  success=False,
+                                  note=str(e))
 
     def edit_network(self, network_name: str, params: NetworkParameters) -> bool:
         """Редактирование виртуальной сети"""
@@ -149,7 +180,7 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка редактирования сети '{network_name}': {e}")
             return False
 
-    def get_network_info(self, network_name: str) -> NetworkInfo | None:
+    def get_network_info(self, network_name: str, request_id: str) -> NetworkMessage:
         """Получение информации о сети"""
         try:
             network = self.conn.networkLookupByName(network_name)
@@ -169,11 +200,19 @@ class NetworkManager(LibvirtClient):
                 xml=xml_desc
             )
 
-            return info
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.virtual_network_founded.value,
+                                  code=CommandMessagesEnum.virtual_network_founded.name,
+                                  success=True,
+                                  net_info=info)
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения информации о сети '{network_name}': {e}")
-            return None
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.virtual_network_not_found.value,
+                                  code=CommandMessagesEnum.virtual_network_not_found.name,
+                                  success=False,
+                                  note=str(e))
 
     def _generate_network_xml(self, params: NetworkParameters) -> str:
         """Генерация XML конфигурации сети"""
@@ -574,6 +613,58 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка проверки видимости сети '{network_name}': {e}")
             return False
 
+    def enable_network_with_autostart(self, network_name: str, start_now: bool = True) -> bool:
+        """
+        Включает сеть и настраивает автозапуск.
+
+        Args:
+            network_name: Имя сети
+            start_now: Запускать сеть сразу (True) или только настроить автозапуск (False)
+
+        Returns:
+            bool: True если операция успешна, False в случае ошибки
+        """
+        try:
+            # Получаем информацию о сети
+            network_info = self.get_network_info(network_name)
+            if not network_info:
+                self.logger.error(f"Сеть '{network_name}' не найдена")
+                return False
+
+            # Настраиваем автозапуск
+            autostart_success = self.set_network_autostart(network_name, True)
+            if not autostart_success:
+                self.logger.error(f"Не удалось настроить автозапуск для сети '{network_name}'")
+                return False
+
+            # Запускаем сеть, если требуется
+            if start_now:
+                start_success = self.start_network(network_name)
+                if not start_success:
+                    self.logger.error(f"Не удалось запустить сеть '{network_name}'")
+                    # Автозапуск все равно настроен, но возвращаем False
+                    return False
+
+                self.logger.info(
+                    f"Сеть '{network_name}' запущена и настроен автозапуск "
+                    f"(тип: {network_info.network_type.type})"
+                )
+            else:
+                self.logger.info(
+                    f"Для сети '{network_name}' настроен автозапуск "
+                    f"(тип: {network_info.network_type.type}, "
+                    f"активна: {network_info.active})"
+                )
+
+            return True
+
+        except self.libvirtError as e:
+            self.logger.error(f"Ошибка включения сети '{network_name}' с автозапуском: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Неожиданная ошибка при включении сети '{network_name}': {e}")
+            return False
+
 
 if __name__ == "__main__":
     # Пример использования
@@ -600,17 +691,19 @@ if __name__ == "__main__":
             print(f"  IPv4: {network.network_type.has_ipv4}")
             print(f"  IPv6: {network.network_type.has_ipv6}")
             print(f"  DHCP: {network.network_type.has_dhcp}")
+            # if network.name != "default":
+            #     nm.delete_network(network.name, str(uuid.uuid4()), force=True)
 
         # # Пример создания разных типов сетей
 
-        simple_nat_params = NetworkParameters(
-            name="simple-nat-network",
-            forward=NetworkForward(mode="nat"),
-            bridge=NetworkBridge(name="virbr-simple-nat"),
-            ipv4=True,
-            ipv4_address="192.168.123.0/24",
-            # DHCP будет использовать автоматический диапазон по умолчанию
-        )
+        # simple_nat_params = NetworkParameters(
+        #     name="simple-nat-network",
+        #     forward=NetworkForward(mode="nat"),
+        #     bridge=NetworkBridge(name="virbr-simple-nat"),
+        #     ipv4=True,
+        #     ipv4_address="192.168.123.0/24",
+        #     # DHCP будет использовать автоматический диапазон по умолчанию
+        # )
 
         # print("\n=== Пример создания различных типов сетей ===")
         #

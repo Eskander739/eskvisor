@@ -33,7 +33,7 @@ class VmManager(LibvirtClient):
 
     libvirtError = None
 
-    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None,
+    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None,
                  password: str | None = None):
         self.cli = CLIControl()
         self.config = LibvirtConfig()
@@ -496,7 +496,6 @@ class VmManager(LibvirtClient):
             cmd_parts.append("--noautoconsole")
 
         cmd_parts.append('--qemu-commandline="-netdev user,id=net0,ipv4=on,ipv6=off,dns=8.8.8.8,hostfwd=tcp::2222-:22"')
-        # cmd_parts.append('--qemu-commandline="-netdev user,id=net0,dns=8.8.8.8"')
 
 
         return " ".join(cmd_parts)

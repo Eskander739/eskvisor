@@ -19,7 +19,7 @@ from agent.client.hypervisor.libvirt.models.msg import StorageMessage, CommandMe
 
 
 class StorageManager(LibvirtClient):
-    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None,
+    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None,
                  password: str | None = None):
         super().__init__(connection_uri, username, password)
         self.logger = logging.getLogger(__name__)

@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.disk import VMDisk
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VmUpdateRequest, VirtualMachine
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -26,7 +27,7 @@ def test_vm_05_change_resource(vm_session):
     try:
         # ____________________________________Создание ВМ____________________________________
         random_name = f"VM-TEST-{random.randint(10000, 99999)}"
-        vm_template = VMCreateRequest(name=random_name, disks=[VMDisk()], autostart_vm=True, max_vcpus=4)
+        vm_template = VMCreateRequest(name=random_name, disks=[DiskCreate()], autostart_vm=True, max_vcpus=4)
         create_vm_info = vm_session.create_vm(vm_template)
         assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name

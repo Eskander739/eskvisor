@@ -3,6 +3,7 @@ from enum import Enum
 from pydantic import BaseModel, model_validator
 
 from agent.client.hypervisor.libvirt.models.disk_storage_manager import Disk
+from agent.client.hypervisor.libvirt.models.network import NetworkInfo
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
@@ -47,6 +48,12 @@ class CommandMessagesEnum(Enum):
     vm_edit_error = "VM edit error"
     vm_edit_xml_error = "VM edit XML error"
     vm_edit_unexpected_error = "VM edit unexpected error"
+    virtual_network_successfully_created = "Virtual network successfully created"
+    virtual_network_create_error = "Virtual network create error"
+    virtual_network_successfully_deleted = "Virtual network successfully deleted"
+    virtual_network_delete_error = "Virtual network delete error"
+    virtual_network_founded = "Virtual network founded"
+    virtual_network_not_found = "Virtual network not found"
 
 
 class DefaultMessage(BaseModel):
@@ -86,3 +93,8 @@ class StorageMessage(DefaultMessage):
     disk_info: Disk | None = None
     stdout: str | None = None
     stderr: str | None = None
+
+class NetworkMessage(DefaultMessage):
+    success: bool
+    net_info: NetworkInfo | None = None
+    note: str | None = None

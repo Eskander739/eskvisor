@@ -47,7 +47,7 @@ class LibvirtClient:
         return logger
 
     @classmethod
-    def with_default_user(cls, connection_uri: str = "qemu:///session") -> 'LibvirtClient':
+    def with_default_user(cls, connection_uri: str = "qemu:///system") -> 'LibvirtClient':
         """
         Создание клиента с дефолтным пользователем eskvisor
 

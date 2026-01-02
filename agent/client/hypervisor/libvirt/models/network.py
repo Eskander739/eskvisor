@@ -98,10 +98,12 @@ class NetworkParameters(BaseModel):
     trust_guest_rx_filters: bool | None = False
     isolated: bool | None = False
     domain_name: str | None = None
+    autostart: bool = False
 
     @field_validator("isolated")
     def validate_isolated(cls, v, values):
         """Валидация: изолированная сеть не может иметь forward"""
+        values = values.data
         if v and "forward" in values and values["forward"]:
             raise ValueError("Изолированная сеть (isolated=True) не может иметь forward параметр")
         return v
