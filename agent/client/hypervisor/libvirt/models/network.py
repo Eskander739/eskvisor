@@ -17,8 +17,16 @@ class NetworkTypeInfo(BaseModel):
 
 # Модели Pydantic для валидации параметров
 class NetworkDHCPRange(BaseModel):
-    start: IPvAnyAddress
-    end: IPvAnyAddress
+    start: IPvAnyAddress | str
+    end: IPvAnyAddress | str
+
+    @model_validator(mode="after")
+    def validate_mode(cls, values):
+        if isinstance(values.start, str):
+            IPvAnyNetwork(values.start)
+        if isinstance(values.end, str):
+            IPvAnyNetwork(values.end)
+        return values
 
 
 class NetworkDHCPHost(BaseModel):
@@ -88,7 +96,7 @@ class NetworkParameters(BaseModel):
     forward: NetworkForward | None = None
     ipv4: bool | None = True
     ipv6: bool | None = False
-    ipv4_address: IPvAnyNetwork | None = None
+    ipv4_address: IPvAnyNetwork | str | None = None
     ipv6_address: IPvAnyNetwork | None = None
     dhcp_ranges: list[NetworkDHCPRange] | None = None
     dhcp_hosts: list[NetworkDHCPHost] | None = None
@@ -102,6 +110,10 @@ class NetworkParameters(BaseModel):
 
     @model_validator(mode="after")
     def validate_mode(cls, values):
+        if isinstance(values.ipv4_address, str):
+            IPvAnyNetwork(values.ipv4_address)
+        if isinstance(values.ipv6_address, str):
+            IPvAnyNetwork(values.ipv6_address)
         if values.forward and values.forward.dev and values.bridge and values.bridge.name:
             raise ValueError("Для bridge-сети нужно указать либо <bridge name>, либо <forward dev>, но не оба одновременно")
         if values.forward and values.forward.mode == "bridge":
