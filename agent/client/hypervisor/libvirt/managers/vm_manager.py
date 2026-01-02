@@ -21,7 +21,7 @@ from agent.client.hypervisor.libvirt.models.enum import DiskFormat, NetworkType,
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VmUpdateRequest, VirtualMachine
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import VmError, CommandMessagesEnum, VmMessage
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate, DiskFormat as StorageDiskFormat, Disk
+from agent.client.hypervisor.libvirt.models.disk import DiskCreate, DiskFormat as StorageDiskFormat, Disk
 from agent.client.logger_config import DefaultLogger
 
 
@@ -534,7 +534,7 @@ class VmManager(LibvirtClient):
             disk_info = self.storage_manager.get_disk_info(path=iso_path, request_id=request_id)
 
             # Подготавливаем конфигурацию для подключения
-            from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskAttach, BusType
+            from agent.client.hypervisor.libvirt.models.disk import DiskAttach, BusType
 
             # Преобразуем строковый bus_type в enum
             bus_type_enum = BusType.IDE
@@ -631,7 +631,7 @@ class VmManager(LibvirtClient):
         request_id = str(uuid.uuid4())
 
         try:
-            from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskDetach
+            from agent.client.hypervisor.libvirt.models.disk import DiskDetach
 
             disk_detach = DiskDetach(
                 vm_name=vm_name,

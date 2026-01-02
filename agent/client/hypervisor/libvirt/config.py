@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskFormat
+from agent.client.hypervisor.libvirt.models.disk import DiskFormat
 
 
 class LibvirtConfig:

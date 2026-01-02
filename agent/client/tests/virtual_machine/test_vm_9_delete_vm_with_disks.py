@@ -3,8 +3,7 @@ import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import VMDisk
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate
+from agent.client.hypervisor.libvirt.models.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VirtualMachine
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum

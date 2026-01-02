@@ -4,12 +4,11 @@ from typing import Any
 from pydantic import field_validator, BaseModel, Field, model_validator
 
 from agent.client.hypervisor.libvirt.models.controller import VMController
-from agent.client.hypervisor.libvirt.models.disk import VMDisk
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import BusType, Disk, DiskCreate
+from agent.client.hypervisor.libvirt.models.disk import BusType, DiskCreate
 from agent.client.hypervisor.libvirt.models.enum import Architecture, EmulatorType, OSType, GraphicsType, \
-    ControllerType, DiskType
+    ControllerType
 from agent.client.hypervisor.libvirt.models.general import MachineType, VMState
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, VmNetAdapter
+from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 
 
 class VMCreateRequest(BaseModel):

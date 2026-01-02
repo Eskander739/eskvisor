@@ -7,7 +7,7 @@ import pytest
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate
+from agent.client.hypervisor.libvirt.models.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.tools import wait_while_not

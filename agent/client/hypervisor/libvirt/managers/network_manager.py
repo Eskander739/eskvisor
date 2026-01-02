@@ -1,12 +1,11 @@
-import uuid
+
 from xml.etree import ElementTree as ET
 import ipaddress
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.msg import NetworkMessage, CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, \
-    NetworkForward, NetworkBridge
+from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo
 
 
 class NetworkManager(LibvirtClient):

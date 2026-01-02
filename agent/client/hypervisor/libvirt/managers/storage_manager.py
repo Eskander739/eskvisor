@@ -10,7 +10,7 @@ from typing import List
 import logging
 import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import (
+from agent.client.hypervisor.libvirt.models.disk import (
     Disk, DiskCreate, DiskUpdate, DiskAttach, DiskDetach, DiskQuery,
     DiskFormat, DiskType, DiskStatus, BusType, CacheMode
 )

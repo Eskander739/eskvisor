@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskFormat, DiskCreate, DiskStatus, DiskType
+from agent.client.hypervisor.libvirt.models.disk import DiskFormat, DiskCreate, DiskStatus, DiskType
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 

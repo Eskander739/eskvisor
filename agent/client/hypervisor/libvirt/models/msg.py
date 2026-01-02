@@ -2,7 +2,7 @@ from enum import Enum
 
 from pydantic import BaseModel, model_validator
 
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import Disk
+from agent.client.hypervisor.libvirt.models.disk import Disk
 from agent.client.hypervisor.libvirt.models.network import NetworkInfo
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
