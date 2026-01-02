@@ -9,28 +9,27 @@ from agent.client.hypervisor.libvirt.models.network import NetworkParameters, Ne
 
 
 @pytest.mark.tags("VN‑08", "Удаление сети")
-@pytest.mark.parametrize("network_model", (NetworkParameters(
+@pytest.mark.parametrize("network_model", (
+        NetworkParameters(
             name=f"nat-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(name="virbr-test-ntt", stp="on", delay=0),
             ipv4_address="192.168.100.0/24",
-            dhcp_ranges=[
-                NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
-            ],
-            autostart=True,
-        ), NetworkParameters(
+            dhcp_ranges=[NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")],
+            autostart=True),
+        NetworkParameters(
             name=f"isolated-{random.randint(1000, 9999)}",
             ipv4=True,
             ipv4_address="192.168.101.0/24",
             isolated=True,
             autostart=True,
         ),
-                                           NetworkParameters(
-                                               name=f"bridge-{random.randint(1000, 9999)}",
-                                               forward=NetworkForward(mode="bridge"),
-                                               bridge=NetworkBridge(name="virbr-test-bridge"),
-                                               autostart=True
-                                           )
+        NetworkParameters(
+            name=f"bridge-{random.randint(1000, 9999)}",
+            forward=NetworkForward(mode="bridge"),
+            bridge=NetworkBridge(name="virbr-test-bridge"),
+            autostart=True
+        )
 ))
 def test_vn_08_delete_network(network_session, network_model):
     """
