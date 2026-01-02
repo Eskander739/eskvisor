@@ -34,6 +34,19 @@ def test_vn_09_delete_network_with_connected_vm(network_session):
         assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
         # _____________________________Создание ВМ и подключение созданной сети NAT_____________________________
         raise NotImplementedError
+        # ____________________________________Удаление виртуальной сети____________________________________
+        delete_network_info = network_session.delete_network(network_name, request_id, True)
+        assert delete_network_info.message == CommandMessagesEnum.virtual_network_successfully_deleted.value
+        assert delete_network_info.code == CommandMessagesEnum.virtual_network_successfully_deleted.name
+        v_network = network_session.get_network_info(network_name, request_id)
+        assert v_network.message == CommandMessagesEnum.virtual_network_founded.value
+        assert v_network.code == CommandMessagesEnum.virtual_network_founded.name
+        network_list = network_session.list_all_networks()
+        for current_network in network_list:
+            if current_network.name == network_name:
+                break
+        else:
+            raise AssertionError(f"Виртуальная сеть: '{network_name}' не найдена в списке")
 
     finally:
         # ____________________________________Удаление сети(постусловие)____________________________________

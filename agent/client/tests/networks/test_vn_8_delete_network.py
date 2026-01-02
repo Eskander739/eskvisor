@@ -47,7 +47,9 @@ def test_vn_08_delete_network(network_session, network_model):
         created_network_info = network_session.create_network(network_model, request_id)
         assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
         # ____________________________________Удаление виртуальной сети____________________________________
-        network_session.delete_network(network_name, request_id, True)
+        delete_network_info = network_session.delete_network(network_name, request_id, True)
+        assert delete_network_info.message == CommandMessagesEnum.virtual_network_successfully_deleted.value
+        assert delete_network_info.code == CommandMessagesEnum.virtual_network_successfully_deleted.name
         v_network = network_session.get_network_info(network_name, request_id)
         assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
         assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
