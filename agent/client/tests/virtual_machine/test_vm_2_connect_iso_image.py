@@ -15,12 +15,16 @@ from agent.client.tools import wait_while_not
 IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
 
-@pytest.mark.tags("VM‑02", "Установка ОС на ВМ (загрузка с ISO)")
+@pytest.mark.tags("VM‑02", "VM‑10", "Установка ОС на ВМ (загрузка с ISO)", "Просмотр консоли ВМ")
 def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_session):
     """
     VM‑02: Установка ОС на ВМ (загрузка с ISO)
 
     Присоединить ISO-образ, запустить ВМ, пройти процесс установки. Убедиться, что ОС загружается.
+
+    VM‑10: Просмотр консоли ВМ
+
+    Открыть графическую или текстовую консоль ВМ, убедиться, что можно взаимодействовать с гостевой ОС.
     """
     random_name = None
     request_id = str(uuid.uuid4())
