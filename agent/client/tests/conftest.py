@@ -6,6 +6,7 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
+from agent.client.hypervisor.libvirt.managers.virsh_manager import VirshConsoleController
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
 from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
@@ -82,3 +83,7 @@ def storage_session():
 def vm_session():
     with VmManager().with_default_user() as vm_manager:
         yield vm_manager
+
+@pytest.fixture(scope="session", autouse=True)
+def virsh_console_session():
+    yield VirshConsoleController

@@ -495,6 +495,10 @@ class VmManager(LibvirtClient):
         if config.noautoconsole:
             cmd_parts.append("--noautoconsole")
 
+        cmd_parts.append('--qemu-commandline="-netdev user,id=net0,ipv4=on,ipv6=off,dns=8.8.8.8,hostfwd=tcp::2222-:22"')
+        # cmd_parts.append('--qemu-commandline="-netdev user,id=net0,dns=8.8.8.8"')
+
+
         return " ".join(cmd_parts)
 
     def attach_iso_to_vm(self, vm_name: str, iso_path: str, bus_type: str = "ide", target_dev: str = None) -> VmMessage:

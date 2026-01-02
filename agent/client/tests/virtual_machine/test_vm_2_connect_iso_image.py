@@ -1,22 +1,22 @@
 import random
+import time
 import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import VMDisk
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
-from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskType, DiskCreate
+from agent.client.hypervisor.libvirt.models.disk_storage_manager import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.tools import wait_while_not
 
-IMG_PATH = "/home/eska/alpine-standard-3.19.0-x86_64.iso"
+IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
 
 @pytest.mark.tags("VM‑02", "Установка ОС на ВМ (загрузка с ISO)")
-def test_vm_10_connect_vm_console(vm_session, storage_session):
+def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_session):
     """
     VM‑02: Установка ОС на ВМ (загрузка с ISO)
 
@@ -26,6 +26,7 @@ def test_vm_10_connect_vm_console(vm_session, storage_session):
     request_id = str(uuid.uuid4())
     get_state = vm_session.get_vm_state_by_name
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
+    virsh_console = virsh_console_session(random_name)
     vm_template = VMCreateRequest(name=random_name, autostart_vm=True,
                                   disks=[DiskCreate(path=IMG_PATH),
                                          DiskCreate()], networks=[VmNetAdapter(network_type=NetworkType.USER)])
@@ -35,9 +36,16 @@ def test_vm_10_connect_vm_console(vm_session, storage_session):
         assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         assert create_vm_info.vm_info is not None
-        assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value, timeout=5000000)
+        assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
+        time.sleep(60)
         # ____________________________________Подключение к ВМ____________________________________
-        # raise NotImplementedError
+        virsh_console.connect()
+        results = virsh_console.execute_commands(["root", "cd /", "mkdir hello_eskvisor", "ls"])
+        for result in results:
+            if result and "hello_eskvisor" in result:
+                break
+        else:
+            raise AssertionError("Некорректное подключение к ВМ")
     finally:
         # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)____________
         if random_name is not None:
