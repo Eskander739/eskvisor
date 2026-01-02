@@ -1,0 +1,42 @@
+import random
+import uuid
+
+import pytest
+
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkForward, NetworkBridge, \
+    NetworkDHCPRange
+
+
+@pytest.mark.tags("VN‑02", "Создание NAT-сети")
+def test_vn_01_create_isolated_network(network_session):
+    """
+    VN‑02: Создание NAT-сети
+
+    Создать сеть с NAT и DHCP. Убедиться, что ВМ получают IP-адреса и имеют выход в интернет.
+    """
+    request_id = str(uuid.uuid4())
+    network_name = None
+    try:
+        # ____________________________________Создание виртуальной сети____________________________________
+        nat_params = NetworkParameters(
+            name=f"nat-{random.randint(1000, 9999)}",
+            forward=NetworkForward(mode="nat"),
+            bridge=NetworkBridge(name="virbr-test-ntt"),
+            ipv4_address="192.168.100.0/24",
+            dhcp_ranges=[
+                NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
+            ]
+        )
+        network_name = nat_params.name
+        created_network_info = network_session.create_network(nat_params, request_id)
+        assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
+        assert created_network_info.code == CommandMessagesEnum.virtual_network_successfully_created.name
+
+    finally:
+        # ____________________________________Удаление диска(постусловие)____________________________________
+        if network_name is not None:
+            network_session.delete_network(network_name, request_id, True)
+            v_network = network_session.get_network_info(network_name, request_id)
+            assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
