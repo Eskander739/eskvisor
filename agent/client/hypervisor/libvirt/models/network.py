@@ -3,6 +3,25 @@ from pydantic import BaseModel, Field, IPvAnyAddress, IPvAnyNetwork, field_valid
 from agent.client.hypervisor.libvirt.models.enum import NetworkType, NetworkModel
 
 
+
+class DNSForwarder(BaseModel):
+    """Модель для настройки DNS форвардера"""
+    domain: str | None = None  # Домен для которого применяется форвардер (опционально)
+    addr: str  # IP адрес DNS сервера
+
+
+class DNSHost(BaseModel):
+    """Модель для статических DNS записей хостов"""
+    ip: str  # IP адрес
+    hostnames: list[str]  # Список имен хостов для этого IP
+
+
+class DNSTXT(BaseModel):
+    """Модель для TXT записей DNS"""
+    name: str  # Имя записи (например, example.com или _domainkey.example.com)
+    value: str  # Значение TXT записи
+
+
 # Дополнительные модели для типов сетей
 class NetworkTypeInfo(BaseModel):
     """Информация о типе сети"""
@@ -106,6 +125,10 @@ class NetworkParameters(BaseModel):
     trust_guest_rx_filters: bool | None = False
     isolated: bool | None = False
     domain_name: str | None = None
+    gateway: str | None = None
+    dns_forwarders: list[DNSForwarder] | None = None
+    dns_hosts: list[DNSHost] | None = None
+    dns_txts: list[DNSTXT] | None = None
     autostart: bool = False
 
     @model_validator(mode="after")
@@ -157,6 +180,13 @@ class NetworkInfo(BaseModel):
     autostart: bool
     network_type: NetworkTypeInfo
     xml: str
+    gateway: str | None = None
+    dns_forwarders: list[DNSForwarder]
+    dns_hosts: list[DNSHost]
+    dns_txts: list[DNSTXT]
+    ipv4_address: str | None = None
+    dhcp_ranges: list[NetworkDHCPRange] | None = None
+
 
 class VmNetAdapter(BaseModel):
     """

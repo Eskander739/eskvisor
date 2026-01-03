@@ -16,7 +16,7 @@ from agent.client.tools import wait_while_not
 IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
 @pytest.mark.tags("VN‑06", "VN‑07", "Подключение ВМ к сети", "Отключение ВМ от сети")
-def test_vn_06_connect_vm_to_network(network_session, vm_session, virsh_console_session, storage_session):
+def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(network_session, vm_session, virsh_console_session, storage_session):
     """
     VN‑06: Подключение ВМ к сети
     VN‑07: Отключение ВМ от сети

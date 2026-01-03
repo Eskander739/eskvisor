@@ -16,7 +16,7 @@ from agent.client.tools import wait_while_not
 IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
 @pytest.mark.tags("VN‑09", "Попытка удаления сети с подключенной ВМ")
-def test_vn_06_connect_vm_to_network(network_session, vm_session, virsh_console_session, storage_session):
+def test_vn_09_delete_network_with_connected_vm(network_session, vm_session, virsh_console_session, storage_session):
     """
     VN‑09: Попытка удаления сети с подключенной ВМ
 

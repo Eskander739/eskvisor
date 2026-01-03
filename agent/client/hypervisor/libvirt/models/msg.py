@@ -53,12 +53,16 @@ class CommandMessagesEnum(Enum):
     virtual_network_successfully_deleted = "Virtual network successfully deleted"
     virtual_network_delete_error = "Virtual network delete error"
     virtual_network_have_connected_vms = "Virtual network have connected vms"
-    virtual_network_founded = "Virtual network founded"
+    virtual_network_found = "Virtual network found"
     virtual_network_not_found = "Virtual network not found"
     virtual_network_interfaces_found = "Virtual network interfaces found"
     virtual_network_interface_detached = "Virtual network interface successfully detached"
     virtual_network_interface_detach_error = "Virtual network interface detach error"
     virtual_network_interface_not_found = "Virtual network interface not found"
+    virtual_network_successfully_updated = "Virtual network successfully updated"
+    virtual_network_update_error = "Virtual network updat error"
+    virtual_network_successfully_started = "Virtual network successfully started"
+    virtual_network_restart_error = "Virtual network restart error"
 
 
 class DefaultMessage(BaseModel):
