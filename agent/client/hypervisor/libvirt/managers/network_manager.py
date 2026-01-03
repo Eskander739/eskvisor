@@ -1,11 +1,15 @@
-
+import json
+import uuid
 from xml.etree import ElementTree as ET
 import ipaddress
+
+import libvirt
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.msg import NetworkMessage, CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo
+from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, \
+    NetworkInterfacesInfo, VmInfo, NetworkInterfacesList
 
 
 class NetworkManager(LibvirtClient):
@@ -27,7 +31,7 @@ class NetworkManager(LibvirtClient):
         "no-forward": "Сеть без форвардинга - только внутренняя коммуникация"
     }
 
-    def __init__(self, connection_uri: str = "qemu:///session", username: str | None = None, password: str | None = None):
+    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None, password: str | None = None):
         super().__init__(connection_uri, username, password)
         self.cli = CLIControl()
 
@@ -667,6 +671,190 @@ class NetworkManager(LibvirtClient):
             return False
 
 
+    def get_vm_network_info(self, vm_name: str, request_id: str) -> NetworkMessage:
+        """Получить полную информацию о сетевых интерфейсах ВМ в формате JSON"""
+
+        try:
+            vm = self.conn.lookupByName(vm_name)
+        except libvirt.libvirtError as e:
+            return NetworkMessage(request_id=request_id,
+                                  message=CommandMessagesEnum.vm_found_error.value,
+                                  code=CommandMessagesEnum.vm_found_error.name,
+                                  success=False,
+                                  note=str(e))
+
+        xml_desc = vm.XMLDesc(0)
+        root = ET.fromstring(xml_desc)
+
+        interfaces = []
+
+        for iface in root.findall('.//devices/interface'):
+            # Определяем драйвер по умолчанию на основе модели
+            model = iface.find('model').get('type') if iface.find('model') is not None else ''
+
+            # Значения драйвера по умолчанию для разных моделей
+            default_drivers = {
+                'virtio': {'name': 'virtio-net-pci', 'queues': '1', 'iommu': 'off'},
+                'e1000': {'name': 'e1000', 'queues': '1', 'iommu': 'off'},
+                'rtl8139': {'name': 'rtl8139', 'queues': '1', 'iommu': 'off'},
+                'vmxnet3': {'name': 'vmxnet3', 'queues': '1', 'iommu': 'off'}
+            }
+
+            interface_info = {
+                # Основные поля
+                "interface_type": iface.get('type', ''),
+                "mac_address": iface.find('mac').get('address') if iface.find('mac') is not None else '',
+                "model": model,
+
+                # Драйвер с подстановкой значений по умолчанию
+                "driver": {},
+
+                # Источник подключения
+                "source": {},
+                "host_interface": iface.find('target').get('dev') if iface.find('target') is not None else '',
+
+                # Состояние связи (по умолчанию 'up')
+                "link_state": {"state": "up", "description": "Канал активен по умолчанию"},
+
+                # Boot order (если не указан, значит не используется для загрузки)
+                "boot_order": None,
+                "boot_order_description": "Не используется для PXE загрузки" if iface.find(
+                    'boot') is None else "Используется для сетевой загрузки",
+
+                # ROM (по умолчанию отключен)
+                "rom_bar": {"enabled": "off", "description": "ROM отключен по умолчанию"},
+
+                # Filter (по умолчанию нет фильтрации)
+                "filter": {"name": "none", "description": "Фильтрация трафика не настроена"},
+
+                # MTU (по умолчанию 1500)
+                "mtu": {"size": "1500", "description": "Стандартный MTU по умолчанию"},
+
+                # Коалесцирование (актуально для virtio)
+                "coalescing": {"enabled": "false", "description": "Коалесцирование отключено по умолчанию"}
+            }
+
+            # Заполняем драйвер (явные настройки или значения по умолчанию)
+            driver = iface.find('driver')
+            if driver is not None:
+                # Используем явные настройки
+                interface_info["driver"] = {
+                    "name": driver.get('name', default_drivers.get(model, {}).get('name', 'unknown')),
+                    "queues": driver.get('queues', default_drivers.get(model, {}).get('queues', '1')),
+                    "iommu": driver.get('iommu', default_drivers.get(model, {}).get('iommu', 'off')),
+                    "txmode": driver.get('txmode', ''),
+                    "rxmode": driver.get('rxmode', ''),
+                    "description": "Настройки драйвера из конфигурации"
+                }
+            else:
+                # Используем значения по умолчанию для модели
+                interface_info["driver"] = {
+                    "name": default_drivers.get(model, {}).get('name', 'unknown'),
+                    "queues": default_drivers.get(model, {}).get('queues', '1'),
+                    "iommu": default_drivers.get(model, {}).get('iommu', 'off'),
+                    "description": f"Стандартный драйвер для модели {model}"
+                }
+
+            source = iface.find('source')
+            if source is not None:
+                if source.get('network'):
+                    interface_info["source"] = {
+                        "type": "network",
+                        "name": source.get('network'),
+                        "description": "Виртуальная сеть libvirt",
+                        "network_uuid": self._get_network_uuid(self.conn, source.get('network'))  # Можно добавить
+                    }
+
+            # Проверяем link state
+            link = iface.find('link')
+            if link is not None:
+                interface_info["link_state"] = {
+                    "state": link.get('state', 'up'),
+                    "description": "Явно заданное состояние канала"
+                }
+
+            # Проверяем boot
+            boot = iface.find('boot')
+            if boot is not None:
+                interface_info["boot_order"] = boot.get('order')
+                interface_info["boot_order_description"] = f"Порядок загрузки: {boot.get('order')}"
+
+            # Проверяем rom
+            rom = iface.find('rom')
+            if rom is not None:
+                interface_info["rom_bar"] = {
+                    "enabled": rom.get('bar', 'on'),
+                    "file": rom.get('file', ''),
+                    "description": "ROM настроен явно"
+                }
+
+            # Проверяем фильтр
+            filterref = iface.find('filterref')
+            if filterref is not None:
+                interface_info["filter"] = {
+                    "name": filterref.get('filter'),
+                    "parameters": {},
+                    "description": "Применен сетевой фильтр"
+                }
+                for param in filterref.findall('parameter'):
+                    interface_info["filter"]["parameters"][param.get('name')] = param.get('value')
+
+            # Проверяем MTU
+            mtu = iface.find('mtu')
+            if mtu is not None:
+                interface_info["mtu"] = {
+                    "size": mtu.get('size'),
+                    "description": "MTU задан явно"
+                }
+
+            interfaces.append(interface_info)
+
+        # Добавляем информацию о сети
+        for iface in interfaces:
+            if iface["source"].get("type") == "network":
+                network_name = iface["source"]["name"]
+                try:
+                    network = self.conn.networkLookupByName(network_name)
+                    iface["source"]["network_info"] = {
+                        "active": network.isActive(),
+                        "persistent": network.isPersistent(),
+                        "autostart": network.autostart(),
+                        "bridge": network.bridgeName() if network.isActive() else None,
+                        "uuid": network.UUIDString()
+                    }
+                except libvirt.libvirtError:
+                    iface["source"]["network_info"] = {"error": "Network not found"}
+
+        net_info = NetworkInterfacesInfo(vm_info=VmInfo(name=vm_name,
+                                                uuid=vm.UUIDString(),
+                                                state="running" if vm.isActive() else "shut off",
+                                                has_guest_agent=self._check_guest_agent(vm)),
+                                         network_interfaces=NetworkInterfacesList(count=len(interfaces),
+                                                                                  interfaces=interfaces))
+        return NetworkMessage(request_id=request_id,
+                              message=CommandMessagesEnum.virtual_network_interfaces_found.value,
+                              code=CommandMessagesEnum.virtual_network_interfaces_found.name,
+                              net_info=net_info,
+                              success=True)
+
+    def _get_network_uuid(self, conn, network_name):
+        """Получить UUID сети"""
+        try:
+            network = conn.networkLookupByName(network_name)
+            return network.UUIDString()
+        except:
+            return None
+
+    def _check_guest_agent(self, vm):
+        """Проверить наличие guest agent"""
+        try:
+            # Попробовать получить информацию через агент
+            vm.interfaceAddresses(libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT, 0)
+            return True
+        except:
+            return False
+
+
 if __name__ == "__main__":
     # Пример использования
     with NetworkManager().with_default_user() as nm:
@@ -692,9 +880,18 @@ if __name__ == "__main__":
             print(f"  IPv4: {network.network_type.has_ipv4}")
             print(f"  IPv6: {network.network_type.has_ipv6}")
             print(f"  DHCP: {network.network_type.has_dhcp}")
-            # if network.name != "default":
-            #     nm.delete_network(network.name, str(uuid.uuid4()), force=True)
-
+            if network.name != "default":
+                nm.delete_network(network.name, str(uuid.uuid4()), force=True)
+        #
+        # result = nm.get_vm_network_info("VM-TEST-35084", str(uuid.uuid4()))
+        # formatted = json.dumps(
+        #     result.model_dump(),
+        #     indent=2,
+        #     ensure_ascii=False,
+        #     default=str  # для обработки datetime и других несериализуемых типов
+        # )
+        # print(formatted)
+        # print(result.net_info.network_interfaces.interfaces[0])
         # # Пример создания разных типов сетей
 
         # simple_nat_params = NetworkParameters(

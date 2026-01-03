@@ -3,7 +3,7 @@ from enum import Enum
 from pydantic import BaseModel, model_validator
 
 from agent.client.hypervisor.libvirt.models.disk import Disk
-from agent.client.hypervisor.libvirt.models.network import NetworkInfo
+from agent.client.hypervisor.libvirt.models.network import NetworkInfo, NetworkInterfacesInfo
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
@@ -54,6 +54,7 @@ class CommandMessagesEnum(Enum):
     virtual_network_delete_error = "Virtual network delete error"
     virtual_network_founded = "Virtual network founded"
     virtual_network_not_found = "Virtual network not found"
+    virtual_network_interfaces_found = "Virtual network interfaces found"
 
 
 class DefaultMessage(BaseModel):
@@ -96,5 +97,5 @@ class StorageMessage(DefaultMessage):
 
 class NetworkMessage(DefaultMessage):
     success: bool
-    net_info: NetworkInfo | None = None
+    net_info: NetworkInfo | NetworkInterfacesInfo | None = None
     note: str | None = None

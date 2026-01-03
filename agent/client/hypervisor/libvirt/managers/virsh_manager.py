@@ -36,7 +36,7 @@ class VirshConsoleController:
 
         try:
             # Запускаем virsh console
-            self.child = pexpect.spawn(f'virsh console {self.vm_name}', timeout=timeout)
+            self.child = pexpect.spawn(f'virsh --connect qemu:///system console {self.vm_name}', timeout=timeout)
             # self.child.logfile = sys.stdout.buffer
 
             # Ждем приветственного сообщения

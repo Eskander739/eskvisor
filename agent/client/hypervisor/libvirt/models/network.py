@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, IPvAnyAddress, IPvAnyNetwork, validator, field_validator, model_validator
+from pydantic import BaseModel, Field, IPvAnyAddress, IPvAnyNetwork, field_validator, model_validator
 
 from agent.client.hypervisor.libvirt.models.enum import NetworkType, NetworkModel
 
@@ -187,3 +187,79 @@ class VmNetAdapter(BaseModel):
     model: NetworkModel = NetworkModel.VIRTIO
     mac_address: str | None = None
     source: str | None = "default"
+
+
+class VmInfo(BaseModel):
+    name: str
+    uuid: str
+    state: str
+    has_guest_agent: bool
+
+class NetworkInterfaceSourceInfo(BaseModel):
+    active: int
+    persistent: int
+    autostart: int
+    bridge: str
+    uuid: str
+
+class NetworkInterfaceSource(BaseModel):
+    type: NetworkType
+    name: str
+    description: str
+    network_info: NetworkInterfaceSourceInfo
+
+class NetworkInterfaceDriver(BaseModel):
+    name: str
+    queues: str
+    iommu: str
+    description: str
+
+
+class NetworkInterfaceLinkState(BaseModel):
+    state: str
+    description: str
+
+
+class NetworkInterfaceRomBar(BaseModel):
+    enabled: str
+    description: str
+
+
+class NetworkInterfaceFilter(BaseModel):
+    name: str
+    description: str
+
+
+class NetworkInterfaceMtu(BaseModel):
+    size: str
+    description: str
+
+
+class NetworkInterfaceCoalescing(BaseModel):
+    enabled: str
+    description: str
+
+
+class NetworkInterface(BaseModel):
+    interface_type: NetworkType
+    mac_address: str | None = None
+    model: str
+    source: NetworkInterfaceSource
+    host_interface: str
+    driver: NetworkInterfaceDriver
+    link_state: NetworkInterfaceLinkState
+    boot_order: str | None = None
+    boot_order_description: str | None = None
+    rom_bar: NetworkInterfaceRomBar
+    filter: NetworkInterfaceFilter
+    mtu: NetworkInterfaceMtu
+    coalescing: NetworkInterfaceCoalescing
+
+
+class NetworkInterfacesList(BaseModel):
+    count: int
+    interfaces: list[NetworkInterface]
+
+class NetworkInterfacesInfo(BaseModel):
+    vm_info: VmInfo
+    network_interfaces: NetworkInterfacesList

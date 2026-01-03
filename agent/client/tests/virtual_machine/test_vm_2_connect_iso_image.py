@@ -53,7 +53,6 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
     finally:
         # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)____________
         if random_name is not None:
-            pass
             delete_vm_info = vm_session.delete_vm_with_force(name=random_name, request_id=request_id, delete_disks=False)
             assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
             assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name

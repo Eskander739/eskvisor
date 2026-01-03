@@ -320,7 +320,7 @@ class VmManager(LibvirtClient):
         Returns:
             Строка команды для выполнения
         """
-        cmd_parts = ["virt-install"]
+        cmd_parts = ["virt-install --connect qemu:///system"]
         controller_params = []
         graphics_params = []
         boot_params = []

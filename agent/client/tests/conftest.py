@@ -10,9 +10,13 @@ from agent.client.hypervisor.libvirt.managers.storage_manager import StorageMana
 from agent.client.hypervisor.libvirt.managers.virsh_manager import VirshConsoleController
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
 from agent.client.hypervisor.libvirt.models.disk import DiskCreate
+from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
+from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.tools import wait_while_not
+
+IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
 
 def pytest_configure(config):
