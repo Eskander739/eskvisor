@@ -52,6 +52,7 @@ class CommandMessagesEnum(Enum):
     virtual_network_create_error = "Virtual network create error"
     virtual_network_successfully_deleted = "Virtual network successfully deleted"
     virtual_network_delete_error = "Virtual network delete error"
+    virtual_network_have_connected_vms = "Virtual network have connected vms"
     virtual_network_founded = "Virtual network founded"
     virtual_network_not_found = "Virtual network not found"
     virtual_network_interfaces_found = "Virtual network interfaces found"

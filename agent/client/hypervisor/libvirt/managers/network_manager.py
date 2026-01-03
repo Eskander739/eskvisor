@@ -101,13 +101,49 @@ class NetworkManager(LibvirtClient):
                                   success=False,
                                   note=str(e))
 
-    def delete_network(self, network_name: str, request_id: str, force: bool = False) -> NetworkMessage:
+    def _has_vms_connected_to_network(self, network_name: str) -> bool:
+        """
+        Простая проверка через список всех ВМ с фильтрацией по сети
+        """
+        try:
+            # Получаем все запущенные ВМ
+            domains = self.conn.listAllDomains(libvirt.VIR_CONNECT_LIST_DOMAINS_RUNNING)
+
+            for domain in domains:
+                try:
+                    # Получаем XML ВМ
+                    xml_desc = domain.XMLDesc(0)
+
+                    # Быстрая проверка строкой
+                    if f"<source network='{network_name}'" in xml_desc:
+                        return True
+
+                    # Альтернативный формат (без кавычек)
+                    if f"<source network={network_name}" in xml_desc:
+                        return True
+
+                except:
+                    continue
+
+            return False
+
+        except Exception as e:
+            self.logger.debug(f"Ошибка проверки ВМ в сети '{network_name}': {e}")
+            return False
+
+    def delete_network(self, network_name: str, request_id: str, force: bool = False, approve_admin: bool = False) -> NetworkMessage:
         """Удаление виртуальной сети"""
         try:
             network = self.conn.networkLookupByName(network_name)
 
             # Получаем информацию о типе сети перед удалением
             network_type = self._get_network_type_from_xml(network.XMLDesc(0))
+            if self._has_vms_connected_to_network(network_name) and not approve_admin:
+                self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) не может быть удалена с подключенными ВМ без подтверждения администратора")
+                return NetworkMessage(request_id=request_id,
+                                      message=CommandMessagesEnum.virtual_network_have_connected_vms.value,
+                                      code=CommandMessagesEnum.virtual_network_have_connected_vms.name,
+                                      success=False)
 
             if network.isActive():
                 if force:

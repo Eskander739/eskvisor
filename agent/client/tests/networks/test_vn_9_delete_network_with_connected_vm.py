@@ -15,14 +15,12 @@ from agent.client.tools import wait_while_not
 
 IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
-@pytest.mark.tags("VN‑06", "VN‑07", "Подключение ВМ к сети", "Отключение ВМ от сети")
+@pytest.mark.tags("VN‑09", "Попытка удаления сети с подключенной ВМ")
 def test_vn_06_connect_vm_to_network(network_session, vm_session, virsh_console_session, storage_session):
     """
-    VN‑06: Подключение ВМ к сети
-    VN‑07: Отключение ВМ от сети
+    VN‑09: Попытка удаления сети с подключенной ВМ
 
-    Выбрать сеть и подключить к ней ВМ. Убедиться, что ВМ получает сетевые настройки.
-    Отсоединить ВМ от сети. Проверить, что сетевой интерфейс в ВМ теряет соединение.
+    Попытаться удалить сеть, к которой подключены ВМ. Система должна запросить подтверждение или запретить удаление.
     """
 
     request_id = str(uuid.uuid4())
@@ -74,19 +72,10 @@ def test_vn_06_connect_vm_to_network(network_session, vm_session, virsh_console_
         results = virsh_console.execute_commands(["root", "ip link set eth0 up", "udhcpc -i eth0", "sleep 15", "ip a"])
         result = results.pop()
         assert network_mac_address in result
-        # ____________________________Отключить сетевой интерфейс у ВМ____________________________
-        detach_net_itnerface_info = network_session.detach_vm_network_interface(random_name, network_mac_address, request_id)
-        assert detach_net_itnerface_info.message == CommandMessagesEnum.virtual_network_interface_detached.value
-        assert detach_net_itnerface_info.code == CommandMessagesEnum.virtual_network_interface_detached.name
-        results = virsh_console.execute_commands(["ip a"])
-        result = results.pop()
-        assert network_mac_address not in result
-        # _________________________Проверка отсутствия виртуальной сети у ВМ_________________________
-        get_net_vm_info = network_session.get_vm_network_info(vm_template.name, request_id)
-        assert get_net_vm_info.message == CommandMessagesEnum.virtual_network_interfaces_found.value
-        assert get_net_vm_info.code == CommandMessagesEnum.virtual_network_interfaces_found.name
-        assert get_net_vm_info.net_info.network_interfaces.count == 0
-        assert not get_net_vm_info.net_info.network_interfaces.interfaces
+        # ______________________________________Удаление сети_____________________________________
+        delete_network_info = network_session.delete_network(nat_params.name, request_id, True)
+        assert delete_network_info.message == CommandMessagesEnum.virtual_network_have_connected_vms.value
+        assert delete_network_info.code == CommandMessagesEnum.virtual_network_have_connected_vms.name
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________________________________
         if vm_created:
