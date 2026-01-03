@@ -55,6 +55,9 @@ class CommandMessagesEnum(Enum):
     virtual_network_founded = "Virtual network founded"
     virtual_network_not_found = "Virtual network not found"
     virtual_network_interfaces_found = "Virtual network interfaces found"
+    virtual_network_interface_detached = "Virtual network interface successfully detached"
+    virtual_network_interface_detach_error = "Virtual network interface detach error"
+    virtual_network_interface_not_found = "Virtual network interface not found"
 
 
 class DefaultMessage(BaseModel):

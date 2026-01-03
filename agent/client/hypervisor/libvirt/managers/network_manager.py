@@ -1,4 +1,5 @@
 import json
+import subprocess
 import uuid
 from xml.etree import ElementTree as ET
 import ipaddress
@@ -853,6 +854,106 @@ class NetworkManager(LibvirtClient):
             return True
         except:
             return False
+
+    def detach_vm_network_interface(self, vm_name: str, mac_address: str, request_id: str,
+                                    persistent: bool = True, live: bool = True) -> NetworkMessage:
+        """Отключение сетевого интерфейса от виртуальной машины"""
+        try:
+            # Проверяем существование ВМ
+            try:
+                vm = self.conn.lookupByName(vm_name)
+            except libvirt.libvirtError as e:
+                self.logger.error(f"ВМ '{vm_name}' не найдена: {e}")
+                return NetworkMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.vm_found_error.value,
+                    code=CommandMessagesEnum.vm_found_error.name,
+                    success=False,
+                    note=f"VM not found: {e}"
+                )
+
+            # Проверяем существование интерфейса с указанным MAC
+            xml_desc = vm.XMLDesc(0)
+            root = ET.fromstring(xml_desc)
+
+            interface_found = False
+            for iface in root.findall('.//devices/interface'):
+                mac_elem = iface.find('mac')
+                if mac_elem is not None and mac_elem.get('address') == mac_address:
+                    interface_found = True
+                    break
+
+            if not interface_found:
+                self.logger.error(f"Сетевой интерфейс с MAC '{mac_address}' не найден у ВМ '{vm_name}'")
+                return NetworkMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.virtual_network_interface_not_found.value,
+                    code=CommandMessagesEnum.virtual_network_interface_not_found.name,
+                    success=False,
+                    note=f"Network interface with MAC {mac_address} not found"
+                )
+
+            # Строим команду virsh detach-interface
+            cmd = ['virsh', '--connect', self.connection_uri, 'detach-interface', vm_name, 'network']
+
+            if mac_address:
+                cmd.extend(['--mac', mac_address])
+
+            if persistent:
+                cmd.append('--persistent')
+
+            if live:
+                cmd.append('--live')
+            else:
+                cmd.append('--config')
+
+            # Выполняем команду
+            self.logger.info(f"Отключение сетевого интерфейса {mac_address} от ВМ {vm_name}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                self.logger.info(f"Сетевой интерфейс {mac_address} успешно отключен от ВМ {vm_name}")
+
+                # Получаем обновленную информацию о сетевых интерфейсах ВМ
+                network_info = self.get_vm_network_info(vm_name, request_id)
+
+                return NetworkMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.virtual_network_interface_detached.value,
+                    code=CommandMessagesEnum.virtual_network_interface_detached.name,
+                    success=True,
+                    net_info=network_info.net_info if network_info.success else None,
+                    note="Network interface successfully detached"
+                )
+            else:
+                error_msg = result.stderr.strip()
+                self.logger.error(f"Ошибка отключения интерфейса {mac_address}: {error_msg}")
+                return NetworkMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
+                    code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
+                    success=False,
+                    note=error_msg
+                )
+
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Ошибка выполнения команды detach-interface: {e}")
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
+                code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
+                success=False,
+                note=str(e)
+            )
+        except Exception as e:
+            self.logger.error(f"Неожиданная ошибка при отключении сетевого интерфейса: {e}")
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
+                code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
+                success=False,
+                note=str(e)
+            )
 
 
 if __name__ == "__main__":
