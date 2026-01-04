@@ -1,3 +1,5 @@
+import random
+
 import libvirt
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
@@ -6,7 +8,7 @@ from agent.client.hypervisor.libvirt.models.resource_pool import ResourcePoolCre
     VMPoolAssignmentRequest, ResourcePoolReservationRequest, ResourcePoolLimitRequest, ResourcePoolDeleteRequest, \
     ResourcePoolInfoRequest, ResourcePoolEditRequest, ResourcePoolControlRequest, ResourcePool, ResourcePoolList, \
     AdjustResourcePool, AddVMInResourcePool, RemoveVMInResourcePool, ResourcePoolReservation, ResourcePoolUpdates, \
-    DeleteResourcePool, ResourcePoolUsageInfo, ResourcePoolState
+    DeleteResourcePool, ResourcePoolUsageInfo, ResourcePoolState, UsageInfo
 
 
 class PoolManager(LibvirtClient):
@@ -19,8 +21,9 @@ class PoolManager(LibvirtClient):
 
     libvirtError = libvirt.libvirtError
 
-    def __init__(self, connection_uri: str = "qemu:///system"):
-        super().__init__(connection_uri)
+    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None,
+                 password: str | None = None):
+        super().__init__(connection_uri, username, password)
         # Кэш для хранения информации о пулах (в реальной системе можно использовать БД)
         self._resource_pools = {}
 
@@ -66,13 +69,16 @@ class PoolManager(LibvirtClient):
 
         Args:
             request: Запрос на создание пула ресурсов
+            request_id: Id запроса
 
         Returns:
             RpMessage: Результат операции
         """
         try:
+            self.logger.info(f"Запуск создания ресурс пула '{request.name}'")
             # Проверяем, существует ли уже пул с таким именем
             if request.name in self._resource_pools:
+                self.logger.error(f"Ресурс пул'{request.name}' уже существует")
                 return RpMessage(
                     request_id=request_id,
                     message=CommandMessagesEnum.rp_already_exists.value,
@@ -84,6 +90,7 @@ class PoolManager(LibvirtClient):
             # Создаем пул хранения в libvirt, если предоставлен XML
             storage_pool_created = False
             if request.storage_xml:
+                self.logger.info(f"Создание ресурс пула '{request.name}' из xml конфигурации")
                 # Модифицируем XML с указанными параметрами
                 storage_xml = request.storage_xml
                 if request.storage_limit:
@@ -103,6 +110,9 @@ class PoolManager(LibvirtClient):
                         note="Failed to create storage pool in libvirt"
                     )
 
+            if request.storage_path is None:
+                self.logger.info(f"Автоматическая установка директории для ресурс пула '{request.name}'")
+                request.storage_path = f"/var/lib/libvirt/resource_pools/rp_{random.randint(100_000, 999_999)}"
             # Создаем запись о ресурсном пуле
             pool_data = {
                 "name": request.name,
@@ -136,7 +146,10 @@ class PoolManager(LibvirtClient):
                                      storage_limit=request.storage_limit,
                                      vms=[],
                                      reservations={},
-                                     limits={})
+                                     limits={},
+                                     usage=UsageInfo(cpu=0,
+                                                     memory=0,
+                                                     storage=0))
 
             return RpMessage(
                 request_id=request_id,
@@ -602,48 +615,51 @@ class PoolManager(LibvirtClient):
                 note=str(e)
             )
 
-    def delete_resource_pool(self, request: ResourcePoolDeleteRequest) -> RpMessage:
+    def delete_resource_pool(self, name: str, request_id: str, force: bool = False) -> RpMessage:
         """
         Удаление пула ресурсов (RP-08, RP-09)
 
         Args:
-            request: Запрос на удаление пула
+            name: Имя пула
+            request_id: id запроса
+            force: Принудительное удаление даже если есть ВМ
 
         Returns:
             RpMessage: Результат операции
         """
+
         try:
             # Проверяем существование пула
-            if request.name not in self._resource_pools:
+            if name not in self._resource_pools:
                 return RpMessage(
-                    request_id=request.request_id,
+                    request_id=request_id,
                     message=CommandMessagesEnum.rp_not_found.value,
                     code=CommandMessagesEnum.rp_not_found.name,
                     success=False,
-                    note=f"Pool '{request.name}' not found"
+                    note=f"Pool '{name}' not found"
                 )
 
-            pool_data = self._resource_pools[request.name]
+            pool_data = self._resource_pools[name]
 
             # Проверяем, есть ли ВМ в пуле
-            if not request.force and pool_data["vms"]:
+            if not force and pool_data["vms"]:
                 return RpMessage(
-                    request_id=request.request_id,
+                    request_id=request_id,
                     message=CommandMessagesEnum.rp_delete_not_empty_error.value,
                     code=CommandMessagesEnum.rp_delete_not_empty_error.name,
                     success=False,
-                    note=f"Pool '{request.name}' contains {len(pool_data['vms'])} VMs. Use force=True to delete."
+                    note=f"Pool '{name}' contains {len(pool_data['vms'])} VMs. Use force=True to delete."
                 )
 
             # Если есть ВМ, перемещаем их из пула (при форсированном удалении)
-            if pool_data["vms"] and request.force:
+            if pool_data["vms"] and force:
                 for vm_name in pool_data["vms"]:
                     # Освобождаем ресурсы ВМ
                     try:
                         domain = self.conn.lookupByName(vm_name)
                         vm_info = domain.info()
                         # В реальной реализации нужно отвязать ВМ от пула
-                        self.logger.info(f"VM '{vm_name}' removed from pool '{request.name}' during forced deletion")
+                        self.logger.info(f"VM '{vm_name}' removed from pool '{name}' during forced deletion")
                     except:
                         pass
 
@@ -651,25 +667,25 @@ class PoolManager(LibvirtClient):
             try:
                 # Пытаемся найти и удалить пул хранения
                 pool_list = self.list_storage_pools()
-                if request.name in pool_list:
-                    self.delete_storage_pool(request.name, destroy=True)
+                if name in pool_list:
+                    self.delete_storage_pool(name, destroy=True)
             except:
                 pass
 
             # Удаляем пул из кэша
-            del self._resource_pools[request.name]
+            del self._resource_pools[name]
             return RpMessage(
-                request_id=request.request_id,
+                request_id=request_id,
                 message=CommandMessagesEnum.rp_delete_success.value,
                 code=CommandMessagesEnum.rp_delete_success.name,
                 success=True,
-                rp_info=DeleteResourcePool(name=request.name, force=request.force, vms_count=len(pool_data["vms"]))
+                rp_info=DeleteResourcePool(name=name, force=force, vms_count=len(pool_data["vms"]))
             )
 
         except Exception as e:
-            self.logger.error(f"Ошибка удаления пула ресурсов '{request.name}': {e}")
+            self.logger.error(f"Ошибка удаления пула ресурсов '{name}': {e}")
             return RpMessage(
-                request_id=request.request_id,
+                request_id=request_id,
                 message=CommandMessagesEnum.rp_delete_error.value,
                 code=CommandMessagesEnum.rp_delete_error.name,
                 success=False,
@@ -1057,4 +1073,4 @@ class PoolManager(LibvirtClient):
 if __name__ == "__main__":
     with PoolManager() as mngr:
         print(mngr.list_storage_pools())
-        print(mngr.get_pool_info("eska"))
+        print(mngr.get_pool_info("images"))

@@ -15,8 +15,9 @@ class SnapshotManager(LibvirtClient):
     """
     libvirtError = libvirt.libvirtError
 
-    def __init__(self, connection_uri: str = "qemu:///system"):
-        super().__init__(connection_uri)
+    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None,
+                 password: str | None = None):
+        super().__init__(connection_uri, username, password)
 
     def snapshots_by_vm_name(self, vm_name: str, request_id: str = None) -> SnapshotMessage:
         """

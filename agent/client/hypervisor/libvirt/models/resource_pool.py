@@ -81,6 +81,11 @@ class ResourceMetrics(BaseModel):
     available: int | None = None
     percent: int | None = None
 
+class UsageInfo(BaseModel):
+    cpu: int
+    memory: int
+    storage: int
+
 
 class ResourcePoolUsageInfo(BaseModel):
     pool_name: str
@@ -159,6 +164,7 @@ class ResourcePool(BaseModel):
     vms: list
     reservations: dict
     limits: dict
+    usage: UsageInfo | None = None
 
 
 class ResourcePoolList(BaseModel):
