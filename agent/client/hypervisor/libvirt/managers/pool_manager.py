@@ -1057,3 +1057,4 @@ class PoolManager(LibvirtClient):
 if __name__ == "__main__":
     with PoolManager() as mngr:
         print(mngr.list_storage_pools())
+        print(mngr.get_pool_info("eska"))
