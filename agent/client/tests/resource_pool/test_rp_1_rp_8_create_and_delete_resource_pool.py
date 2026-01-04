@@ -28,7 +28,11 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         assert create_rp_info.code == CommandMessagesEnum.rp_create_success.name
         assert create_rp_info.rp_info is not None
         get_rp_info = resource_pool_session.get_pool_info(random_name, request_id)
+        print("get_rp_info: ", get_rp_info)
         assert get_rp_info.rp_info.name == random_name
+        assert get_rp_info.rp_info.cpu_limit == rp_template.cpu_limit
+        assert get_rp_info.rp_info.memory_limit_gb == rp_template.memory_limit/1024
+        assert int(get_rp_info.rp_info.available_gb) == rp_template.storage_limit
         # ____________________________________Удаление пула ресурсов_____________________________________
         delete_rp_info = resource_pool_session.delete_resource_pool(random_name, request_id)
         assert delete_rp_info.message == CommandMessagesEnum.rp_delete_success.value
@@ -42,5 +46,5 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         if not rp_deleted:
             delete_rp_info = resource_pool_session.delete_resource_pool(random_name, request_id)
             assert delete_rp_info.message in (CommandMessagesEnum.rp_delete_success.value, CommandMessagesEnum.rp_not_found.value)
-            assert delete_rp_info.code == (CommandMessagesEnum.rp_delete_success.name, CommandMessagesEnum.rp_not_found.name)
+            assert delete_rp_info.code in (CommandMessagesEnum.rp_delete_success.name, CommandMessagesEnum.rp_not_found.name)
             assert delete_rp_info.success is True

@@ -231,6 +231,12 @@ class ResourcePool(BaseModel):
 
     @computed_field
     @property
+    def memory_limit_gb(self) -> float:
+        """Общая емкость в гигабайтах"""
+        return self.memory_limit / (1024 ** 3)
+
+    @computed_field
+    @property
     def capacity_gb(self) -> float:
         """Общая емкость в гигабайтах"""
         return self.capacity_bytes / (1024 ** 3)
