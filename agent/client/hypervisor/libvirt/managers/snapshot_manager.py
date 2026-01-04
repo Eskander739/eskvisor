@@ -1,7 +1,6 @@
 import libvirt
 import os
 import uuid
-from typing import List, Dict, Any
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
@@ -629,8 +628,8 @@ class SnapshotManager(LibvirtClient):
                 note=str(e)
             )
 
-    def create_snapshot_chain(self, vm_name: str, snapshot_names: List[str],
-                              descriptions: List[str] = None, request_id: str = None) -> SnapshotMessage:
+    def create_snapshot_chain(self, vm_name: str, snapshot_names: list[str],
+                              descriptions: list[str] = None, request_id: str = None) -> SnapshotMessage:
         """
         Создать цепочку снапшотов
 
@@ -974,7 +973,7 @@ class SnapshotManager(LibvirtClient):
             self.logger.warning(f"Не удалось проверить свободное место: {e}")
             return True  # В случае ошибки разрешаем создание снапшота
 
-    def _get_snapshots_after(self, vm_name: str, snapshot_name: str) -> List[Any]:
+    def _get_snapshots_after(self, vm_name: str, snapshot_name: str) -> list:
         """Получить снапшоты, созданные после указанного снапшота"""
         try:
             virtual_machine = self.conn.lookupByName(vm_name)
@@ -1009,7 +1008,7 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError:
             return []
 
-    def _calculate_chain_depth(self, snapshots: List[SnapshotWithParent]) -> int:
+    def _calculate_chain_depth(self, snapshots: list[SnapshotWithParent]) -> int:
         """Рассчитать глубину цепочки снапшотов"""
         if not snapshots:
             return 0
@@ -1037,7 +1036,7 @@ class SnapshotManager(LibvirtClient):
 
         return max_depth
 
-    def _build_snapshot_tree(self, snapshots_info: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_snapshot_tree(self, snapshots_info: list[dict]) -> dict:
         """Построить дерево снапшотов"""
         tree = {}
 
@@ -1062,7 +1061,7 @@ class SnapshotManager(LibvirtClient):
             "roots": root_nodes
         }
 
-    def _build_chain_from_root(self, root_name: str, snapshots_info: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _build_chain_from_root(self, root_name: str, snapshots_info: list[dict]) -> list[dict]:
         """Построить цепочку начиная с корневого снапшота"""
         chain = []
 
