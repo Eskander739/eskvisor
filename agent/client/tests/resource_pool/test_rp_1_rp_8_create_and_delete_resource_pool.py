@@ -31,17 +31,20 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         assert create_rp_info.message == CommandMessagesEnum.rp_create_success.value
         assert create_rp_info.code == CommandMessagesEnum.rp_create_success.name
         assert create_rp_info.rp_info is not None
-        get_rp_info = resource_pool_session.get_pool_info(random_name)
-        assert get_rp_info.get("name") == random_name
+        get_rp_info = resource_pool_session.get_pool_info(random_name, request_id)
+        assert get_rp_info.rp_info.name == random_name
         # ____________________________________Удаление пула ресурсов_____________________________________
         delete_rp_info = resource_pool_session.delete_resource_pool(random_name, request_id)
         assert delete_rp_info.message == CommandMessagesEnum.rp_delete_success.value
         assert delete_rp_info.code == CommandMessagesEnum.rp_delete_success.name
+        get_rp_info = resource_pool_session.get_pool_info(random_name, request_id)
+        assert get_rp_info.message == CommandMessagesEnum.rp_not_found.value
+        assert get_rp_info.code == CommandMessagesEnum.rp_not_found.name
         rp_deleted = True
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)______________________________
         if not rp_deleted:
             delete_rp_info = resource_pool_session.delete_resource_pool(random_name, request_id)
-            assert delete_rp_info.message == CommandMessagesEnum.rp_delete_success.value
-            assert delete_rp_info.code == CommandMessagesEnum.rp_delete_success.name
+            assert delete_rp_info.message in (CommandMessagesEnum.rp_delete_success.value, CommandMessagesEnum.rp_not_found.value)
+            assert delete_rp_info.code == (CommandMessagesEnum.rp_delete_success.name, CommandMessagesEnum.rp_not_found.name)
             assert delete_rp_info.success is True

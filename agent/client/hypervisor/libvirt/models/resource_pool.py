@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ResourcePoolType(str, Enum):
@@ -8,6 +8,53 @@ class ResourcePoolType(str, Enum):
     CPU = "cpu"
     MEMORY = "memory"
     STORAGE = "storage"
+
+
+class StoragePoolType(str, Enum):
+    """Типы пулов хранения в libvirt"""
+
+    DIR = "dir"  # Директория в файловой системе
+    FS = "fs"  # Предварительно отформатированный раздел файловой системы
+    LOGICAL = "logical"  # Группа LVM логических томов
+    DISK = "disk"  # Физический диск или раздел
+    ISCSI = "iscsi"  # iSCSI целевое устройство
+    SCSI = "scsi"  # SCSI устройства
+    MPATH = "mpath"  # Multipath устройства
+    RBD = "rbd"  # RADOS Block Device (Ceph)
+    SHEEPDOG = "sheepdog"  # Sheepdog распределенное хранилище
+    GLUSTER = "gluster"  # GlusterFS том
+    ZFS = "zfs"  # ZFS пул
+    VSTORAGE = "vstorage"  # Virtuozzo Storage
+    NETFS = "netfs"  # Сетевая файловая система (NFS)
+    VXHS = "vxhs"  # Veritas HyperScale Storage
+    ISCSI_DIRECT = "iscsi-direct"  # Прямой доступ к iSCSI
+    UNKNOWN = "unknown"
+
+POOL_TYPE_DESCRIPTIONS = {
+    StoragePoolType.DIR: "Директория в локальной файловой системе",
+    StoragePoolType.FS: "Форматированный раздел файловой системы",
+    StoragePoolType.LOGICAL: "Группа LVM логических томов",
+    StoragePoolType.DISK: "Физический диск или раздел",
+    StoragePoolType.ISCSI: "iSCSI целевое устройство по сети",
+    StoragePoolType.SCSI: "SCSI устройства",
+    StoragePoolType.MPATH: "Устройства с multipath",
+    StoragePoolType.RBD: "RADOS Block Device (Ceph)",
+    StoragePoolType.SHEEPDOG: "Sheepdog распределенное хранилище",
+    StoragePoolType.GLUSTER: "GlusterFS сетевой том",
+    StoragePoolType.ZFS: "ZFS пул",
+    StoragePoolType.VSTORAGE: "Virtuozzo Storage",
+    StoragePoolType.NETFS: "Сетевая файловая система (NFS)",
+    StoragePoolType.VXHS: "Veritas HyperScale Storage",
+    StoragePoolType.ISCSI_DIRECT: "Прямой доступ к iSCSI",
+}
+
+POOL_STATE = {0: "inactive", 1: "building", 2: "running", 3: "degraded"}
+
+class PoolState(Enum):
+    INACTIVE = "inactive"
+    BUILDING = "building"
+    RUNNING = "running"
+    DEGRADED = "degraded"
 
 
 class ResourcePoolCreateRequest(BaseModel):
@@ -18,6 +65,10 @@ class ResourcePoolCreateRequest(BaseModel):
     storage_limit: int | None = Field(None, description="Лимит хранилища (в ГБ)")
     storage_path: str | None = Field(None, description="Путь к хранилищу")
     storage_xml: str | None = Field(None, description="XML описание пула хранения")
+    pool_type: StoragePoolType = StoragePoolType.DIR
+
+    class Config:
+        use_enum_values = True  # Для сериализации Enum в их значения
 
 
 class ResourcePoolEditRequest(BaseModel):
@@ -157,14 +208,117 @@ class RemoveVMInResourcePool(BaseModel):
 
 class ResourcePool(BaseModel):
     name: str
-    type: ResourcePoolType | None = None
-    cpu_limit: int
-    memory_limit: int
-    storage_limit: int
-    vms: list
-    reservations: dict
-    limits: dict
+    state: PoolState
+
+    # Основные метрики в байтах (сырые данные из libvirt)
+    capacity_bytes: int = Field(..., description="Общая емкость в байтах")
+    allocation_bytes: int = Field(..., description="Использованное пространство в байтах")
+    available_bytes: int = Field(..., description="Доступное пространство в байтах")
+
+    autostart: bool
+    is_active: bool
+    type: StoragePoolType
+
+    # Лимиты ресурсов (в соответствующих единицах)
+    cpu_limit: int | None = Field(None, description="Лимит CPU в ядрах")
+    memory_limit: float | None = Field(None, description="Лимит памяти в гигабайтах")
+
+    vms: list[str] = Field(default_factory=list)
+    reservations: dict | None = None
     usage: UsageInfo | None = None
+
+    # ========== ВЫЧИСЛЯЕМЫЕ ПОЛЯ для удобства ==========
+
+    @computed_field
+    @property
+    def capacity_gb(self) -> float:
+        """Общая емкость в гигабайтах"""
+        return self.capacity_bytes / (1024 ** 3)
+
+    @computed_field
+    @property
+    def allocation_gb(self) -> float:
+        """Использованное пространство в гигабайтах"""
+        return self.allocation_bytes / (1024 ** 3)
+
+    @computed_field
+    @property
+    def available_gb(self) -> float:
+        """Доступное пространство в гигабайтах"""
+        return self.available_bytes / (1024 ** 3)
+
+    @computed_field
+    @property
+    def usage_percent(self) -> float:
+        """Процент использования хранилища"""
+        if self.capacity_bytes == 0:
+            return 0.0
+        return (self.allocation_bytes / self.capacity_bytes) * 100
+
+    @computed_field
+    @property
+    def free_percent(self) -> float:
+        """Процент свободного места"""
+        if self.capacity_bytes == 0:
+            return 0.0
+        return (self.available_bytes / self.capacity_bytes) * 100
+
+    @computed_field
+    @property
+    def capacity_tb(self) -> float:
+        """Общая емкость в терабайтах"""
+        return self.capacity_bytes / (1024 ** 4)
+
+    @computed_field
+    @property
+    def allocation_tb(self) -> float:
+        """Использованное пространство в терабайтах"""
+        return self.allocation_bytes / (1024 ** 4)
+
+    @computed_field
+    @property
+    def available_tb(self) -> float:
+        """Доступное пространство в терабайтах"""
+        return self.available_bytes / (1024 ** 4)
+
+    # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+
+    def get_human_readable_size(self, size_bytes: int) -> str:
+        """Конвертирует размер в байтах в человекочитаемый формат"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
+
+    @property
+    def capacity_human(self) -> str:
+        """Общая емкость в человекочитаемом формате"""
+        return self.get_human_readable_size(self.capacity_bytes)
+
+    @property
+    def allocation_human(self) -> str:
+        """Использованное пространство в человекочитаемом формате"""
+        return self.get_human_readable_size(self.allocation_bytes)
+
+    @property
+    def available_human(self) -> str:
+        """Доступное пространство в человекочитаемом формате"""
+        return self.get_human_readable_size(self.available_bytes)
+
+    @property
+    def summary(self) -> dict[str, str]:
+        """Краткая сводка информации о пуле"""
+        return {
+            "name": self.name,
+            "state": self.state.value,
+            "capacity": self.capacity_human,
+            "used": self.allocation_human,
+            "available": self.available_human,
+            "usage_percent": f"{self.usage_percent:.1f}%",
+            "type": self.type.value if self.type else "unknown",
+            "vms_count": len(self.vms)
+        }
 
 
 class ResourcePoolList(BaseModel):

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from agent.client.hypervisor.libvirt.models.disk import DiskFormat
+from agent.client.hypervisor.libvirt.models.resource_pool import StoragePoolType, POOL_TYPE_DESCRIPTIONS
 
 
 class LibvirtConfig:
@@ -51,3 +52,90 @@ class LibvirtConfig:
         elif disk_path.endswith(".img"):
             return DiskFormat.IMG
         return DiskFormat.UNKNOWN
+
+    @staticmethod
+    def get_pool_type_info(pool_type: StoragePoolType) -> dict:
+        """
+        Получение детальной информации о типе пула
+
+        Args:
+            pool_type: Тип пула
+
+        Returns:
+            Словарь с информацией о типе пула
+        """
+        info = {
+            StoragePoolType.DIR: {
+                "description": "Директория в локальной файловой системе",
+                "requires": ["storage_path"],
+                "recommended_for": "Локальные ВМ, разработка и тестирование",
+                "performance": "Средняя",
+                "scalability": "Ограничена размером диска",
+                "redundancy": "Зависит от файловой системы",
+            },
+            StoragePoolType.FS: {
+                "description": "Предварительно отформатированный раздел файловой системы",
+                "requires": ["device_path"],
+                "recommended_for": "Локальные ВМ с выделенным разделом",
+                "performance": "Высокая",
+                "scalability": "Ограничена размером раздела",
+                "redundancy": "Нет",
+            },
+            StoragePoolType.LOGICAL: {
+                "description": "Группа LVM логических томов",
+                "requires": ["volume_group"],
+                "recommended_for": "Локальные ВМ с динамическим выделением",
+                "performance": "Высокая",
+                "scalability": "Хорошая (через LVM)",
+                "redundancy": "LVM зеркалирование",
+            },
+            StoragePoolType.RBD: {
+                "description": "RADOS Block Device (Ceph)",
+                "requires": ["monitor_host", "pool_name"],
+                "recommended_for": "Кластерные среды, высокая доступность",
+                "performance": "Высокая",
+                "scalability": "Отличная",
+                "redundancy": "Высокая (репликация Ceph)",
+            },
+            StoragePoolType.ISCSI: {
+                "description": "iSCSI целевое устройство",
+                "requires": ["target_host", "target_port"],
+                "recommended_for": "SAN окружения, совместное хранилище",
+                "performance": "Зависит от сети",
+                "scalability": "Хорошая",
+                "redundancy": "Зависит от SAN",
+            },
+            StoragePoolType.GLUSTER: {
+                "description": "GlusterFS распределенный файловый том",
+                "requires": ["volume_name", "hosts"],
+                "recommended_for": "Распределенные системы, масштабирование",
+                "performance": "Хорошая",
+                "scalability": "Отличная",
+                "redundancy": "Высокая (репликация Gluster)",
+            },
+            StoragePoolType.ZFS: {
+                "description": "ZFS пул",
+                "requires": ["pool_name", "devices"],
+                "recommended_for": "Серверы с ZFS, snapshot и клонирование",
+                "performance": "Отличная",
+                "scalability": "Хорошая",
+                "redundancy": "Высокая (ZFS RAID)",
+            },
+            StoragePoolType.NETFS: {
+                "description": "Сетевая файловая система (NFS)",
+                "requires": ["host", "path"],
+                "recommended_for": "Общие хранилища, миграция ВМ",
+                "performance": "Средняя",
+                "scalability": "Хорошая",
+                "redundancy": "Зависит от NFS сервера",
+            },
+        }
+
+        return info.get(pool_type, {
+            "description": POOL_TYPE_DESCRIPTIONS.get(pool_type, "Неизвестный тип пула"),
+            "requires": ["Специфические параметры конфигурации"],
+            "recommended_for": "Специализированные сценарии",
+            "performance": "Зависит от конфигурации",
+            "scalability": "Зависит от конфигурации",
+            "redundancy": "Зависит от конфигурации",
+        })
