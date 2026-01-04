@@ -898,18 +898,19 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
 
                 # Добавляем лимит хранилища в XML, если указан
                 if request.storage_limit:
+                    self.logger.info(f"Установка ограничения хранилища '{request.storage_limit}'Гб в '{request.name}' из XML конфигурации")
                     # Ищем и заменяем capacity или добавляем новый элемент
                     capacity_pattern = r'<capacity>\s*\d+\s*</capacity>'
                     if re.search(capacity_pattern, storage_xml):
                         storage_xml = re.sub(
                             capacity_pattern,
-                            f'<capacity>{request.storage_limit * 1024 * 1024 * 1024}</capacity>',
+                            f'<capacity>{request.storage_limit_bytes}</capacity>',
                             storage_xml
                         )
                     else:
                         # Добавляем capacity в подходящее место
                         target_pattern = r'(<target>.*?</target>)'
-                        replacement = f'\\1<capacity>{request.storage_limit * 1024 * 1024 * 1024}</capacity>'
+                        replacement = f'\\1<capacity>{request.storage_limit_bytes}</capacity>'
                         storage_xml = re.sub(target_pattern, replacement, storage_xml, flags=re.DOTALL)
 
                 # Извлекаем путь из XML для возврата в ответе
@@ -935,8 +936,10 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
 
                 # Добавляем лимит хранилища если указан
                 if request.storage_limit:
+                    self.logger.info(
+                        f"Установка ограничения хранилища '{request.storage_limit}'Гб в '{request.name}' с наличием пути")
                     storage_xml += f'''
-                  <capacity>{request.storage_limit * 1024 * 1024 * 1024}</capacity>'''
+                  <capacity>{request.storage_limit_bytes}</capacity>'''
 
                 storage_xml += '''
                 </pool>'''
@@ -975,8 +978,10 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
 
                 # Добавляем лимит хранилища если указан
                 if request.storage_limit:
+                    self.logger.info(
+                        f"Установка ограничения хранилища '{request.storage_limit}'Гб в '{request.name}' с автоматическим путем")
                     storage_xml += f'''
-                  <capacity>{request.storage_limit * 1024 * 1024 * 1024}</capacity>'''
+                  <capacity>{request.storage_limit_bytes}</capacity>'''
 
                 storage_xml += '''
                 </pool>'''
@@ -2028,10 +2033,27 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
     def get_pool_info(self, pool_name: str, request_id: str) -> RpMessage:
         """
         Получение информации о пуле хранения
+
+        Включает информацию о capacity (лимите хранилища) из XML
         """
         try:
             pool = self.conn.storagePoolLookupByName(pool_name)
             info = pool.info()
+
+            # Получаем XML пула для извлечения capacity
+            xml_content = pool.XMLDesc(0)
+            print(xml_content)
+            # Извлекаем capacity из XML
+            storage_capacity_from_xml = None
+            try:
+                root = ET.fromstring(xml_content)
+                # Ищем элемент capacity
+                capacity_elem = root.find('.//capacity')
+                if capacity_elem is not None and capacity_elem.text:
+                    storage_capacity_from_xml = int(capacity_elem.text)
+                    self.logger.debug(f"Capacity из XML для пула {pool_name}: {storage_capacity_from_xml} байт")
+            except Exception as xml_e:
+                self.logger.warning(f"Не удалось извлечь capacity из XML пула {pool_name}: {xml_e}")
 
             # Получаем тип пула
             pool_type_str = self.get_storage_pool_type(pool_name)
@@ -2041,7 +2063,16 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
             except ValueError:
                 pass
 
+            # Получаем информацию из CGroups для CPU и RAM
             cgroup_pool = self.get_cgroup_stats(pool_name)
+
+            # Используем capacity из XML если он есть, иначе из info[1]
+            print("storage_capacity_from_xml :", storage_capacity_from_xml)
+            capacity_bytes = storage_capacity_from_xml if storage_capacity_from_xml is not None else info[1]
+
+            self.logger.debug(f"Итоговый capacity для пула {pool_name}: {capacity_bytes} байт "
+                              f"(из XML: {storage_capacity_from_xml}, из info: {info[1]})")
+
             return RpMessage(
                 request_id=request_id,
                 message=CommandMessagesEnum.rp_info_success.value,
@@ -2051,7 +2082,7 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
                     name=pool_name,
                     type=pool_type,
                     state=POOL_STATE[info[0]],
-                    capacity_bytes=info[1],
+                    capacity_bytes=capacity_bytes,
                     allocation_bytes=info[2],
                     available_bytes=info[3],
                     autostart=pool.autostart(),

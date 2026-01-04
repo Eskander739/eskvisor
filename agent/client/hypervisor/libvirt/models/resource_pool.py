@@ -67,6 +67,15 @@ class ResourcePoolCreateRequest(BaseModel):
     storage_xml: str | None = Field(None, description="XML описание пула хранения")
     pool_type: StoragePoolType = StoragePoolType.DIR
 
+    @computed_field
+    @property
+    def storage_limit_bytes(self) -> int | None:
+        """Лимит хранилища в байтах"""
+        if self.storage_limit is None:
+            return None
+        return int(self.storage_limit * 1024 * 1024 * 1024)  # ГБ -> байты
+
+
     class Config:
         use_enum_values = True  # Для сериализации Enum в их значения
 
@@ -79,6 +88,15 @@ class ResourcePoolEditRequest(BaseModel):
     memory_limit: int | None = Field(None, description="Новый лимит памяти (в МБ)")
     storage_limit: int | None = Field(None, description="Новый лимит хранилища (в ГБ)")
     storage_xml: str | None = Field(None, description="Новое XML описание пула хранения")
+
+
+    @computed_field
+    @property
+    def storage_limit_bytes(self) -> int | None:
+        """Лимит хранилища в байтах"""
+        if self.storage_limit is None:
+            return None
+        return int(self.storage_limit * 1024 * 1024 * 1024)  # ГБ -> байты
 
 
 class ResourcePoolAdjustRequest(BaseModel):
