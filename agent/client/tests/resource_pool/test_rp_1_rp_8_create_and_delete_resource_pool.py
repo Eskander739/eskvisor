@@ -3,12 +3,8 @@ import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.resource_pool import ResourcePoolCreateRequest
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VirtualMachine
-from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.tools import wait_while_not
 
 
 @pytest.mark.tags("RP‑01", "RP‑08", "Создание пула ресурсов (CPU, memory, storage)", "Удаление пула (пустой)")
