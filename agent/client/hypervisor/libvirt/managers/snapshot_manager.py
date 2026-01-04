@@ -1,27 +1,41 @@
 import libvirt
+import os
+import uuid
+from typing import List, Dict, Any
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot
+from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
+    SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
+    MultipleSnapshotsRequest, SnapshotChainRequest
+from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
 
 
 class SnapshotManager(LibvirtClient):
     """
-    Управление снапшотами
+    Управление снапшотами с возвратом SnapshotMessage
     """
     libvirtError = libvirt.libvirtError
 
     def __init__(self, connection_uri: str = "qemu:///system"):
         super().__init__(connection_uri)
 
-    def snapshots_by_vm_name(self, name: str) -> list[SnapshotWithParent]:
+    def snapshots_by_vm_name(self, vm_name: str, request_id: str = None) -> SnapshotMessage:
         """
         Получить все снапшоты виртуальной машины по имени
+
+        Returns:
+            SnapshotMessage с информацией о снапшотах в rp_info
         """
+        if request_id is None:
+            request_id = str(uuid.uuid4())
+
         try:
-            virtual_machine = self.conn.lookupByName(name)
+            virtual_machine = self.conn.lookupByName(vm_name)
             snapshots = virtual_machine.listAllSnapshots(flags=0)
-            self.logger.info(f"Количество снапшотов: {len(snapshots)}")
+            self.logger.info(f"Количество снапшотов для ВМ {vm_name}: {len(snapshots)}")
+
             snapshots_list = []
+            snapshots_info = []
 
             for snapshot in snapshots:
                 snapshot_data = SnapshotWithParent(
@@ -43,20 +57,79 @@ class SnapshotManager(LibvirtClient):
                 except self.libvirtError:
                     snapshot_data.parent = None
 
+                # Получение размера снапшота
+                try:
+                    size = self._get_snapshot_size(snapshot)
+                    snapshot_info = {
+                        "name": snapshot_data.name,
+                        "description": snapshot_data.description,
+                        "created": snapshot_data.created,
+                        "state": snapshot_data.state,
+                        "parent": snapshot_data.parent.name if snapshot_data.parent else None,
+                        "size_bytes": size
+                    }
+                    snapshots_info.append(snapshot_info)
+                except Exception as e:
+                    self.logger.warning(f"Не удалось получить размер снапшота {snapshot_data.name}: {e}")
+                    snapshot_info = {
+                        "name": snapshot_data.name,
+                        "description": snapshot_data.description,
+                        "created": snapshot_data.created,
+                        "state": snapshot_data.state,
+                        "parent": snapshot_data.parent.name if snapshot_data.parent else None,
+                        "size_bytes": None
+                    }
+                    snapshots_info.append(snapshot_info)
+
                 snapshots_list.append(snapshot_data)
 
-            return snapshots_list
+            if snapshots_list:
+                return SnapshotMessage(
+                    request_id=request_id,
+                    success=True,
+                    message=CommandMessagesEnum.vm_successfully_found.value,
+                    code="SNAPSHOT_LIST_FOUND",
+                    snapshot_info={
+                        "vm_name": vm_name,
+                        "snapshots": snapshots_info,
+                        "count": len(snapshots_list),
+                        "chain_depth": self._calculate_chain_depth(snapshots_list)
+                    }
+                )
+            else:
+                return SnapshotMessage(
+                    request_id=request_id,
+                    success=True,
+                    message="Снапшотов не найдено",
+                    code="SNAPSHOT_LIST_EMPTY",
+                    snapshot_info={
+                        "vm_name": vm_name,
+                        "snapshots": [],
+                        "count": 0,
+                        "chain_depth": 0
+                    }
+                )
+
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения списка снапшотов: {e}")
-            return []
+            return SnapshotMessage(
+                request_id=request_id,
+                success=False,
+                message=f"Ошибка получения списка снапшотов: {str(e)}",
+                code="SNAPSHOT_LIST_ERROR",
+                note=str(e)
+            )
 
-    def snapshot_by_name(self, vm_name: str, snapshot_name: str) -> SnapshotWithParent | None:
+    def snapshot_by_name(self, request: SnapshotInfoRequest) -> SnapshotMessage:
         """
         Получить снапшот по имени виртуальной машины и имени снапшота
+
+        Returns:
+            SnapshotMessage с информацией о снапшоте в rp_info
         """
         try:
-            virtual_machine = self.conn.lookupByName(vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(request.vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
 
             snapshot_data = SnapshotWithParent(
                 name=snapshot.getName(),
@@ -77,98 +150,229 @@ class SnapshotManager(LibvirtClient):
             except self.libvirtError:
                 snapshot_data.parent = None
 
-            return snapshot_data
+            # Получение размера снапшота
+            size = self._get_snapshot_size(snapshot)
+
+            snapshot_info = {
+                "name": snapshot_data.name,
+                "description": snapshot_data.description,
+                "created": snapshot_data.created,
+                "state": snapshot_data.state,
+                "parent": snapshot_data.parent.name if snapshot_data.parent else None,
+                "size_bytes": size,
+                "vm_name": request.vm_name
+            }
+
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=True,
+                message=CommandMessagesEnum.vm_successfully_found.value,
+                code="SNAPSHOT_FOUND",
+                snapshot_info=snapshot_info
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения снапшота: {e}")
-            return None
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка получения снапшота: {str(e)}",
+                code="SNAPSHOT_NOT_FOUND",
+                note=str(e)
+            )
 
-    def create_snapshot(self, vm_name: str, snapshot_name: str, description: str = "",
-                        disk_only: bool = False, quiesce: bool = False) -> bool:
+    def create_snapshot(self, request: SnapshotCreateRequest) -> SnapshotMessage:
         """
         Создать снапшот виртуальной машины
+
+        Returns:
+            SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(vm_name)
+            # Проверяем наличие свободного места
+            if not self._check_disk_space(request.vm_name):
+                return SnapshotMessage(
+                    request_id=request.request_id,
+                    success=False,
+                    message="Недостаточно свободного места для создания снапшота",
+                    code="INSUFFICIENT_DISK_SPACE",
+                    note="Проверьте доступное место в хранилище"
+                )
+
+            virtual_machine = self.conn.lookupByName(request.vm_name)
+
+            # Проверяем состояние ВМ
+            state, _ = virtual_machine.state()
+            is_running = state == libvirt.VIR_DOMAIN_RUNNING
+
+            if not is_running and request.quiesce:
+                self.logger.warning("Параметр quiesce игнорируется для остановленной ВМ")
 
             # Подготовка XML для снапшота
             snapshot_xml = f"""
             <domainsnapshot>
-                <name>{snapshot_name}</name>
-                <description>{description}</description>
+                <name>{request.snapshot_name}</name>
+                <description>{request.description}</description>
             </domainsnapshot>
             """
 
             # Настройка флагов
             flags = 0
-            if disk_only:
+            if request.disk_only:
                 flags |= libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
-            if quiesce:
+            if request.quiesce and is_running:
                 flags |= libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_QUIESCE
 
             # Создание снапшота
             snapshot = virtual_machine.snapshotCreateXML(snapshot_xml, flags)
 
             if snapshot:
-                self.logger.info(f"Снапшот '{snapshot_name}' успешно создан для VM '{vm_name}'")
-                return True
-            return False
+                self.logger.info(f"Снапшот '{request.snapshot_name}' успешно создан для VM '{request.vm_name}'")
+                return SnapshotMessage(
+                    request_id=request.request_id,
+                    success=True,
+                    message="Снапшот успешно создан",
+                    code="SNAPSHOT_CREATE_SUCCESS",
+                    snapshot_info={
+                        "vm_name": request.vm_name,
+                        "snapshot_name": request.snapshot_name,
+                        "description": request.description,
+                        "disk_only": request.disk_only,
+                        "quiesce": request.quiesce and is_running,
+                        "vm_state": "running" if is_running else "stopped"
+                    }
+                )
+
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message="Не удалось создать снапшот",
+                code="SNAPSHOT_CREATE_FAILED"
+            )
 
         except self.libvirtError as e:
-            self.logger.error(f"Ошибка создания снапшота: {e}")
-            return False
+            error_msg = str(e)
+            if "No space left" in error_msg or "disk full" in error_msg.lower():
+                return SnapshotMessage(
+                    request_id=request.request_id,
+                    success=False,
+                    message="Недостаточно свободного места для создания снапшота",
+                    code="INSUFFICIENT_DISK_SPACE",
+                    note=error_msg
+                )
 
-    def delete_snapshot(self, vm_name: str, snapshot_name: str,
-                        remove_children: bool = False) -> bool:
+            self.logger.error(f"Ошибка создания снапшота: {e}")
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка создания снапшота: {error_msg}",
+                code="SNAPSHOT_CREATE_ERROR",
+                note=error_msg
+            )
+
+    def delete_snapshot(self, request: SnapshotDeleteRequest) -> SnapshotMessage:
         """
         Удалить снапшот виртуальной машины
+
+        Returns:
+            SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(request.vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
 
             # Настройка флагов
             flags = 0
-            if remove_children:
+            if request.remove_children:
                 flags |= libvirt.VIR_DOMAIN_SNAPSHOT_DELETE_CHILDREN
             flags |= libvirt.VIR_DOMAIN_SNAPSHOT_DELETE_METADATA_ONLY
 
             # Удаление снапшота
             snapshot.delete(flags)
 
-            self.logger.info(f"Снапшот '{snapshot_name}' успешно удален для VM '{vm_name}'")
-            return True
+            self.logger.info(f"Снапшот '{request.snapshot_name}' успешно удален для VM '{request.vm_name}'")
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=True,
+                message="Снапшот успешно удален",
+                code="SNAPSHOT_DELETE_SUCCESS",
+                snapshot_info={
+                    "vm_name": request.vm_name,
+                    "snapshot_name": request.snapshot_name,
+                    "remove_children": request.remove_children
+                }
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления снапшота: {e}")
-            return False
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка удаления снапшота: {str(e)}",
+                code="SNAPSHOT_DELETE_ERROR",
+                note=str(e)
+            )
 
-    def revert_to_snapshot(self, vm_name: str, snapshot_name: str) -> bool:
+    def revert_to_snapshot(self, request: SnapshotRevertRequest) -> SnapshotMessage:
         """
         Восстановить виртуальную машину до состояния снапшота
+
+        Returns:
+            SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(request.vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
+
+            # Получаем информацию о цепочке снапшотов
+            try:
+                parent = snapshot.getParent()
+                parent_name = parent.getName() if parent else None
+            except self.libvirtError:
+                parent_name = None
 
             # Восстановление до снапшота
             virtual_machine.revertToSnapshot(snapshot, flags=0)
 
-            self.logger.info(f"VM '{vm_name}' восстановлена до снапшота '{snapshot_name}'")
-            return True
+            self.logger.info(f"VM '{request.vm_name}' восстановлена до снапшота '{request.snapshot_name}'")
+
+            # Проверяем, нужно ли удалять последующие снапшоты
+            snapshots_after = self._get_snapshots_after(request.vm_name, request.snapshot_name)
+
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=True,
+                message="ВМ успешно восстановлена до состояния снапшота",
+                code="SNAPSHOT_REVERT_SUCCESS",
+                snapshot_info={
+                    "vm_name": request.vm_name,
+                    "snapshot_name": request.snapshot_name,
+                    "parent_snapshot": parent_name,
+                    "snapshots_after_revert": [s.name for s in snapshots_after],
+                    "note": "Последующие снапшоты могут быть недоступны после восстановления"
+                }
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка восстановления до снапшота: {e}")
-            return False
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка восстановления до снапшота: {str(e)}",
+                code="SNAPSHOT_REVERT_ERROR",
+                note=str(e)
+            )
 
-    def update_snapshot_description(self, vm_name: str, snapshot_name: str,
-                                    new_description: str) -> bool:
+    def update_snapshot_description(self, request: SnapshotUpdateRequest) -> SnapshotMessage:
         """
         Обновить описание снапшота
+
+        Returns:
+            SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(request.vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
 
             # Получение текущего XML снапшота
             snapshot_xml = snapshot.getXMLDesc(flags=0)
@@ -180,11 +384,11 @@ class SnapshotManager(LibvirtClient):
             # Поиск и обновление элемента description
             description_elem = root.find('description')
             if description_elem is not None:
-                description_elem.text = new_description
+                description_elem.text = request.new_description
             else:
                 # Если элемента description нет, создаем его
                 desc_elem = ET.SubElement(root, 'description')
-                desc_elem.text = new_description
+                desc_elem.text = request.new_description
 
             # Преобразование обратно в XML строку
             updated_xml = ET.tostring(root, encoding='unicode')
@@ -194,21 +398,56 @@ class SnapshotManager(LibvirtClient):
                                                              flags=libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_REPLACE)
 
             if new_snapshot:
-                self.logger.info(f"Описание снапшота '{snapshot_name}' успешно обновлено")
-                return True
-            return False
+                self.logger.info(f"Описание снапшота '{request.snapshot_name}' успешно обновлено")
+                return SnapshotMessage(
+                    request_id=request.request_id,
+                    success=True,
+                    message="Описание снапшота успешно обновлено",
+                    code="SNAPSHOT_UPDATE_SUCCESS",
+                    snapshot_info={
+                        "vm_name": request.vm_name,
+                        "snapshot_name": request.snapshot_name,
+                        "old_description": snapshot.getDescription(),
+                        "new_description": request.new_description
+                    }
+                )
+
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message="Не удалось обновить описание снапшота",
+                code="SNAPSHOT_UPDATE_FAILED"
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка обновления описания снапшота: {e}")
-            return False
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка обновления описания снапшота: {str(e)}",
+                code="SNAPSHOT_UPDATE_ERROR",
+                note=str(e)
+            )
         except Exception as e:
             self.logger.error(f"Ошибка обработки XML: {e}")
-            return False
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка обработки XML: {str(e)}",
+                code="SNAPSHOT_UPDATE_XML_ERROR",
+                note=str(e)
+            )
 
-    def get_current_snapshot(self, vm_name: str) -> SnapshotWithParent | None:
+    def get_current_snapshot(self, vm_name: str, request_id: str = None) -> SnapshotMessage:
         """
         Получить текущий активный снапшот виртуальной машины
+
+        Returns:
+            SnapshotMessage с информацией о текущем снапшоте в rp_info
         """
+        if request_id is None:
+            request_id = str(uuid.uuid4())
+
         try:
             virtual_machine = self.conn.lookupByName(vm_name)
             snapshot = virtual_machine.snapshotCurrent(flags=0)
@@ -233,9 +472,618 @@ class SnapshotManager(LibvirtClient):
                 except self.libvirtError:
                     snapshot_data.parent = None
 
-                return snapshot_data
-            return None
+                # Получение размера снапшота
+                size = self._get_snapshot_size(snapshot)
+
+                snapshot_info = {
+                    "name": snapshot_data.name,
+                    "description": snapshot_data.description,
+                    "created": snapshot_data.created,
+                    "state": snapshot_data.state,
+                    "parent": snapshot_data.parent.name if snapshot_data.parent else None,
+                    "size_bytes": size,
+                    "vm_name": vm_name,
+                    "is_current": True
+                }
+
+                return SnapshotMessage(
+                    request_id=request_id,
+                    success=True,
+                    message="Текущий снапшот найден",
+                    code="CURRENT_SNAPSHOT_FOUND",
+                    snapshot_info=snapshot_info
+                )
+
+            return SnapshotMessage(
+                request_id=request_id,
+                success=True,
+                message="Текущий снапшот не установлен",
+                code="NO_CURRENT_SNAPSHOT",
+                snapshot_info={
+                    "vm_name": vm_name,
+                    "is_current": False
+                }
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения текущего снапшота: {e}")
-            return None
+            return SnapshotMessage(
+                request_id=request_id,
+                success=False,
+                message=f"Ошибка получения текущего снапшота: {str(e)}",
+                code="CURRENT_SNAPSHOT_ERROR",
+                note=str(e)
+            )
+
+    def clone_vm_from_snapshot(self, request: SnapshotCloneRequest) -> SnapshotMessage:
+        """
+        Клонировать ВМ из снапшота
+
+        Returns:
+            SnapshotMessage с результатом операции
+        """
+        try:
+            import xml.etree.ElementTree as ET
+            import shutil
+
+            # Получаем исходную ВМ
+            source_vm = self.conn.lookupByName(request.source_vm_name)
+
+            # Получаем снапшот
+            snapshot = source_vm.snapshotLookupByName(request.source_snapshot_name, flags=0)
+
+            # Получаем XML конфигурации ВМ из снапшота
+            snapshot_xml = snapshot.getXMLDesc(flags=libvirt.VIR_DOMAIN_XML_SECURE)
+
+            # Парсим XML
+            root = ET.fromstring(snapshot_xml)
+
+            # Обновляем имя ВМ
+            name_elem = root.find('name')
+            if name_elem is not None:
+                name_elem.text = request.new_vm_name
+
+            # Генерируем новый UUID если нужно
+            if request.generate_new_uuid:
+                uuid_elem = root.find('uuid')
+                if uuid_elem is not None:
+                    uuid_elem.text = str(uuid.uuid4())
+
+            # Обновляем пути к дискам для новой ВМ
+            for disk_elem in root.findall('.//disk'):
+                source_elem = disk_elem.find('source')
+                if source_elem is not None and 'file' in source_elem.attrib:
+                    old_path = source_elem.get('file')
+                    if old_path:
+                        # Создаем новый путь для диска
+                        dir_name = os.path.dirname(old_path)
+                        base_name = os.path.basename(old_path)
+                        new_path = os.path.join(dir_name, f"{request.new_vm_name}_{base_name}")
+
+                        # Копируем диск
+                        try:
+                            shutil.copy2(old_path, new_path)
+                            source_elem.set('file', new_path)
+                        except Exception as e:
+                            self.logger.error(f"Ошибка копирования диска {old_path}: {e}")
+                            return SnapshotMessage(
+                                request_id=request.request_id,
+                                success=False,
+                                message=f"Ошибка копирования диска: {str(e)}",
+                                code="SNAPSHOT_CLONE_DISK_ERROR",
+                                note=str(e)
+                            )
+
+            # Преобразуем XML обратно в строку
+            new_xml = ET.tostring(root, encoding='unicode')
+
+            # Создаем новую ВМ
+            new_domain = self.conn.defineXML(new_xml)
+
+            if new_domain:
+                self.logger.info(
+                    f"ВМ '{request.new_vm_name}' успешно клонирована из снапшота '{request.source_snapshot_name}'")
+
+                # Запускаем ВМ если исходная была запущена
+                source_state, _ = source_vm.state()
+                if source_state == libvirt.VIR_DOMAIN_RUNNING:
+                    new_domain.create()
+
+                return SnapshotMessage(
+                    request_id=request.request_id,
+                    success=True,
+                    message="ВМ успешно клонирована из снапшота",
+                    code="SNAPSHOT_CLONE_SUCCESS",
+                    snapshot_info={
+                        "source_vm_name": request.source_vm_name,
+                        "source_snapshot_name": request.source_snapshot_name,
+                        "new_vm_name": request.new_vm_name,
+                        "new_uuid": request.generate_new_uuid,
+                        "vm_started": source_state == libvirt.VIR_DOMAIN_RUNNING
+                    }
+                )
+
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message="Не удалось создать клонированную ВМ",
+                code="SNAPSHOT_CLONE_FAILED"
+            )
+
+        except self.libvirtError as e:
+            self.logger.error(f"Ошибка клонирования ВМ из снапшота: {e}")
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка клонирования ВМ из снапшота: {str(e)}",
+                code="SNAPSHOT_CLONE_ERROR",
+                note=str(e)
+            )
+        except Exception as e:
+            self.logger.error(f"Неожиданная ошибка при клонировании ВМ: {e}")
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Неожиданная ошибка при клонировании ВМ: {str(e)}",
+                code="SNAPSHOT_CLONE_UNEXPECTED_ERROR",
+                note=str(e)
+            )
+
+    def create_snapshot_chain(self, vm_name: str, snapshot_names: List[str],
+                              descriptions: List[str] = None, request_id: str = None) -> SnapshotMessage:
+        """
+        Создать цепочку снапшотов
+
+        Returns:
+            SnapshotMessage с результатом операции
+        """
+        if request_id is None:
+            request_id = str(uuid.uuid4())
+
+        if descriptions is None:
+            descriptions = [""] * len(snapshot_names)
+
+        if len(snapshot_names) != len(descriptions):
+            return SnapshotMessage(
+                request_id=request_id,
+                success=False,
+                message="Количество имен снапшотов и описаний не совпадает",
+                code="SNAPSHOT_CHAIN_INVALID_PARAMS"
+            )
+
+        created_snapshots = []
+        errors = []
+
+        try:
+            virtual_machine = self.conn.lookupByName(vm_name)
+
+            for i, (snapshot_name, description) in enumerate(zip(snapshot_names, descriptions)):
+                try:
+                    # Подготовка XML для снапшота
+                    snapshot_xml = f"""
+                    <domainsnapshot>
+                        <name>{snapshot_name}</name>
+                        <description>{description}</description>
+                    </domainsnapshot>
+                    """
+
+                    # Создание снапшота
+                    snapshot = virtual_machine.snapshotCreateXML(snapshot_xml, flags=0)
+
+                    if snapshot:
+                        created_snapshots.append({
+                            "name": snapshot_name,
+                            "description": description,
+                            "index": i + 1,
+                            "parent": created_snapshots[-1]["name"] if created_snapshots else None
+                        })
+                        self.logger.info(f"Снапшот {i + 1}/{len(snapshot_names)} создан: {snapshot_name}")
+                    else:
+                        errors.append(f"Не удалось создать снапшот {snapshot_name}")
+
+                except self.libvirtError as e:
+                    errors.append(f"Ошибка создания снапшота {snapshot_name}: {str(e)}")
+                    # Прерываем цепочку при ошибке
+                    break
+
+            if errors:
+                return SnapshotMessage(
+                    request_id=request_id,
+                    success=False,
+                    message=f"Создание цепочки снапшотов завершилось с ошибками: {len(errors)}",
+                    code="SNAPSHOT_CHAIN_PARTIAL_SUCCESS",
+                    snapshot_info={
+                        "vm_name": vm_name,
+                        "created_snapshots": created_snapshots,
+                        "errors": errors,
+                        "total_requested": len(snapshot_names),
+                        "successfully_created": len(created_snapshots)
+                    },
+                    note="; ".join(errors)
+                )
+
+            return SnapshotMessage(
+                request_id=request_id,
+                success=True,
+                message="Цепочка снапшотов успешно создана",
+                code="SNAPSHOT_CHAIN_SUCCESS",
+                snapshot_info={
+                    "vm_name": vm_name,
+                    "created_snapshots": created_snapshots,
+                    "total_created": len(created_snapshots),
+                    "chain_depth": len(created_snapshots)
+                }
+            )
+
+        except self.libvirtError as e:
+            self.logger.error(f"Ошибка создания цепочки снапшотов: {e}")
+            return SnapshotMessage(
+                request_id=request_id,
+                success=False,
+                message=f"Ошибка создания цепочки снапшотов: {str(e)}",
+                code="SNAPSHOT_CHAIN_ERROR",
+                note=str(e)
+            )
+
+    def create_multiple_vm_snapshots(self, request: MultipleSnapshotsRequest) -> SnapshotMessage:
+        """
+        Создать снапшоты для нескольких ВМ одновременно
+
+        Returns:
+            SnapshotMessage с результатами операций
+        """
+        results = []
+        errors = []
+
+        for snapshot_request in request.snapshots:
+            try:
+                result = self.create_snapshot(snapshot_request)
+                results.append({
+                    "vm_name": snapshot_request.vm_name,
+                    "snapshot_name": snapshot_request.snapshot_name,
+                    "success": result.success,
+                    "message": result.message,
+                    "code": result.code
+                })
+
+                if not result.success:
+                    errors.append(f"{snapshot_request.vm_name}: {result.message}")
+
+            except Exception as e:
+                errors.append(f"{snapshot_request.vm_name}: {str(e)}")
+                results.append({
+                    "vm_name": snapshot_request.vm_name,
+                    "snapshot_name": snapshot_request.snapshot_name,
+                    "success": False,
+                    "message": str(e),
+                    "code": "SNAPSHOT_CREATE_EXCEPTION"
+                })
+
+        if errors:
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Создание снапшотов завершилось с ошибками: {len(errors)}",
+                code="MULTIPLE_SNAPSHOTS_PARTIAL_SUCCESS",
+                snapshot_info={
+                    "results": results,
+                    "total_requested": len(request.snapshots),
+                    "successful": len([r for r in results if r["success"]]),
+                    "failed": len([r for r in results if not r["success"]])
+                },
+                note="; ".join(errors)
+            )
+
+        return SnapshotMessage(
+            request_id=request.request_id,
+            success=True,
+            message="Снапшоты для всех ВМ успешно созданы",
+            code="MULTIPLE_SNAPSHOTS_SUCCESS",
+            snapshot_info={
+                "results": results,
+                "total_created": len(results),
+                "successful": len(results)
+            }
+        )
+
+    def revert_to_parent_snapshot(self, request: SnapshotRevertRequest) -> SnapshotMessage:
+        """
+        Восстановить ВМ до родительского снапшота (откат к более раннему состоянию)
+
+        Returns:
+            SnapshotMessage с результатом операции
+        """
+        try:
+            virtual_machine = self.conn.lookupByName(request.vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
+
+            # Получаем родительский снапшот
+            try:
+                parent_snapshot = snapshot.getParent()
+                if parent_snapshot:
+                    parent_name = parent_snapshot.getName()
+
+                    # Восстанавливаем до родительского снапшота
+                    virtual_machine.revertToSnapshot(parent_snapshot, flags=0)
+
+                    # Получаем список снапшотов после родительского (включая текущий)
+                    snapshots_after = self._get_snapshots_after(request.vm_name, parent_name)
+
+                    self.logger.info(f"VM '{request.vm_name}' восстановлена до родительского снапшота '{parent_name}'")
+
+                    return SnapshotMessage(
+                        request_id=request.request_id,
+                        success=True,
+                        message="ВМ успешно восстановлена до родительского снапшота",
+                        code="SNAPSHOT_REVERT_TO_PARENT_SUCCESS",
+                        snapshot_info={
+                            "vm_name": request.vm_name,
+                            "current_snapshot": request.snapshot_name,
+                            "parent_snapshot": parent_name,
+                            "snapshots_made_inactive": [s.name for s in snapshots_after],
+                            "note": "Снапшоты, созданные после родительского, стали неактивными"
+                        }
+                    )
+                else:
+                    return SnapshotMessage(
+                        request_id=request.request_id,
+                        success=False,
+                        message="Указанный снапшот не имеет родителя",
+                        code="SNAPSHOT_NO_PARENT",
+                        note="Невозможно выполнить откат к родительскому снапшоту"
+                    )
+
+            except self.libvirtError as e:
+                return SnapshotMessage(
+                    request_id=request.request_id,
+                    success=False,
+                    message=f"Ошибка получения родительского снапшота: {str(e)}",
+                    code="SNAPSHOT_PARENT_ERROR",
+                    note=str(e)
+                )
+
+        except self.libvirtError as e:
+            self.logger.error(f"Ошибка восстановления до родительского снапшота: {e}")
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка восстановления до родительского снапшота: {str(e)}",
+                code="SNAPSHOT_REVERT_TO_PARENT_ERROR",
+                note=str(e)
+            )
+
+    def get_snapshot_chain(self, request: SnapshotChainRequest) -> SnapshotMessage:
+        """
+        Получить цепочку снапшотов ВМ с детальной информацией
+
+        Returns:
+            SnapshotMessage с информацией о цепочке снапшотов
+        """
+        try:
+            # Получаем все снапшоты ВМ
+            snapshots_msg = self.snapshots_by_vm_name(request.vm_name, request.request_id)
+
+            if not snapshots_msg.success:
+                return snapshots_msg
+
+            snapshots_info = snapshots_msg.rp_info.get("snapshots", [])
+
+            # Строим дерево снапшотов
+            snapshot_tree = self._build_snapshot_tree(snapshots_info)
+
+            # Находим корневые снапшоты (без родителей)
+            root_snapshots = [s for s in snapshots_info if not s.get("parent")]
+
+            # Строим цепочки
+            chains = []
+            for root in root_snapshots:
+                chain = self._build_chain_from_root(root["name"], snapshots_info)
+                chains.append(chain)
+
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=True,
+                message="Цепочка снапшотов успешно получена",
+                code="SNAPSHOT_CHAIN_INFO_SUCCESS",
+                snapshot_info={
+                    "vm_name": request.vm_name,
+                    "snapshots": snapshots_info,
+                    "snapshot_tree": snapshot_tree,
+                    "chains": chains,
+                    "root_snapshots": [s["name"] for s in root_snapshots],
+                    "chain_depth": max([len(c) for c in chains]) if chains else 0
+                }
+            )
+
+        except Exception as e:
+            self.logger.error(f"Ошибка получения цепочки снапшотов: {e}")
+            return SnapshotMessage(
+                request_id=request.request_id,
+                success=False,
+                message=f"Ошибка получения цепочки снапшотов: {str(e)}",
+                code="SNAPSHOT_CHAIN_INFO_ERROR",
+                note=str(e)
+            )
+
+    # Вспомогательные методы
+
+    def _get_snapshot_size(self, snapshot) -> int:
+        """Получить размер снапшота в байтах"""
+        try:
+            # Получаем XML снапшота
+            xml_desc = snapshot.getXMLDesc(flags=0)
+
+            # Парсим XML для получения информации о дисках
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(xml_desc)
+
+            total_size = 0
+
+            # Ищем диски в снапшоте
+            for disk in root.findall('.//disk'):
+                # Получаем источник диска
+                source = disk.find('source')
+                if source is not None:
+                    # Проверяем атрибуты файла или устройства
+                    file_path = source.get('file')
+                    if file_path and os.path.exists(file_path):
+                        total_size += os.path.getsize(file_path)
+
+                    # Для других типов источников можно добавить дополнительную логику
+
+            return total_size
+
+        except Exception as e:
+            self.logger.warning(f"Не удалось определить размер снапшота: {e}")
+            return 0
+
+    def _check_disk_space(self, vm_name: str, required_gb: int = 1) -> bool:
+        """Проверить наличие свободного места в хранилище"""
+        try:
+            # Получаем информацию о дисках ВМ
+            virtual_machine = self.conn.lookupByName(vm_name)
+            xml_desc = virtual_machine.XMLDesc(flags=0)
+
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(xml_desc)
+
+            # Ищем пути к дискам
+            disk_paths = []
+            for disk in root.findall('.//disk'):
+                source = disk.find('source')
+                if source is not None:
+                    file_path = source.get('file')
+                    if file_path:
+                        disk_paths.append(file_path)
+
+            # Проверяем свободное место для первого диска (упрощенная проверка)
+            if disk_paths:
+                disk_path = disk_paths[0]
+                disk_dir = os.path.dirname(disk_path)
+
+                # Получаем статистику использования диска
+                stat = os.statvfs(disk_dir)
+                free_space_gb = (stat.f_bavail * stat.f_frsize) / (1024 ** 3)
+
+                # Требуется хотя бы 1GB свободного места
+                return free_space_gb >= required_gb
+
+            return True
+
+        except Exception as e:
+            self.logger.warning(f"Не удалось проверить свободное место: {e}")
+            return True  # В случае ошибки разрешаем создание снапшота
+
+    def _get_snapshots_after(self, vm_name: str, snapshot_name: str) -> List[Any]:
+        """Получить снапшоты, созданные после указанного снапшота"""
+        try:
+            virtual_machine = self.conn.lookupByName(vm_name)
+            all_snapshots = virtual_machine.listAllSnapshots(flags=0)
+
+            # Находим целевой снапшот
+            target_snapshot = None
+            for snapshot in all_snapshots:
+                if snapshot.getName() == snapshot_name:
+                    target_snapshot = snapshot
+                    break
+
+            if not target_snapshot:
+                return []
+
+            # Получаем все потомки целевого снапшота
+            descendants = []
+
+            def get_descendants(snapshot):
+                try:
+                    children = snapshot.listAllChildren(flags=0)
+                    for child in children:
+                        descendants.append(child)
+                        get_descendants(child)
+                except self.libvirtError:
+                    pass
+
+            get_descendants(target_snapshot)
+
+            return descendants
+
+        except self.libvirtError:
+            return []
+
+    def _calculate_chain_depth(self, snapshots: List[SnapshotWithParent]) -> int:
+        """Рассчитать глубину цепочки снапшотов"""
+        if not snapshots:
+            return 0
+
+        # Находим максимальную длину цепочки
+        max_depth = 0
+
+        def get_depth(snapshot_name, snapshots_dict, current_depth):
+            nonlocal max_depth
+            max_depth = max(max_depth, current_depth)
+
+            # Ищем детей этого снапшота
+            for snapshot in snapshots_dict.values():
+                if snapshot.parent and snapshot.parent.name == snapshot_name:
+                    get_depth(snapshot.name, snapshots_dict, current_depth + 1)
+
+        # Создаем словарь для быстрого поиска
+        snapshots_dict = {s.name: s for s in snapshots}
+
+        # Находим корневые снапшоты (без родителей)
+        root_snapshots = [s for s in snapshots if not s.parent]
+
+        for root in root_snapshots:
+            get_depth(root.name, snapshots_dict, 1)
+
+        return max_depth
+
+    def _build_snapshot_tree(self, snapshots_info: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Построить дерево снапшотов"""
+        tree = {}
+
+        # Создаем узлы для всех снапшотов
+        for snapshot in snapshots_info:
+            tree[snapshot["name"]] = {
+                "info": snapshot,
+                "children": []
+            }
+
+        # Строим связи родитель-ребенок
+        for snapshot in snapshots_info:
+            parent_name = snapshot.get("parent")
+            if parent_name and parent_name in tree:
+                tree[parent_name]["children"].append(snapshot["name"])
+
+        # Находим корневые узлы
+        root_nodes = [name for name, node in tree.items() if not node["info"].get("parent")]
+
+        return {
+            "nodes": tree,
+            "roots": root_nodes
+        }
+
+    def _build_chain_from_root(self, root_name: str, snapshots_info: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Построить цепочку начиная с корневого снапшота"""
+        chain = []
+
+        # Создаем словарь для быстрого поиска
+        snapshots_dict = {s["name"]: s for s in snapshots_info}
+
+        current_name = root_name
+        while current_name in snapshots_dict:
+            current_snapshot = snapshots_dict[current_name]
+            chain.append(current_snapshot)
+
+            # Ищем следующего ребенка
+            next_snapshot = None
+            for snapshot in snapshots_info:
+                if snapshot.get("parent") == current_name:
+                    next_snapshot = snapshot["name"]
+                    break
+
+            if next_snapshot:
+                current_name = next_snapshot
+            else:
+                break
+
+        return chain

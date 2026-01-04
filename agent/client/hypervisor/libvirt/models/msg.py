@@ -1,9 +1,13 @@
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, model_validator
 
 from agent.client.hypervisor.libvirt.models.disk import Disk
 from agent.client.hypervisor.libvirt.models.network import NetworkInfo, NetworkInterfacesInfo
+from agent.client.hypervisor.libvirt.models.resource_pool import ResourcePool, ResourcePoolList, AdjustResourcePool, \
+    AddVMInResourcePool, RemoveVMInResourcePool, ResourcePoolReservation, ResourcePoolUpdates, DeleteResourcePool, \
+    ResourcePoolUsageInfo, ResourcePoolState
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
@@ -64,6 +68,67 @@ class CommandMessagesEnum(Enum):
     virtual_network_successfully_started = "Virtual network successfully started"
     virtual_network_restart_error = "Virtual network restart error"
 
+    # Ресурс пулы
+    rp_success = "Resource pool operation successful"
+    rp_error = "Resource pool operation error"
+
+    rp_create_success = "Resource pool successfully created"
+    rp_create_error = "Resource pool create error"
+    rp_already_exists = "Resource pool with this name already exists"
+
+    rp_delete_success = "Resource pool successfully deleted"
+    rp_delete_error = "Resource pool delete error"
+    rp_delete_not_empty_error = "Cannot delete non-empty resource pool"
+    rp_not_found = "Resource pool not found"
+
+    rp_edit_success = "Resource pool successfully edited"
+    rp_edit_error = "Resource pool edit error"
+
+    rp_resource_adjust_success = "Resource pool resource adjust success"
+    rp_resource_adjust_error = "Resource pool resource adjust error"
+    rp_insufficient_resources = "Insufficient resources in pool"
+    rp_resource_in_use = "Resource cannot be reduced below current usage"
+
+    rp_set_reservation_success = "Resource pool reservation set success"
+    rp_set_reservation_error = "Resource pool reservation set error"
+    rp_set_limit_success = "Resource pool limit set success"
+    rp_set_limit_error = "Resource pool limit set error"
+
+    rp_vm_add_success = "VM successfully added to resource pool"
+    rp_vm_add_error = "VM add to resource pool error"
+    rp_vm_remove_success = "VM successfully removed from resource pool"
+    rp_vm_remove_error = "VM remove from resource pool error"
+    rp_vm_not_found = "VM not found"
+
+    rp_start_success = "Resource pool successfully started"
+    rp_start_error = "Resource pool start error"
+    rp_stop_success = "Resource pool successfully stopped"
+    rp_stop_error = "Resource pool stop error"
+    rp_already_running = "Resource pool already running"
+    rp_already_stopped = "Resource pool already stopped"
+
+    rp_info_success = "Resource pool info retrieved"
+    rp_info_error = "Resource pool info error"
+    rp_list_success = "Resource pools list retrieved"
+    rp_list_error = "Resource pools list error"
+
+    # Снапшоты
+    snapshot_successfully_created = "Snapshot successfully created"
+    snapshot_create_error = "Snapshot create error"
+    snapshot_successfully_deleted = "Snapshot successfully deleted"
+    snapshot_delete_error = "Snapshot delete error"
+    snapshot_revert_success = "Snapshot revert success"
+    snapshot_revert_error = "Snapshot revert error"
+    snapshot_update_success = "Snapshot update success"
+    snapshot_update_error = "Snapshot update error"
+    snapshot_found = "Snapshot found"
+    snapshot_not_found = "Snapshot not found"
+    snapshot_list_found = "Snapshot list found"
+    snapshot_list_error = "Snapshot list error"
+    snapshot_clone_success = "Snapshot clone success"
+    snapshot_clone_error = "Snapshot clone error"
+    snapshot_insufficient_space = "Insufficient space for snapshot"
+
 
 class DefaultMessage(BaseModel):
     request_id: str
@@ -106,4 +171,19 @@ class StorageMessage(DefaultMessage):
 class NetworkMessage(DefaultMessage):
     success: bool
     net_info: NetworkInfo | NetworkInterfacesInfo | None = None
+    note: str | None = None
+
+class RpMessage(DefaultMessage):
+    """Сообщение для работы с пулами ресурсов"""
+    success: bool
+    rp_info: (ResourcePoolList | ResourcePool | AdjustResourcePool |
+              AddVMInResourcePool | RemoveVMInResourcePool |
+              ResourcePoolReservation | ResourcePoolUpdates |
+              DeleteResourcePool | ResourcePoolUsageInfo | ResourcePoolState | None) = None
+    note: str | None = None
+
+class SnapshotMessage(DefaultMessage):
+    """Сообщение для работы с пулами ресурсов"""
+    success: bool
+    snapshot_info: Any = None
     note: str | None = None

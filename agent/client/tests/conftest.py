@@ -6,6 +6,8 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.managers.network_manager import NetworkManager
+from agent.client.hypervisor.libvirt.managers.pool_manager import PoolManager
+from agent.client.hypervisor.libvirt.managers.snapshot_manager import SnapshotManager
 from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
 from agent.client.hypervisor.libvirt.managers.virsh_manager import VirshConsoleController
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
@@ -98,3 +100,13 @@ def network_session():
 @pytest.fixture(scope="session", autouse=True)
 def virsh_console_session():
     yield VirshConsoleController
+
+@pytest.fixture(scope="session", autouse=True)
+def resource_pool_session():
+    with PoolManager().with_default_user() as rp_manager:
+        yield rp_manager
+
+@pytest.fixture(scope="session", autouse=True)
+def snapshot_session():
+    with SnapshotManager().with_default_user() as sn_manager:
+        yield sn_manager
