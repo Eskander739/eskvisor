@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 
 class ResourcePoolType(str, Enum):

@@ -9,7 +9,13 @@ sudo usermod -aG wheel eskvisor  # Для CentOS/RHEL
 sudo usermod -a -G libvirt eskvisor
 sudo usermod -a -G kvm eskvisor
 sudo usermod -aG qemu eskvisor
+sudo usermod -aG disk eskvisor
 sudo passwd eskvisor
+
+newgrp libvirt
+newgrp kvm
+newgrp qemu
+newgrp disk
 # Указываем пароль: P@$$w0rd12A
 
 # Для работы без пароля (менее безопасно)
