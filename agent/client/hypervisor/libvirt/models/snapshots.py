@@ -3,21 +3,21 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from agent.client.hypervisor.libvirt.models.general import VMState
+from agent.client.hypervisor.libvirt.models.general import VMState, SnapshotState
 
 
 class Snapshot(BaseModel):
     name: str
     description: str
     created: datetime
-    state: VMState
+    state: SnapshotState
 
 
 class SnapshotWithParent(BaseModel):
     name: str
     description: str | None = None
     created: datetime
-    state: VMState
+    state: SnapshotState
     parent: Snapshot | None = None
 
 

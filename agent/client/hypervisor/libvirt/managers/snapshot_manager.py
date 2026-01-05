@@ -481,22 +481,34 @@ class SnapshotManager(LibvirtClient):
             snapshot = virtual_machine.snapshotCurrent(flags=0)
 
             if snapshot:
+                # Получаем XML снапшота для извлечения полной информации
+                snapshot_xml = snapshot.getXMLDesc(flags=0)
+
+                # Извлекаем информацию из XML
+                snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
+
                 snapshot_data = SnapshotWithParent(
                     name=snapshot.getName(),
-                    description=self._get_snapshot_description(snapshot),
-                    created=snapshot.getCreateTime(),
-                    state=snapshot.getState()
+                    description=snapshot_info_dict.get("description"),
+                    created=snapshot_info_dict.get("creation_time"),
+                    state=snapshot_info_dict.get("state")
                 )
 
                 # Информация о родительском снапшоте
                 try:
                     parent_snapshot = snapshot.getParent()
-                    snapshot_data.parent = Snapshot(
-                        name=parent_snapshot.getName(),
-                        description=self._get_snapshot_description(snapshot),
-                        created=parent_snapshot.getCreateTime(),
-                        state=parent_snapshot.getState()
-                    )
+                    if parent_snapshot:
+                        parent_xml = parent_snapshot.getXMLDesc(flags=0)
+                        parent_info_dict = self._parse_snapshot_xml(parent_xml)
+
+                        snapshot_data.parent = Snapshot(
+                            name=parent_snapshot.getName(),
+                            description=parent_info_dict.get("description"),
+                            created=parent_info_dict.get("creation_time"),
+                            state=parent_info_dict.get("state")
+                        )
+                    else:
+                        snapshot_data.parent = None
                 except self.libvirtError:
                     snapshot_data.parent = None
 
@@ -542,6 +554,56 @@ class SnapshotManager(LibvirtClient):
                 code=CommandMessagesEnum.snapshot_not_found.name,
                 note=str(e)
             )
+
+    def _parse_snapshot_xml(self, xml_desc: str) -> dict:
+        """
+        Парсинг XML снапшота для извлечения информации
+
+        Args:
+            xml_desc: XML описание снапшота
+
+        Returns:
+            Словарь с извлеченной информацией
+        """
+        try:
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(xml_desc)
+            result = {}
+
+            # Извлекаем описание
+            description_elem = root.find('description')
+            if description_elem is not None and description_elem.text:
+                result["description"] = description_elem.text.strip()
+            else:
+                result["description"] = None
+
+            # Извлекаем время создания
+            creation_time_elem = root.find('creationTime')
+            if creation_time_elem is not None and creation_time_elem.text:
+                try:
+                    result["creation_time"] = int(creation_time_elem.text)
+                except ValueError:
+                    result["creation_time"] = None
+            else:
+                result["creation_time"] = None
+
+            # Извлекаем состояние
+            state_elem = root.find('state')
+            if state_elem is not None and state_elem.text:
+                result["state"] = state_elem.text
+            else:
+                result["state"] = None
+
+            return result
+
+        except Exception as e:
+            self.logger.warning(f"Ошибка парсинга XML снапшота: {e}")
+            return {
+                "description": None,
+                "creation_time": None,
+                "state": None
+            }
 
     def clone_vm_from_snapshot(self, request: SnapshotCloneRequest, request_id: str) -> SnapshotMessage:
         """
