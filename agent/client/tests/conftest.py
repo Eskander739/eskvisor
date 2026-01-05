@@ -61,6 +61,20 @@ def create_stopped_vm():
 
 
 @pytest.fixture(scope="session")
+def create_running_vm():
+    with VmManager().with_default_user() as vm_manager:
+        random_name = f"TEST-VM_{random.randint(10000, 99999)}"
+        request_id = str(uuid.uuid4())
+        vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()], autostart_vm=True)
+        vm_config.name = random_name
+        vm_manager.create_vm(vm_config)
+        assert wait_while_not(lambda: vm_manager.get_vm_state_by_name(vm_config.name) == VMState.RUNNING.value, timeout=120)
+
+        yield random_name, request_id
+        vm_manager.delete_vm_with_force(vm_config.name, request_id)
+
+
+@pytest.fixture(scope="session")
 def multi_create_stopped_vm():
     with VmManager().with_default_user() as vm_manager:
         vm_config_names = []

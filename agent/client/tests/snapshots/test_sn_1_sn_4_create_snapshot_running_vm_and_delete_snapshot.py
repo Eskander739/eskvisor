@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.disk import DiskCreate
+from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotDeleteRequest
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VirtualMachine
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -11,7 +12,7 @@ from agent.client.tools import wait_while_not
 
 
 @pytest.mark.tags("SN‑01", "SN‑04", "Создание снапшота работающей ВМ", "Удаление снапшота")
-def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session):
+def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_running_vm):
     """
     SN‑01: Создание снапшота работающей ВМ
     SN‑04: Удаление снапшота
@@ -19,28 +20,45 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session):
     Создать снапшот без остановки ВМ. Проверить, что снапшот появляется в дереве снапшотов ВМ.
     Удалить отдельный снапшот. Убедиться, что место освобождается и дерево снапшотов корректно обновляется.
     """
-    random_name = None
-    request_id = str(uuid.uuid4())
-    kb_to_mb = lambda kb: kb / 1024
+    random_name, request_id = create_running_vm
+    snapshot_name = "snapshot-" + random_name
+    snapshot_deleted = False
     try:
+        # _____________________________Проверка отсутствия снапшота_______________________________
+        get_snapshot_info = snapshot_session.get_current_snapshot(random_name, request_id)
+        assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
+        assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # ____________________________Создание снапшота работающей ВМ_____________________________
-        random_name = f"VM-TEST-{random.randint(10000, 99999)}"
-        vm_template = VMCreateRequest(name=random_name, disks=[DiskCreate()])
-        create_vm_info = snapshot_session.create_storage_pool(vm_template)
-        assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
-        assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
-        assert create_vm_info.vm_info is not None
-        vm_info: VirtualMachine = create_vm_info.vm_info
-        # assert wait_while_not(lambda: get_state(random_name) == VMState.SHUTOFF.value)
-        assert vm_info.vcpus == vm_template.vcpus
-        assert vm_info.name == vm_template.name
-        assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
+        vm_template = SnapshotCreateRequest(vm_name=random_name, snapshot_name=snapshot_name)
+        create_vm_info = snapshot_session.create_snapshot(vm_template, request_id)
+        assert create_vm_info.message == CommandMessagesEnum.snapshot_successfully_created.value
+        assert create_vm_info.code == CommandMessagesEnum.snapshot_successfully_created.name
+        assert create_vm_info.snapshot_info is not None
+        # _______________________________Проверка наличия снапшота________________________________
+        get_snapshot_info = snapshot_session.get_current_snapshot(random_name, request_id)
+        assert get_snapshot_info.message == CommandMessagesEnum.snapshot_found.value
+        assert get_snapshot_info.code == CommandMessagesEnum.snapshot_found.name
         # ____________________________________Удаление снапшота____________________________________
+        delete_snapshot_info = snapshot_session.delete_snapshot(SnapshotDeleteRequest(vm_name=random_name,
+                                                                                      snapshot_name=snapshot_name,
+                                                                                      remove_children=True),
+                                                          request_id)
 
+        assert delete_snapshot_info.message == CommandMessagesEnum.snapshot_successfully_deleted.value
+        assert delete_snapshot_info.code == CommandMessagesEnum.snapshot_successfully_deleted.name
+        assert delete_snapshot_info.success is True
+        snapshot_deleted = True
+        # _____________________________Проверка отсутствия снапшота_______________________________
+        get_snapshot_info = snapshot_session.get_current_snapshot(random_name, request_id)
+        assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
+        assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
     finally:
         # ______________________________Удаление снапшота(постусловие)_____________________________
-        if random_name is not None:
-            delete_vm_info = vm_session.delete_vm_with_force(name=random_name, request_id=request_id)
-            assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
-            assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
-            assert delete_vm_info.success is True
+        if not snapshot_deleted:
+            delete_snapshot_info = snapshot_session.delete_snapshot(SnapshotDeleteRequest(vm_name=random_name,
+                                                                                          snapshot_name=snapshot_name,
+                                                                                          remove_children=True),
+                                                              request_id)
+            assert delete_snapshot_info.message == CommandMessagesEnum.snapshot_successfully_deleted.value
+            assert delete_snapshot_info.code == CommandMessagesEnum.snapshot_successfully_deleted.name
+            assert delete_snapshot_info.success is True
