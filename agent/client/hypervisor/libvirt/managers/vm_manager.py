@@ -1125,8 +1125,8 @@ class VmManager(LibvirtClient):
                 id=domain.ID() if domain.ID() != -1 else -1,
                 uuid=domain.UUIDString(),
                 vcpus=info[3],
-                memory=info[1],
-                max_memory=info[2],
+                memory=info[2],
+                max_memory=info[1],
                 cpu_time=info[4]
             )
         except self.libvirtError as e:

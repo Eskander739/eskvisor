@@ -521,7 +521,7 @@ class StorageManager(LibvirtClient):
                                   note=str(e)
                                   )
 
-    def get_disks_by_vm(self, vm_name: str, request_id) -> List[Disk]:
+    def get_disks_by_vm(self, vm_name: str, request_id) -> list[Disk]:
         """
         Получить все диски, подключенные к указанной ВМ
         """

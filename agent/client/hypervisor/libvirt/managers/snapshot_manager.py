@@ -5,6 +5,7 @@ import os
 import uuid
 import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.hypervisor.libvirt.models.disk import Disk, SnapshotDiskInfo, DiskType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
@@ -12,6 +13,7 @@ from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent,
     CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots, \
     SnapshotRevertSuccess, SnapshotsChain
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
 class SnapshotManager(LibvirtClient):
@@ -49,6 +51,12 @@ class SnapshotManager(LibvirtClient):
                     parent_snapshot_xml = snapshot.getXMLDesc(flags=0)
                     parent_snapshot_info_dict = self._parse_snapshot_xml(parent_snapshot_xml)
                     parent_size = self._get_snapshot_size(snapshot)
+                    parent_vm_config = VirtualMachine(name=parent_snapshot_info_dict.get("vm_name"),
+                                               uuid=parent_snapshot_info_dict.get("uuid"),
+                                               max_memory=parent_snapshot_info_dict.get("memory"),
+                                               memory=parent_snapshot_info_dict.get("current_memory"),
+                                               vcpus=parent_snapshot_info_dict.get("vcpu"),
+                                               state=parent_snapshot_info_dict.get("state"))
                     parent_snapshot = Snapshot(
                         name=parent_snapshot.getName(),
                         vm_name=snapshot.getName(),
@@ -56,7 +64,9 @@ class SnapshotManager(LibvirtClient):
                         created=parent_snapshot_info_dict.get("creation_time"),
                         state=parent_snapshot_info_dict.get("state"),
                         is_current=parent_snapshot_info_dict.get("current"),
-                        size_bytes=parent_size
+                        size_bytes=parent_size,
+                        disks=self._parse_snapshot_disks_xml(parent_snapshot_xml),
+                        vm_config=parent_vm_config
                     )
                 except self.libvirtError:
                     parent_snapshot = None
@@ -66,6 +76,12 @@ class SnapshotManager(LibvirtClient):
                     size = self._get_snapshot_size(snapshot)
                     snapshot_xml = snapshot.getXMLDesc(flags=0)
                     snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
+                    vm_config = VirtualMachine(name=snapshot_info_dict.get("vm_name"),
+                                               uuid=snapshot_info_dict.get("uuid"),
+                                               max_memory=snapshot_info_dict.get("memory"),
+                                               memory=snapshot_info_dict.get("current_memory"),
+                                               vcpus=snapshot_info_dict.get("vcpu"),
+                                               state=snapshot_info_dict.get("state"))
                     snapshot_info = SnapshotWithParent(name=snapshot.getName(),
                                                        description=snapshot_info_dict.get("description"),
                                                        created=snapshot_info_dict.get("creation_time"),
@@ -73,12 +89,20 @@ class SnapshotManager(LibvirtClient):
                                                        parent=parent_snapshot if parent_snapshot else None,
                                                        size_bytes=size,
                                                        vm_name=vm_name,
-                                                       is_current=snapshot_info_dict.get("current"))
+                                                       is_current=snapshot_info_dict.get("current"),
+                                                       disks=self._parse_snapshot_disks_xml(snapshot_xml),
+                                                       vm_config=vm_config)
                     snapshots_info.append(snapshot_info)
                 except Exception as e:
                     self.logger.warning(f"Не удалось получить размер снапшота {snapshot.getName()}: {e}")
                     snapshot_xml = snapshot.getXMLDesc(flags=0)
                     snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
+                    vm_config = VirtualMachine(name=snapshot_info_dict.get("vm_name"),
+                                               uuid=snapshot_info_dict.get("uuid"),
+                                               max_memory=snapshot_info_dict.get("memory"),
+                                               memory=snapshot_info_dict.get("current_memory"),
+                                               vcpus=snapshot_info_dict.get("vcpu"),
+                                               state=snapshot_info_dict.get("state"))
                     snapshot_info = SnapshotWithParent(name=snapshot.getName(),
                                                        description=snapshot_info_dict.get("description"),
                                                        created=snapshot_info_dict.get("creation_time"),
@@ -86,7 +110,9 @@ class SnapshotManager(LibvirtClient):
                                                        parent=parent_snapshot if parent_snapshot else None,
                                                        size_bytes=None,
                                                        vm_name=vm_name,
-                                                       is_current=snapshot_info_dict.get("current"))
+                                                       is_current=snapshot_info_dict.get("current"),
+                                                       disks=self._parse_snapshot_disks_xml(snapshot_xml),
+                                                       vm_config=vm_config)
                     snapshots_info.append(snapshot_info)
 
                 snapshots_list.append(snapshot_info)
@@ -141,6 +167,12 @@ class SnapshotManager(LibvirtClient):
                 parent_snapshot_xml = snapshot.getXMLDesc(flags=0)
                 parent_snapshot_info_dict = self._parse_snapshot_xml(parent_snapshot_xml)
                 parent_size = self._get_snapshot_size(snapshot)
+                vm_config = VirtualMachine(name=parent_snapshot_info_dict.get("vm_name"),
+                                           uuid=parent_snapshot_info_dict.get("uuid"),
+                                           max_memory=parent_snapshot_info_dict.get("memory"),
+                                           memory=parent_snapshot_info_dict.get("current_memory"),
+                                           vcpus=parent_snapshot_info_dict.get("vcpu"),
+                                           state=parent_snapshot_info_dict.get("state"))
                 parent_snapshot = Snapshot(
                     name=parent_snapshot.getName(),
                     vm_name=snapshot.getName(),
@@ -148,7 +180,9 @@ class SnapshotManager(LibvirtClient):
                     created=parent_snapshot_info_dict.get("creation_time"),
                     state=parent_snapshot_info_dict.get("state"),
                     is_current=parent_snapshot_info_dict.get("current"),
-                    size_bytes=parent_size
+                    size_bytes=parent_size,
+                    disks=self._parse_snapshot_disks_xml(parent_snapshot_xml),
+                    vm_config=vm_config
                 )
             except self.libvirtError:
                 parent_snapshot = None
@@ -157,6 +191,12 @@ class SnapshotManager(LibvirtClient):
             size = self._get_snapshot_size(snapshot)
             snapshot_xml = snapshot.getXMLDesc(flags=0)
             snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
+            vm_config = VirtualMachine(name=snapshot_info_dict.get("vm_name"),
+                                       uuid=snapshot_info_dict.get("uuid"),
+                                       max_memory=snapshot_info_dict.get("memory"),
+                                       memory=snapshot_info_dict.get("current_memory"),
+                                       vcpus=snapshot_info_dict.get("vcpu"),
+                                       state=snapshot_info_dict.get("state"))
             snapshot_info = SnapshotWithParent(name=snapshot.getName(),
                                                description=snapshot_info_dict.get("description"),
                                                created=snapshot_info_dict.get("creation_time"),
@@ -164,7 +204,9 @@ class SnapshotManager(LibvirtClient):
                                                parent=parent_snapshot if parent_snapshot else None,
                                                size_bytes=size,
                                                vm_name=request.vm_name,
-                                               is_current=snapshot_info_dict.get("current"))
+                                               is_current=snapshot_info_dict.get("current"),
+                                               disks=self._parse_snapshot_disks_xml(snapshot_xml),
+                                               vm_config=vm_config)
             return SnapshotMessage(
                 request_id=request_id,
                 success=True,
@@ -443,11 +485,9 @@ class SnapshotManager(LibvirtClient):
             if snapshot:
                 # Получаем XML снапшота для извлечения полной информации
                 snapshot_xml = snapshot.getXMLDesc(flags=0)
-                print(snapshot_xml)
 
                 # Извлекаем информацию из XML
                 snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
-
                 # Информация о родительском снапшоте
                 try:
                     parent_snapshot = snapshot.getParent()
@@ -455,6 +495,12 @@ class SnapshotManager(LibvirtClient):
                         parent_xml = parent_snapshot.getXMLDesc(flags=0)
                         parent_info_dict = self._parse_snapshot_xml(parent_xml)
                         parent_size = self._get_snapshot_size(parent_snapshot)
+                        vm_config_parent = VirtualMachine(name=snapshot_info_dict.get("vm_name"),
+                                                   uuid=parent_info_dict.get("uuid"),
+                                                   max_memory=parent_info_dict.get("memory"),
+                                                   memory=parent_info_dict.get("current_memory"),
+                                                   vcpus=parent_info_dict.get("vcpu"),
+                                                   state=parent_info_dict.get("state"))
                         parent_snapshot = Snapshot(
                             name=parent_snapshot.getName(),
                             vm_name=snapshot.getName(),
@@ -462,7 +508,9 @@ class SnapshotManager(LibvirtClient):
                             created=parent_info_dict.get("creation_time"),
                             state=parent_info_dict.get("state"),
                             is_current=parent_info_dict.get("current"),
-                            size_bytes=parent_size
+                            size_bytes=parent_size,
+                            disks=self._parse_snapshot_disks_xml(parent_xml),
+                            vm_config=vm_config_parent
                         )
                     else:
                         parent_snapshot = None
@@ -471,7 +519,12 @@ class SnapshotManager(LibvirtClient):
 
                 # Получение размера снапшота
                 size = self._get_snapshot_size(snapshot)
-
+                vm_config = VirtualMachine(name=snapshot_info_dict.get("vm_name"),
+                                           uuid=snapshot_info_dict.get("uuid"),
+                                           max_memory=snapshot_info_dict.get("memory"),
+                                           memory=snapshot_info_dict.get("current_memory"),
+                                           vcpus=snapshot_info_dict.get("vcpu"),
+                                           state=snapshot_info_dict.get("state"))
                 snapshot_info = SnapshotWithParent(name=snapshot.getName(),
                                                    description=snapshot_info_dict.get("description"),
                                                    created=snapshot_info_dict.get("creation_time"),
@@ -479,7 +532,9 @@ class SnapshotManager(LibvirtClient):
                                                    parent=parent_snapshot if parent_snapshot else None,
                                                    size_bytes=size,
                                                    vm_name=vm_name,
-                                                   is_current=snapshot_info_dict.get("current"))
+                                                   is_current=snapshot_info_dict.get("current"),
+                                                   disks=self._parse_snapshot_disks_xml(snapshot_xml),
+                                                   vm_config=vm_config)
                 return SnapshotMessage(
                     request_id=request_id,
                     success=True,
@@ -505,6 +560,49 @@ class SnapshotManager(LibvirtClient):
                 note=str(e)
             )
 
+    def _parse_snapshot_disks_xml(self, xml_desc: str) -> list[Disk]:
+        """
+        Парсинг XML снапшота для извлечения информации
+
+        Args:
+            xml_desc: XML описание снапшота
+
+        Returns:
+            Словарь с извлеченной информацией
+        """
+        try:
+
+            root = ET.fromstring(xml_desc)
+            devices = root.find("domain").find("devices")
+            disk_list = []
+            disk_list_from_secion_disks = []
+            for current_disk in root.find("disks").findall("disk"):
+                disk_list_from_secion_disks.append(SnapshotDiskInfo(name=current_disk.get("name"),
+                                                                    snapshot=current_disk.get("snapshot")))
+
+            # Извлекаем memory
+            disks = devices.findall("disk")
+            for current_disk in disks:
+                disk_path = current_disk.find("source").get("file")
+                disk_name = os.path.basename(disk_path)
+                disk_list.append(Disk(name=disk_name,
+                                      path=disk_path,
+                                      type=DiskType.SNAPSHOT,
+                                      format=current_disk.find("driver").get("type"),
+                                      bus_type=current_disk.find("target").get("bus"),
+                                      target_dev=current_disk.find("target").get("dev"),
+                                      file_path_exists=False))
+            target_dev_from_disk_list = tuple(sorted([current_disk.target_dev for current_disk in disk_list]))
+            target_dev_from_disk_section_list = tuple(sorted([current_disk.name for current_disk in disk_list_from_secion_disks]))
+            if target_dev_from_disk_list != target_dev_from_disk_section_list:
+                raise ValueError("Некорректное состояние дисков снапшота")
+
+            return disk_list
+
+        except Exception as e:
+            self.logger.warning(f"Ошибка парсинга XML снапшота: {e}")
+            return []
+
     def _parse_snapshot_xml(self, xml_desc: str) -> dict:
         """
         Парсинг XML снапшота для извлечения информации
@@ -521,18 +619,46 @@ class SnapshotManager(LibvirtClient):
             result = {}
 
             # Извлекаем имя ВМ из снапшота
-            name_elem = root.find('name')
+            name_elem = root.find("name")
             if name_elem is not None and name_elem.text:
                 result["name"] = name_elem.text.strip()
             else:
                 result["name"] = None
 
             # Извлекаем описание
-            description_elem = root.find('description')
+            description_elem = root.find("description")
             if description_elem is not None and description_elem.text:
                 result["description"] = description_elem.text.strip()
             else:
                 result["description"] = None
+
+            # Извлекаем имя ВМ
+            vm_name_elem = root.find("domain").find("name")
+            if vm_name_elem is not None and vm_name_elem.text:
+                result["vm_name"] = vm_name_elem.text.strip()
+            else:
+                result["vm_name"] = None
+
+            # Извлекаем memory
+            memory_elem = root.find("domain").find("memory")
+            if memory_elem is not None and memory_elem.text:
+                result["memory"] = memory_elem.text.strip()
+            else:
+                result["memory"] = None
+
+            # Извлекаем currentMemory
+            current_memory_elem = root.find("domain").find("currentMemory")
+            if current_memory_elem is not None and current_memory_elem.text:
+                result["current_memory"] = current_memory_elem.text.strip()
+            else:
+                result["current_memory"] = None
+
+            # Извлекаем vcpu
+            vcpu_elem = root.find("domain").find("vcpu")
+            if vcpu_elem is not None and vcpu_elem.text:
+                result["vcpu"] = vcpu_elem.text.strip()
+            else:
+                result["vcpu"] = None
 
             # Извлекаем время создания
             creation_time_elem = root.find('creationTime')
@@ -567,7 +693,7 @@ class SnapshotManager(LibvirtClient):
             else:
                 result["parent_name"] = None
 
-            uuid_elem = root.find('uuid')
+            uuid_elem = root.find("domain").find('uuid')
             if uuid_elem is not None and uuid_elem.text:
                 result["uuid"] = uuid_elem.text.strip()
             else:

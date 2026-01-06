@@ -2,13 +2,14 @@ import uuid
 
 import pytest
 
+from agent.client.hypervisor.libvirt.models.disk import DiskType
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotDeleteRequest
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("SN‑02", "Создание снапшота остановленной ВМ")
-def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_stopped_vm):
+def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, vm_session, storage_session):
     """
     SN‑02: Создание снапшота остановленной ВМ
 
@@ -19,6 +20,8 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_st
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False
     try:
+        # _____________________________Получение информации о ВМ_______________________________
+        vm_info = vm_session.get_vm_by_name(vm_name, request_id)
         # _____________________________Проверка отсутствия снапшота_______________________________
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
@@ -38,6 +41,21 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_st
         assert snapshot_info.vm_name == vm_name
         assert snapshot_info.state.value == VMState.SHUTOFF.value
         assert snapshot_info.size_bytes > 0
+        # _______________________________Проверка конфигурации ВМ________________________________
+        vm_config = snapshot_info.vm_config
+        assert vm_config.name == vm_name
+        assert vm_config.uuid == vm_info.vm_info.uuid
+        assert vm_config.memory == vm_info.vm_info.memory
+        assert vm_config.max_memory == vm_info.vm_info.max_memory
+        assert vm_config.vcpus == vm_info.vm_info.vcpus
+
+        # _____________________________Проверка конфигурации дисков______________________________
+        vm_disk_info = storage_session.get_disks_by_vm(vm_name, request_id)
+        for current_disk, snapshot_disk in zip(sorted(vm_disk_info), sorted(snapshot_info.disks)):
+            assert current_disk.name == snapshot_disk.name
+            assert current_disk.path == snapshot_disk.path
+            assert snapshot_disk.type.value == DiskType.SNAPSHOT.value
+            assert current_disk.format.value == snapshot_disk.format.value
     finally:
         # ______________________________Удаление снапшота(постусловие)_____________________________
         if not snapshot_deleted:

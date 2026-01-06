@@ -8,7 +8,7 @@ from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("SN‑01", "SN‑04", "Создание снапшота работающей ВМ", "Удаление снапшота")
-def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_running_vm):
+def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(snapshot_session, create_running_vm):
     """
     SN‑01: Создание снапшота работающей ВМ
     SN‑04: Удаление снапшота

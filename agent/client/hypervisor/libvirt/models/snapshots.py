@@ -2,7 +2,9 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from agent.client.hypervisor.libvirt.models.disk import Disk
 from agent.client.hypervisor.libvirt.models.general import VMState
+from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
 class DeleteSnapshotInfo(BaseModel):
@@ -19,6 +21,8 @@ class Snapshot(BaseModel):
     state: VMState
     is_current: bool
     size_bytes: int
+    disks: list[Disk] | None = None
+    vm_config: VirtualMachine
 
 
 class SnapshotWithParent(BaseModel):
@@ -30,6 +34,8 @@ class SnapshotWithParent(BaseModel):
     parent: Snapshot | None = None
     is_current: bool
     size_bytes: int | None = None
+    disks: list[Disk] | None = None
+    vm_config: VirtualMachine
 
 
 class ClonedSnapshot(BaseModel):

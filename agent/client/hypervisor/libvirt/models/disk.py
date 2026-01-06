@@ -379,3 +379,7 @@ class DiskQuery(BaseModel):
             if self.min_size_gb > self.max_size_gb:
                 raise ValueError("min_size_gb не может быть больше max_size_gb")
         return self
+
+class SnapshotDiskInfo(BaseModel):
+    name: str
+    snapshot: str

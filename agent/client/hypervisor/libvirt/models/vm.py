@@ -243,9 +243,9 @@ class VirtualMachine(BaseModel):
     """Информация о виртуальной машине"""
     name: str
     state: VMState
-    id: int
+    id: int | None = None
     uuid: str
     vcpus: int
     memory: int  # в килобайтах
     max_memory: int  # в килобайтах
-    cpu_time: int  # в наносекундах
+    cpu_time: int | None = None  # в наносекундах
