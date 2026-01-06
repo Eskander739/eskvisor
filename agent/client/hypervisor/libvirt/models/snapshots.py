@@ -32,6 +32,30 @@ class SnapshotWithParent(BaseModel):
     size_bytes: int | None = None
 
 
+class ClonedSnapshot(BaseModel):
+    source_vm_name: str
+    source_snapshot_name: str
+    new_vm_name: str
+    new_uuid: str
+    vm_started: bool
+
+
+class CreateSnapshotChainError(BaseModel):
+    vm_name: str
+    created_snapshots: list[SnapshotWithParent]
+    errors: list[str]
+    total_requested: int
+    successfully_created: int
+
+
+
+class CreateSnapshotChainSuccess(BaseModel):
+    vm_name: str
+    created_snapshots: list[SnapshotWithParent]
+    total_created: int
+    chain_depth: int
+
+
 class SnapshotList(BaseModel):
     vm_name: str
     snapshots: list[SnapshotWithParent]
@@ -90,21 +114,3 @@ class SnapshotChainRequest(BaseModel):
 class MultipleSnapshotsRequest(BaseModel):
     """Модель запроса для создания снапшотов нескольких ВМ"""
     snapshots: list[SnapshotCreateRequest]
-
-class SnapshotInfo(BaseModel):
-    """
-                            "name": snapshot_data.name,
-                    "description": snapshot_data.description,
-                    "created": snapshot_data.created,
-                    "state": snapshot_data.state,
-                    "parent": snapshot_data.parent.name if snapshot_data.parent else None,
-                    "size_bytes": size,
-                    "vm_name": vm_name,
-                    "is_current": True
-    """
-    name: str
-    vm_name: str
-    description: str | None = None
-    created: datetime
-    state: SnapshotState
-    parent: Snapshot | None

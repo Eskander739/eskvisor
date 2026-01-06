@@ -5,7 +5,8 @@ import uuid
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
-    MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo, SnapshotList
+    MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
+    CreateSnapshotChainError, CreateSnapshotChainSuccess
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
 
 
@@ -680,13 +681,11 @@ class SnapshotManager(LibvirtClient):
                     success=True,
                     message=CommandMessagesEnum.snapshot_clone_success.value,
                     code=CommandMessagesEnum.snapshot_clone_success.name,
-                    snapshot_info={
-                        "source_vm_name": request.source_vm_name,
-                        "source_snapshot_name": request.source_snapshot_name,
-                        "new_vm_name": request.new_vm_name,
-                        "new_uuid": request.generate_new_uuid,
-                        "vm_started": source_state == libvirt.VIR_DOMAIN_RUNNING
-                    }
+                    snapshot_info=ClonedSnapshot(source_vm_name=request.source_vm_name,
+                                                 source_snapshot_name=request.source_snapshot_name,
+                                                 new_vm_name=request.new_vm_name,
+                                                 new_uuid=request.new_uuid,
+                                                 vm_started=request.source_state == libvirt.VIR_DOMAIN_RUNNING)
                 )
 
             return SnapshotMessage(
@@ -715,16 +714,14 @@ class SnapshotManager(LibvirtClient):
                 note=str(e)
             )
 
-    def create_snapshot_chain(self, vm_name: str, snapshot_names: list[str],
-                              descriptions: list[str] = None, request_id: str = None) -> SnapshotMessage:
+    def create_snapshot_chain(self, vm_name: str, snapshot_names: list[str], request_id: str,
+                              descriptions: list[str] = None) -> SnapshotMessage:
         """
         Создать цепочку снапшотов
 
         Returns:
             SnapshotMessage с результатом операции
         """
-        if request_id is None:
-            request_id = str(uuid.uuid4())
 
         if descriptions is None:
             descriptions = [""] * len(snapshot_names)
@@ -757,12 +754,9 @@ class SnapshotManager(LibvirtClient):
                     snapshot = virtual_machine.snapshotCreateXML(snapshot_xml, flags=0)
 
                     if snapshot:
-                        created_snapshots.append({
-                            "name": snapshot_name,
-                            "description": description,
-                            "index": i + 1,
-                            "parent": created_snapshots[-1]["name"] if created_snapshots else None
-                        })
+                        created_snapshot = self.snapshot_by_name(SnapshotInfoRequest(vm_name=vm_name,
+                                                                                     snapshot_name=snapshot_name), request_id)
+                        created_snapshots.append(created_snapshot.snapshot_info)
                         self.logger.info(f"Снапшот {i + 1}/{len(snapshot_names)} создан: {snapshot_name}")
                     else:
                         errors.append(f"Failed to create snapshot {snapshot_name}")
@@ -778,13 +772,11 @@ class SnapshotManager(LibvirtClient):
                     success=False,
                     message=CommandMessagesEnum.snapshot_create_error.value,
                     code=CommandMessagesEnum.snapshot_create_error.name,
-                    snapshot_info={
-                        "vm_name": vm_name,
-                        "created_snapshots": created_snapshots,
-                        "errors": errors,
-                        "total_requested": len(snapshot_names),
-                        "successfully_created": len(created_snapshots)
-                    },
+                    snapshot_info=CreateSnapshotChainError(vm_name=vm_name,
+                                                           created_snapshots=created_snapshots,
+                                                           errors=errors,
+                                                           total_requested=len(created_snapshots),
+                                                           successfully_created=len(created_snapshots)),
                     note="; ".join(errors)
                 )
 
@@ -793,12 +785,10 @@ class SnapshotManager(LibvirtClient):
                 success=True,
                 message=CommandMessagesEnum.snapshot_successfully_created.value,
                 code=CommandMessagesEnum.snapshot_successfully_created.name,
-                snapshot_info={
-                    "vm_name": vm_name,
-                    "created_snapshots": created_snapshots,
-                    "total_created": len(created_snapshots),
-                    "chain_depth": len(created_snapshots)
-                }
+                snapshot_info=CreateSnapshotChainSuccess(vm_name=vm_name,
+                                                         created_snapshots=created_snapshots,
+                                                         total_created=len(created_snapshots),
+                                                         chain_depth=len(created_snapshots))
             )
 
         except self.libvirtError as e:
@@ -823,7 +813,7 @@ class SnapshotManager(LibvirtClient):
 
         for snapshot_request in request.snapshots:
             try:
-                result = self.create_snapshot(snapshot_request)
+                result = self.create_snapshot(snapshot_request, request_id)
                 results.append({
                     "vm_name": snapshot_request.vm_name,
                     "snapshot_name": snapshot_request.snapshot_name,

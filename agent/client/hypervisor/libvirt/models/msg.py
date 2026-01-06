@@ -8,7 +8,8 @@ from agent.client.hypervisor.libvirt.models.network import NetworkInfo, NetworkI
 from agent.client.hypervisor.libvirt.models.resource_pool import ResourcePool, ResourcePoolList, AdjustResourcePool, \
     AddVMInResourcePool, RemoveVMInResourcePool, ResourcePoolReservation, ResourcePoolUpdates, DeleteResourcePool, \
     ResourcePoolUsageInfo, ResourcePoolState
-from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, DeleteSnapshotInfo, SnapshotList
+from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, DeleteSnapshotInfo, SnapshotList, \
+    ClonedSnapshot, CreateSnapshotChainError, CreateSnapshotChainSuccess
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
@@ -186,5 +187,5 @@ class RpMessage(DefaultMessage):
 class SnapshotMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
     success: bool
-    snapshot_info: SnapshotWithParent | DeleteSnapshotInfo | SnapshotList | None = None
+    snapshot_info: SnapshotWithParent | DeleteSnapshotInfo | SnapshotList | ClonedSnapshot | CreateSnapshotChainError | CreateSnapshotChainSuccess | None = None
     note: str | None = None
