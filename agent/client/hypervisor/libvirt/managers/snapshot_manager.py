@@ -308,34 +308,17 @@ class SnapshotManager(LibvirtClient):
         try:
             virtual_machine = self.conn.lookupByName(request.vm_name)
             snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
-
-            # Получаем информацию о цепочке снапшотов
-            try:
-                parent = snapshot.getParent()
-                parent_name = parent.getName() if parent else None
-            except self.libvirtError:
-                parent_name = None
-
             # Восстановление до снапшота
             virtual_machine.revertToSnapshot(snapshot, flags=0)
 
             self.logger.info(f"VM '{request.vm_name}' восстановлена до снапшота '{request.snapshot_name}'")
 
-            # Проверяем, нужно ли удалять последующие снапшоты
-            snapshots_after = self._get_snapshots_after(request.vm_name, request.snapshot_name)
 
             return SnapshotMessage(
                 request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.snapshot_revert_success.value,
-                code=CommandMessagesEnum.snapshot_revert_success.name,
-                snapshot_info={
-                    "vm_name": request.vm_name,
-                    "snapshot_name": request.snapshot_name,
-                    "parent_snapshot": parent_name,
-                    "snapshots_after_revert": [s.name for s in snapshots_after],
-                    "note": "Subsequent snapshots may become unavailable after revert"
-                }
+                code=CommandMessagesEnum.snapshot_revert_success.name
             )
 
         except self.libvirtError as e:
@@ -384,18 +367,11 @@ class SnapshotManager(LibvirtClient):
 
             if new_snapshot:
                 self.logger.info(f"Описание снапшота '{request.snapshot_name}' успешно обновлено")
-                return SnapshotMessage(
-                    request_id=request_id,
-                    success=True,
-                    message=CommandMessagesEnum.snapshot_update_success.value,
-                    code=CommandMessagesEnum.snapshot_update_success.name,
-                    snapshot_info={
-                        "vm_name": request.vm_name,
-                        "snapshot_name": request.snapshot_name,
-                        "old_description": snapshot.getDescription(),
-                        "new_description": request.new_description
-                    }
-                )
+                current_snapshot = self.snapshot_by_name(SnapshotInfoRequest(vm_name=request.vm_name,
+                                                                             snapshot_name=request.snapshot_name), request_id)
+                current_snapshot.message = CommandMessagesEnum.snapshot_update_success.value
+                current_snapshot.code = CommandMessagesEnum.snapshot_update_success.name
+                return current_snapshot
 
             return SnapshotMessage(
                 request_id=request_id,
