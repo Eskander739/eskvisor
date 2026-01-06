@@ -1,14 +1,10 @@
-import random
 import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotDeleteRequest
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VirtualMachine
-from agent.client.hypervisor.libvirt.models.general import VMState, SnapshotState
+from agent.client.hypervisor.libvirt.models.general import SnapshotState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.tools import wait_while_not
 
 
 @pytest.mark.tags("SN‑01", "SN‑04", "Создание снапшота работающей ВМ", "Удаление снапшота")
