@@ -29,7 +29,14 @@ class SnapshotWithParent(BaseModel):
     state: SnapshotState
     parent: Snapshot | None = None
     is_current: bool
-    size_bytes: int
+    size_bytes: int | None = None
+
+
+class SnapshotList(BaseModel):
+    vm_name: str
+    snapshots: list[SnapshotWithParent]
+    count: int
+    chain_depth: int
 
 
 class SnapshotCreateRequest(BaseModel):

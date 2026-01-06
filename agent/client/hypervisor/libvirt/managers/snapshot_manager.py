@@ -5,7 +5,7 @@ import uuid
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
-    MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo
+    MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo, SnapshotList
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
 
 
@@ -38,50 +38,53 @@ class SnapshotManager(LibvirtClient):
             snapshots_info = []
 
             for snapshot in snapshots:
-                snapshot_data = SnapshotWithParent(
-                    name=snapshot.getName(),
-                    description=self._get_snapshot_description(snapshot),
-                    created=snapshot.getCreateTime(),
-                    state=snapshot.getState()
-                )
-
                 # Получение информации о родительском снапшоте
                 try:
                     parent_snapshot = snapshot.getParent()
-                    snapshot_data.parent = Snapshot(
+                    parent_snapshot_xml = snapshot.getXMLDesc(flags=0)
+                    parent_snapshot_info_dict = self._parse_snapshot_xml(parent_snapshot_xml)
+                    parent_size = self._get_snapshot_size(snapshot)
+                    parent_snapshot = Snapshot(
                         name=parent_snapshot.getName(),
-                        description=self._get_snapshot_description(snapshot),
-                        created=parent_snapshot.getCreateTime(),
-                        state=parent_snapshot.getState()
+                        vm_name=snapshot.getName(),
+                        description=parent_snapshot_info_dict.get("description"),
+                        created=parent_snapshot_info_dict.get("creation_time"),
+                        state=parent_snapshot_info_dict.get("state"),
+                        is_current=False,
+                        size_bytes=parent_size
                     )
                 except self.libvirtError:
-                    snapshot_data.parent = None
+                    parent_snapshot = None
 
                 # Получение размера снапшота
                 try:
                     size = self._get_snapshot_size(snapshot)
-                    snapshot_info = {
-                        "name": snapshot_data.name,
-                        "description": snapshot_data.description,
-                        "created": snapshot_data.created,
-                        "state": snapshot_data.state,
-                        "parent": snapshot_data.parent.name if snapshot_data.parent else None,
-                        "size_bytes": size
-                    }
+                    snapshot_xml = snapshot.getXMLDesc(flags=0)
+                    snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
+                    snapshot_info = SnapshotWithParent(name=snapshot.getName(),
+                                                       description=snapshot_info_dict.get("description"),
+                                                       created=snapshot_info_dict.get("creation_time"),
+                                                       state=snapshot_info_dict.get("state"),
+                                                       parent=parent_snapshot if parent_snapshot else None,
+                                                       size_bytes=size,
+                                                       vm_name=vm_name,
+                                                       is_current=True)
                     snapshots_info.append(snapshot_info)
                 except Exception as e:
-                    self.logger.warning(f"Не удалось получить размер снапшота {snapshot_data.name}: {e}")
-                    snapshot_info = {
-                        "name": snapshot_data.name,
-                        "description": snapshot_data.description,
-                        "created": snapshot_data.created,
-                        "state": snapshot_data.state,
-                        "parent": snapshot_data.parent.name if snapshot_data.parent else None,
-                        "size_bytes": None
-                    }
+                    self.logger.warning(f"Не удалось получить размер снапшота {snapshot.getName()}: {e}")
+                    snapshot_xml = snapshot.getXMLDesc(flags=0)
+                    snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
+                    snapshot_info = SnapshotWithParent(name=snapshot.getName(),
+                                                       description=snapshot_info_dict.get("description"),
+                                                       created=snapshot_info_dict.get("creation_time"),
+                                                       state=snapshot_info_dict.get("state"),
+                                                       parent=parent_snapshot if parent_snapshot else None,
+                                                       size_bytes=None,
+                                                       vm_name=vm_name,
+                                                       is_current=True)
                     snapshots_info.append(snapshot_info)
 
-                snapshots_list.append(snapshot_data)
+                snapshots_list.append(snapshot_info)
 
             if snapshots_list:
                 return SnapshotMessage(
@@ -89,12 +92,10 @@ class SnapshotManager(LibvirtClient):
                     success=True,
                     message=CommandMessagesEnum.vm_successfully_found.value,
                     code=CommandMessagesEnum.snapshot_list_found.name,
-                    snapshot_info={
-                        "vm_name": vm_name,
-                        "snapshots": snapshots_info,
-                        "count": len(snapshots_list),
-                        "chain_depth": self._calculate_chain_depth(snapshots_list)
-                    }
+                    snapshot_info=SnapshotList(vm_name=vm_name,
+                                               snapshots=snapshots_info,
+                                               count=len(snapshots_list),
+                                               chain_depth=self._calculate_chain_depth(snapshots_list))
                 )
             else:
                 return SnapshotMessage(
@@ -102,12 +103,10 @@ class SnapshotManager(LibvirtClient):
                     success=True,
                     message=CommandMessagesEnum.snapshot_list_found.value,
                     code=CommandMessagesEnum.snapshot_list_found.name,
-                    snapshot_info={
-                        "vm_name": vm_name,
-                        "snapshots": [],
-                        "count": 0,
-                        "chain_depth": 0
-                    }
+                    snapshot_info=SnapshotList(vm_name=vm_name,
+                                               snapshots=[],
+                                               count=0,
+                                               chain_depth=0)
                 )
 
         except self.libvirtError as e:
