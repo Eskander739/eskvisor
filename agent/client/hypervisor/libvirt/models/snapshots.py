@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from agent.client.hypervisor.libvirt.models.general import SnapshotState
+from agent.client.hypervisor.libvirt.models.general import VMState
 
 
 class DeleteSnapshotInfo(BaseModel):
@@ -16,7 +16,7 @@ class Snapshot(BaseModel):
     vm_name: str
     description: str | None = None
     created: datetime
-    state: SnapshotState
+    state: VMState
     is_current: bool
     size_bytes: int
 
@@ -26,7 +26,7 @@ class SnapshotWithParent(BaseModel):
     vm_name: str
     description: str | None = None
     created: datetime
-    state: SnapshotState
+    state: VMState
     parent: Snapshot | None = None
     is_current: bool
     size_bytes: int | None = None

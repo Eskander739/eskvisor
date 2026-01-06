@@ -3,6 +3,7 @@ import os
 import uuid
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
     MultipleSnapshotsRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
@@ -549,7 +550,7 @@ class SnapshotManager(LibvirtClient):
             # Извлекаем состояние
             state_elem = root.find('state')
             if state_elem is not None and state_elem.text:
-                result["state"] = state_elem.text
+                result["state"] = VMState.__dict__.get(state_elem.text.upper()).value
             else:
                 result["state"] = None
 

@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotDeleteRequest
-from agent.client.hypervisor.libvirt.models.general import SnapshotState
+from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
@@ -38,7 +38,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_ru
         assert snapshot_info.name == snapshot_name
         assert snapshot_info.description == description
         assert snapshot_info.vm_name == vm_name
-        assert snapshot_info.state.value == SnapshotState.RUNNING.value
+        assert snapshot_info.state.value == VMState.RUNNING.value
         # ____________________Проверка корректного обновления дерева снапшотов____________________
         get_snapshots_tree_info = snapshot_session.get_snapshot_chain(vm_name, request_id)
         assert get_snapshots_tree_info.message == CommandMessagesEnum.snapshot_found.value
