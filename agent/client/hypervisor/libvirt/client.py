@@ -30,7 +30,6 @@ class LibvirtClient:
             USERNAME - Имя пользователя для аутентификации
             PASSWORD - Пароль для аутентификации
         """
-        print("CONFIG_PATH: ", CONFIG_PATH)
         self.connection_uri = os.environ.get("CONNECTION_URI")
         self.username = os.environ.get("USERNAME")
         self.password = os.environ.get("PASSWORD")
