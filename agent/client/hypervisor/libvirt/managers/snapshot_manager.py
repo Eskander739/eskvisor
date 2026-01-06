@@ -1,5 +1,4 @@
 import shutil
-import time
 
 import libvirt
 import os
@@ -8,8 +7,8 @@ import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.disk import Disk, SnapshotDiskInfo, DiskType
 from agent.client.hypervisor.libvirt.models.general import VMState
-from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
-    SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
+from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, \
+    SnapshotCreateRequest, SnapshotCloneRequest, \
     MultipleSnapshotsRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
     CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots, \
     SnapshotRevertSuccess, SnapshotsChain
@@ -151,7 +150,7 @@ class SnapshotManager(LibvirtClient):
                 note=str(e)
             )
 
-    def snapshot_by_name(self, request: SnapshotInfoRequest, request_id: str) -> SnapshotMessage:
+    def snapshot_by_name(self, vm_name: str, snapshot_name: str, request_id: str) -> SnapshotMessage:
         """
         Получить снапшот по имени виртуальной машины и имени снапшота
 
@@ -159,8 +158,8 @@ class SnapshotManager(LibvirtClient):
             SnapshotMessage с информацией о снапшоте в rp_info
         """
         try:
-            virtual_machine = self.conn.lookupByName(request.vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
 
             # Информация о родительском снапшоте
             try:
@@ -204,7 +203,7 @@ class SnapshotManager(LibvirtClient):
                                                state=snapshot_info_dict.get("state"),
                                                parent=parent_snapshot if parent_snapshot else None,
                                                size_bytes=size,
-                                               vm_name=request.vm_name,
+                                               vm_name=vm_name,
                                                is_current=snapshot_info_dict.get("current"),
                                                disks=self._parse_snapshot_disks_xml(snapshot_xml),
                                                vm_config=vm_config)
@@ -305,7 +304,7 @@ class SnapshotManager(LibvirtClient):
                 note=error_msg
             )
 
-    def delete_snapshot(self, request: SnapshotDeleteRequest, request_id: str) -> SnapshotMessage:
+    def delete_snapshot(self, vm_name: str, snapshot_name: str, request_id: str, remove_children: bool = False) -> SnapshotMessage:
         """
         Удалить снапшот виртуальной машины
 
@@ -313,27 +312,27 @@ class SnapshotManager(LibvirtClient):
             SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(request.vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
 
             # Настройка флагов
             flags = 0
-            if request.remove_children:
+            if remove_children:
                 flags |= libvirt.VIR_DOMAIN_SNAPSHOT_DELETE_CHILDREN
             flags |= libvirt.VIR_DOMAIN_SNAPSHOT_DELETE_METADATA_ONLY
 
             # Удаление снапшота
             snapshot.delete(flags)
 
-            self.logger.info(f"Снапшот '{request.snapshot_name}' успешно удален для VM '{request.vm_name}'")
+            self.logger.info(f"Снапшот '{snapshot_name}' успешно удален для VM '{vm_name}'")
             return SnapshotMessage(
                 request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.snapshot_successfully_deleted.value,
                 code=CommandMessagesEnum.snapshot_successfully_deleted.name,
-                snapshot_info=DeleteSnapshotInfo(vm_name=request.vm_name,
-                                                 snapshot_name=request.snapshot_name,
-                                                 remove_children=request.remove_children)
+                snapshot_info=DeleteSnapshotInfo(vm_name=vm_name,
+                                                 snapshot_name=snapshot_name,
+                                                 remove_children=remove_children)
             )
 
         except self.libvirtError as e:
@@ -379,7 +378,7 @@ class SnapshotManager(LibvirtClient):
                 note=str(e)
             )
 
-    def update_snapshot_description(self, request: SnapshotUpdateRequest, request_id: str) -> SnapshotMessage:
+    def update_snapshot_description(self, vm_name: str, snapshot_name: str, new_description: str, request_id: str) -> SnapshotMessage:
         """
         Обновить описание снапшота
 
@@ -387,8 +386,8 @@ class SnapshotManager(LibvirtClient):
             SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(request.vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
 
             # Получение текущего XML снапшота
             snapshot_xml = snapshot.getXMLDesc(flags=0)
@@ -399,11 +398,11 @@ class SnapshotManager(LibvirtClient):
             # Поиск и обновление элемента description
             description_elem = root.find('description')
             if description_elem is not None:
-                description_elem.text = request.new_description
+                description_elem.text = new_description
             else:
                 # Если элемента description нет, создаем его
                 desc_elem = ET.SubElement(root, 'description')
-                desc_elem.text = request.new_description
+                desc_elem.text = new_description
 
             # Преобразование обратно в XML строку
             updated_xml = ET.tostring(root, encoding='unicode')
@@ -413,9 +412,8 @@ class SnapshotManager(LibvirtClient):
                                                              flags=libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_REPLACE)
 
             if new_snapshot:
-                self.logger.info(f"Описание снапшота '{request.snapshot_name}' успешно обновлено")
-                current_snapshot = self.snapshot_by_name(SnapshotInfoRequest(vm_name=request.vm_name,
-                                                                             snapshot_name=request.snapshot_name), request_id)
+                self.logger.info(f"Описание снапшота '{snapshot_name}' успешно обновлено")
+                current_snapshot = self.snapshot_by_name(vm_name, snapshot_name, request_id)
                 current_snapshot.message = CommandMessagesEnum.snapshot_update_success.value
                 current_snapshot.code = CommandMessagesEnum.snapshot_update_success.name
                 return current_snapshot
@@ -880,8 +878,7 @@ class SnapshotManager(LibvirtClient):
                     snapshot = virtual_machine.snapshotCreateXML(snapshot_xml, flags=0)
 
                     if snapshot:
-                        created_snapshot = self.snapshot_by_name(SnapshotInfoRequest(vm_name=vm_name,
-                                                                                     snapshot_name=snapshot_name), request_id)
+                        created_snapshot = self.snapshot_by_name(vm_name, snapshot_name, request_id)
                         created_snapshots.append(created_snapshot.snapshot_info)
                         self.logger.info(f"Снапшот {i + 1}/{len(snapshot_names)} создан: {snapshot_name}")
                     else:

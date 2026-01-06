@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.disk import DiskType
-from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotDeleteRequest
+from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
@@ -61,10 +61,10 @@ def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, v
     finally:
         # ______________________________Удаление снапшота(постусловие)_____________________________
         if not snapshot_deleted:
-            delete_snapshot_info = snapshot_session.delete_snapshot(SnapshotDeleteRequest(vm_name=vm_name,
-                                                                                          snapshot_name=snapshot_name,
-                                                                                          remove_children=True),
-                                                              request_id)
+            delete_snapshot_info = snapshot_session.delete_snapshot(vm_name=vm_name,
+                                                                    snapshot_name=snapshot_name,
+                                                                    remove_children=True,
+                                                                    request_id=request_id)
             assert delete_snapshot_info.message == CommandMessagesEnum.snapshot_successfully_deleted.value
             assert delete_snapshot_info.code == CommandMessagesEnum.snapshot_successfully_deleted.name
             assert delete_snapshot_info.success is True

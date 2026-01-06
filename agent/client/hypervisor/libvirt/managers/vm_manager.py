@@ -1489,8 +1489,6 @@ class VmManager(LibvirtClient):
         """
         disk_paths = []
         try:
-            import xml.etree.ElementTree as ET
-
             root = ET.fromstring(xml_config)
 
             for disk in root.findall('.//disk'):
@@ -1634,8 +1632,6 @@ class VmManager(LibvirtClient):
             Путь к файлу NVRAM или None если не используется
         """
         try:
-            import xml.etree.ElementTree as ET
-
             root = ET.fromstring(xml_config)
             os_element = root.find('.//os')
 

@@ -1,4 +1,3 @@
-import json
 import subprocess
 import uuid
 from xml.etree import ElementTree as ET

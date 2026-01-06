@@ -102,32 +102,12 @@ class SnapshotCreateRequest(BaseModel):
     quiesce: bool = False
 
 
-class SnapshotDeleteRequest(BaseModel):
-    """Модель запроса для удаления снапшота"""
-    vm_name: str
-    snapshot_name: str
-    remove_children: bool = False
-
-
-class SnapshotUpdateRequest(BaseModel):
-    """Модель запроса для обновления описания снапшота"""
-    vm_name: str
-    snapshot_name: str
-    new_description: str
-
-
 class SnapshotCloneRequest(BaseModel):
     """Модель запроса для клонирования ВМ из снапшота"""
     source_vm_name: str
     source_snapshot_name: str
     new_vm_name: str
     generate_new_uuid: bool = True
-
-
-class SnapshotInfoRequest(BaseModel):
-    """Модель запроса для получения информации о снапшоте"""
-    vm_name: str
-    snapshot_name: str
 
 
 class MultipleSnapshotsRequest(BaseModel):
