@@ -22,7 +22,7 @@ def test_vn_02_create_nat_network(network_session):
     request_id = str(uuid.uuid4())
     network_name = None
     try:
-        # ____________________________________Создание виртуальной NAT сети____________________________________
+        # ____________________________________Создание виртуальной NAT сети_______
         nat_params = NetworkParameters(
             name=f"nat-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),
@@ -50,7 +50,7 @@ def test_vn_02_create_nat_network(network_session):
         assert nat_network.autostart is True
 
     finally:
-        # ____________________________________Удаление сети(постусловие)____________________________________
+        # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)

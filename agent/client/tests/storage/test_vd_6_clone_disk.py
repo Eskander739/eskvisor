@@ -25,7 +25,7 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
     cloned_disk_path = None
 
     try:
-        # ____________________________________Создание диска____________________________________
+        # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)
         cloned_disk_name = f"disk-test-cloned-{random_name}"
         cloned_disk_file_name = f"disk-test-cloned-{random_name}.{disk_format.value}"
@@ -55,7 +55,7 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
         assert vm_disk_start.file_path_exists is True
         assert vm_disk_start.path == attach_disk_create.path
 
-        # ____________________________________Клонирование диска диска____________________________________
+        # ____________________________________Клонирование диска диска____________
         target_path = vm_disk_start.path.replace(
             f"{attach_disk_create.name}.{attach_disk_create.format.value}",
             cloned_disk_file_name,
@@ -86,7 +86,7 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
         assert current_disk_name == cloned_disk_name
     finally:
 
-        # ____________________________________Удаление дисков(постусловие)____________________________________
+        # ____________________________________Удаление дисков(постусловие)________
 
         if first_disk_path is not None:
             storage_session.delete_disk(path=first_disk_path)

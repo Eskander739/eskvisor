@@ -88,7 +88,7 @@ class VirshConsoleController:
                     self.connected = True
                     self._start_io_threads()
                     return True
-                except:
+                except BaseException:
                     logger.error("Не удалось активировать консоль")
                     return False
 
@@ -108,7 +108,6 @@ class VirshConsoleController:
 
     def _read_output(self):
         """Поток для чтения вывода из консоли"""
-        buffer = ""
         while self.running and self.child:
             try:
                 # Читаем доступные данные
@@ -227,7 +226,7 @@ class VirshConsoleController:
 
         # Выводим приглашение команды (но не саму команду)
         if self.echo_enabled:
-            sys.stdout.write(f"\n[>] ")
+            sys.stdout.write("\n[>] ")
             sys.stdout.flush()
 
         # Отправляем команду
@@ -326,10 +325,9 @@ class VirshConsoleController:
 
                     else:
                         # Обычная команда для ВМ
-                        response = self.send_command(
+                        self.send_command(
                             user_input, wait_for_response=True, timeout=10
                         )
-                        # Не выводим response, так как он уже выведен в send_command
 
                 except EOFError:
                     logger.warning("Конец ввода (EOF)")
@@ -430,7 +428,7 @@ class VirshConsoleController:
                 self.child.send("\x1d")
                 time.sleep(0.5)
                 self.child.close()
-            except:
+            except BaseException:
                 pass
             self.child = None
 

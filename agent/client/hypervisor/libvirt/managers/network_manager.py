@@ -137,7 +137,7 @@ class NetworkManager(LibvirtClient):
                     if f"<source network={network_name}" in xml_desc:
                         return True
 
-                except:
+                except BaseException:
                     continue
 
             return False
@@ -458,7 +458,7 @@ class NetworkManager(LibvirtClient):
 
         # MTU
         if params.mtu and params.mtu != 1500:
-            mtu_elem = ET.SubElement(root, "mtu", size=str(params.mtu))
+            ET.SubElement(root, "mtu", size=str(params.mtu))
 
         # Trust guest RX filters
         if params.trust_guest_rx_filters:
@@ -1234,7 +1234,7 @@ class NetworkManager(LibvirtClient):
         try:
             network = conn.networkLookupByName(network_name)
             return network.UUIDString()
-        except:
+        except BaseException:
             return None
 
     def _check_guest_agent(self, vm):
@@ -1243,7 +1243,7 @@ class NetworkManager(LibvirtClient):
             # Попробовать получить информацию через агент
             vm.interfaceAddresses(libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT, 0)
             return True
-        except:
+        except BaseException:
             return False
 
     def detach_vm_network_interface(

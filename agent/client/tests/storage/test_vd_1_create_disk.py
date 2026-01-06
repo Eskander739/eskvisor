@@ -22,7 +22,7 @@ def test_vd_01_create_disk(storage_session, sparse, disk_format):
     """
     disk_path = None
     try:
-        # ____________________________________Создание диска____________________________________
+        # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)
         attach_disk_create = DiskCreate(
             name=f"disk-test-{random_name}",
@@ -50,7 +50,7 @@ def test_vd_01_create_disk(storage_session, sparse, disk_format):
         assert vm_disk.file_path_exists is True
         assert vm_disk.path == attach_disk_create.path
     finally:
-        # ____________________________________Удаление диска(постусловие)____________________________________
+        # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:
             storage_session.delete_disk(path=disk_path)
             vm_disk = storage_session.get_disk_info(path=disk_path)

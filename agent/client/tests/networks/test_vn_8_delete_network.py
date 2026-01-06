@@ -51,14 +51,14 @@ def test_vn_08_delete_network(network_session, network_model):
     network_name = None
     network_deleted = False
     try:
-        # ____________________________________Создание виртуальной сети____________________________________
+        # ____________________________________Создание виртуальной сети___________
         network_name = network_model.name
         created_network_info = network_session.create_network(network_model, request_id)
         assert (
             created_network_info.message
             == CommandMessagesEnum.virtual_network_successfully_created.value
         )
-        # ____________________________________Удаление виртуальной сети____________________________________
+        # ____________________________________Удаление виртуальной сети___________
         delete_network_info = network_session.delete_network(
             network_name, request_id, True
         )
@@ -79,7 +79,7 @@ def test_vn_08_delete_network(network_session, network_model):
         network_deleted = True
 
     finally:
-        # ____________________________________Удаление сети(постусловие)____________________________________
+        # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None and not network_deleted:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)

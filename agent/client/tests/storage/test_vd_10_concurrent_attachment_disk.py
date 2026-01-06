@@ -28,7 +28,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
     vm_name_to_detach = None
     target_dev_to_detach = None
     try:
-        # ____________________________________Создание диска____________________________________
+        # ____________________________________Создание диска______________________
         attach_disk_create = DiskCreate(
             name=f"disk-test-{RANDOM_NAME}.qcow2",
             size_gb=0.2,
@@ -61,7 +61,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
             )
             if index == 0:
 
-                # ____________________________________Подключение диска____________________________________
+                # ____________________________________Подключение диска___________________
                 assert (
                     attach_disk_result.message
                     == CommandMessagesEnum.disk_successfully_attached.value
@@ -88,7 +88,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
                 target_dev_to_detach = disk_attach.target_dev
             elif index == 1:
 
-                # ____________________________________Подключение диска____________________________________
+                # ____________________________________Подключение диска___________________
                 assert (
                     attach_disk_result.message
                     == CommandMessagesEnum.disk_already_attached_error.value
@@ -112,7 +112,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
                     == CommandMessagesEnum.disk_not_found_by_target_dev.name
                 )
 
-        # ____________________________________Отключение диска____________________________________
+        # ____________________________________Отключение диска____________________
 
         storage_session.detach_disk(
             DiskDetach(vm_name=vm_name_to_detach, target_dev=target_dev_to_detach)
@@ -124,7 +124,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
         assert vm_disk.status.value == DiskStatus.DETACHED.value
 
     finally:
-        # ____________________________________Удаление диска(постусловие)____________________________________
+        # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:
             storage_session.delete_disk(path=disk_path)
             vm_disk = storage_session.get_disk_info(path=disk_path)

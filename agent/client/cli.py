@@ -62,9 +62,7 @@ class CLIControl:
             expanded_path = path_obj.expanduser()
             return expanded_path.exists() and expanded_path.is_dir()
 
-        except Exception as e:
-            # Логируем ошибку при необходимости
-            # print(f"Error checking directory {path_str}: {e}")
+        except Exception:
             return False
 
     def search_emulators(
@@ -82,8 +80,9 @@ class CLIControl:
         # Разбиваем на группы по 20 эмуляторов для поиска
         group_size = 20
         for i in range(0, len(emulator_names), group_size):
-            group = emulator_names[i : i + group_size]
-            # Создаем паттерн типа: -name "qemu-system-x86_64" -o -name "qemu-system-i386" ...
+            group = emulator_names[i: i + group_size]
+            # Создаем паттерн типа: -name "qemu-system-x86_64" -o -name
+            # "qemu-system-i386" ...
             pattern_parts = []
             for emulator in group:
                 pattern_parts.append(f'-name "{emulator}"')
@@ -133,15 +132,15 @@ class CLIControl:
                         )
                         for bin_dir in bin_dirs:
                             if bin_dir:
-                                find_command = f"find {bin_dir} \( {pattern} \) -type f -executable 2>/dev/null"
+                                find_command = f"find {bin_dir} \\( {pattern} \\) -type f -executable 2>/dev/null"
                                 finded_emulator = self.execute(find_command).split("\n")
                                 finded_emulator = [fe for fe in finded_emulator if fe]
                                 installed_emulators.extend(finded_emulator)
-                    except:
+                    except BaseException:
                         continue
                 else:
                     # Обычный поиск
-                    find_command = f"find {dir_path} \( {pattern} \) -type f -executable 2>/dev/null"
+                    find_command = f"find {dir_path} \\( {pattern} \\) -type f -executable 2>/dev/null"
                     finded_emulator = self.execute(find_command).split("\n")
                     finded_emulator = [fe for fe in finded_emulator if fe]
                     installed_emulators.extend(finded_emulator)

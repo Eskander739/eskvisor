@@ -95,8 +95,6 @@ QEMU_EMULATORS = {
     # "qemu-edid": "Генератор EDID данных для мониторов",
 }
 
-from enum import Enum
-
 
 class CpuModelIntel(Enum):
     """Модели CPU Intel x86_64"""

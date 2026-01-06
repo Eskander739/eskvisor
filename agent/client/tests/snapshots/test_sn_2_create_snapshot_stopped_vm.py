@@ -22,15 +22,15 @@ def test_sn_02_create_snapshot_stopped_vm(
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False
     try:
-        # _____________________________Получение информации о ВМ_______________________________
+        # _____________________________Получение информации о ВМ__________________
         vm_info = vm_session.get_vm_by_name(vm_name, request_id)
         assert vm_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_info.code == CommandMessagesEnum.vm_successfully_found.name
-        # _____________________________Проверка отсутствия снапшота_______________________________
+        # _____________________________Проверка отсутствия снапшота_______________
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
-        # ____________________________Создание снапшота работающей ВМ_____________________________
+        # ____________________________Создание снапшота работающей ВМ_____________
         vm_template = SnapshotCreateRequest(
             vm_name=vm_name, snapshot_name=snapshot_name, description=description
         )
@@ -45,13 +45,13 @@ def test_sn_02_create_snapshot_stopped_vm(
         )
         assert create_vm_info.snapshot_info is not None
         snapshot_info = create_vm_info.snapshot_info
-        # _______________________________Проверка наличия снапшота________________________________
+        # _______________________________Проверка наличия снапшота________________
         assert snapshot_info.name == snapshot_name
         assert snapshot_info.description == description
         assert snapshot_info.vm_name == vm_name
         assert snapshot_info.state.value == VMState.SHUTOFF.value
         assert snapshot_info.size_bytes > 0
-        # _______________________________Проверка конфигурации ВМ________________________________
+        # _______________________________Проверка конфигурации ВМ_________________
         vm_config = snapshot_info.vm_config
         assert vm_config.name == vm_name
         assert vm_config.uuid == vm_info.vm_info.uuid
@@ -59,7 +59,7 @@ def test_sn_02_create_snapshot_stopped_vm(
         assert vm_config.max_memory == vm_info.vm_info.max_memory
         assert vm_config.vcpus == vm_info.vm_info.vcpus
 
-        # _____________________________Проверка конфигурации дисков______________________________
+        # _____________________________Проверка конфигурации дисков_______________
         vm_disk_info = storage_session.get_disks_by_vm(vm_name, request_id)
         for current_disk, snapshot_disk in zip(
             sorted(vm_disk_info), sorted(snapshot_info.disks)
@@ -69,7 +69,7 @@ def test_sn_02_create_snapshot_stopped_vm(
             assert snapshot_disk.type.value == DiskType.SNAPSHOT.value
             assert current_disk.format.value == snapshot_disk.format.value
     finally:
-        # ______________________________Удаление снапшота(постусловие)_____________________________
+        # ______________________________Удаление снапшота(постусловие)____________
         if not snapshot_deleted:
             delete_snapshot_info = snapshot_session.delete_snapshot(
                 vm_name=vm_name,

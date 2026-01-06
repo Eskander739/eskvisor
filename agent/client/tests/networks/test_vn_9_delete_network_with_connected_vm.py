@@ -44,7 +44,7 @@ def test_vn_09_delete_network_with_connected_vm(
     )
     network_name = None
     try:
-        # ____________________________________Создание виртуальной изолированной сети____________________________________
+        # ____________________________________Создание виртуальной изолированной с
         nat_params = NetworkParameters(
             name=f"nat-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),
@@ -63,7 +63,7 @@ def test_vn_09_delete_network_with_connected_vm(
             == CommandMessagesEnum.virtual_network_successfully_created.value
         )
         vm_template.networks[0].source = nat_params.name
-        # ____________________________________Создание ВМ____________________________________
+        # ____________________________________Создание ВМ_________________________
         create_vm_info = vm_session.create_vm(vm_template)
         assert (
             create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
@@ -73,7 +73,7 @@ def test_vn_09_delete_network_with_connected_vm(
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         time.sleep(60)
-        # _________________________Проверка наличия виртуальной сети у ВМ_________________________
+        # _________________________Проверка наличия виртуальной сети у ВМ_________
         get_net_vm_info = network_session.get_vm_network_info(
             vm_template.name, request_id
         )
@@ -91,14 +91,14 @@ def test_vn_09_delete_network_with_connected_vm(
         assert network_interface.interface_type == NetworkType.NETWORK.value
         assert network_interface.source.name == nat_params.name
         assert network_interface.source.network_info.bridge == nat_params.bridge.name
-        # ____________________________________Подключение к ВМ____________________________________
+        # ____________________________________Подключение к ВМ____________________
         virsh_console.connect()
         results = virsh_console.execute_commands(
             ["root", "ip link set eth0 up", "udhcpc -i eth0", "sleep 15", "ip a"]
         )
         result = results.pop()
         assert network_mac_address in result
-        # ______________________________________Удаление сети_____________________________________
+        # ______________________________________Удаление сети_____________________
         delete_network_info = network_session.delete_network(
             nat_params.name, request_id, True
         )
@@ -111,7 +111,7 @@ def test_vn_09_delete_network_with_connected_vm(
             == CommandMessagesEnum.virtual_network_have_connected_vms.name
         )
     finally:
-        # ____________________________________Удаление ВМ(постусловие)____________________________________
+        # ____________________________________Удаление ВМ(постусловие)____________
         if vm_created:
             delete_vm_info = vm_session.delete_vm_with_force(
                 name=random_name, request_id=request_id, delete_disks=False
@@ -126,7 +126,7 @@ def test_vn_09_delete_network_with_connected_vm(
             assert delete_vm_info.success is True
             delete_disk = storage_session.delete_disk(path=vm_template.disks[1].path)
             assert delete_disk is True
-        # ____________________________________Удаление сети(постусловие)____________________________________
+        # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)

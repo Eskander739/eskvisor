@@ -40,7 +40,7 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
         networks=[VmNetAdapter(network_type=NetworkType.USER)],
     )
     try:
-        # ____________________________________Создание ВМ____________________________________
+        # ____________________________________Создание ВМ_________________________
         create_vm_info = vm_session.create_vm(vm_template)
         assert (
             create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
@@ -49,7 +49,7 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         time.sleep(60)
-        # ____________________________________Подключение к ВМ____________________________________
+        # ____________________________________Подключение к ВМ____________________
         virsh_console.connect()
         results = virsh_console.execute_commands(
             ["root", "cd /", "mkdir hello_eskvisor", "ls"]
@@ -60,7 +60,7 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
         else:
             raise AssertionError("Некорректное подключение к ВМ")
     finally:
-        # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)____________
+        # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)_
         if random_name is not None:
             delete_vm_info = vm_session.delete_vm_with_force(
                 name=random_name, request_id=request_id, delete_disks=False

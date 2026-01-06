@@ -37,7 +37,7 @@ from agent.client.hypervisor.libvirt.models.msg import (
 from agent.client.hypervisor.libvirt.models.disk import (
     DiskCreate,
     DiskFormat as StorageDiskFormat,
-    Disk,
+    Disk, BusType, DiskAttach,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -233,7 +233,7 @@ class VmManager(LibvirtClient):
                         stderr=result.stderr,
                     )
                 else:
-                    self.logger.error(f"ВМ создана, но не найдена в libvirt")
+                    self.logger.error("ВМ создана, но не найдена в libvirt")
                     return VmMessage(
                         request_id=config.request_id,
                         success=False,
@@ -409,7 +409,7 @@ class VmManager(LibvirtClient):
             cmd_parts.extend(["--features", features_str])
 
         for i, disk in enumerate(config.disks):
-            disk_cmd = f"--disk "
+            disk_cmd = "--disk "
 
             disk_params = []
 
@@ -456,7 +456,7 @@ class VmManager(LibvirtClient):
             cmd_parts.append(disk_cmd)
 
         for i, net in enumerate(config.networks):
-            net_cmd = f"--network "
+            net_cmd = "--network "
 
             net_params = []
 
@@ -479,7 +479,7 @@ class VmManager(LibvirtClient):
             cmd_parts.append(net_cmd)
 
         for controller in config.controllers:
-            controller_cmd = f"--controller "
+            controller_cmd = "--controller "
 
             controller_params.append(f"type={controller.controller_type.value}")
 
@@ -582,14 +582,6 @@ class VmManager(LibvirtClient):
                     message=f"ISO файл не найден: {iso_path}",
                     code="ISO_FILE_NOT_FOUND",
                 )
-
-            # Используем StorageManager для получения информации о диске
-            disk_info = self.storage_manager.get_disk_info(
-                path=iso_path, request_id=request_id
-            )
-
-            # Подготавливаем конфигурацию для подключения
-            from agent.client.hypervisor.libvirt.models.disk import DiskAttach, BusType
 
             # Преобразуем строковый bus_type в enum
             bus_type_enum = BusType.IDE
@@ -788,7 +780,7 @@ class VmManager(LibvirtClient):
             )
             return False
 
-    # _______________________________________________Редактирование ВМ_______________________________________________
+    # _______________________________________________Редактирование ВМ________
 
     def edit_vm(
         self, vm_name: str, vm_update: VmUpdateRequest, request_id: str
@@ -834,7 +826,8 @@ class VmManager(LibvirtClient):
                     if topology is None:
                         topology = ET.SubElement(cpu_elem, "topology")
 
-                    # Устанавливаем простую топологию: sockets = vcpus, cores = 1, threads = 1
+                    # Устанавливаем простую топологию: sockets = vcpus, cores = 1, threads
+                    # = 1
                     topology.set("sockets", str(vm_update.vcpus))
                     topology.set("cores", "1")
                     topology.set("threads", "1")
@@ -928,7 +921,8 @@ class VmManager(LibvirtClient):
                     if os.path.exists(tmp_file_path):
                         os.unlink(tmp_file_path)
 
-                # Если ВМ запущена и мы изменили vCPU или память, применяем изменения на лету
+                # Если ВМ запущена и мы изменили vCPU или память, применяем изменения на
+                # лету
                 if is_running:
                     try:
                         if vm_update.vcpus is not None:
@@ -1287,7 +1281,7 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка: {e}")
             return False
 
-    # _______________________________________________Редактирование ВМ_______________________________________________
+    # _______________________________________________Редактирование ВМ________
 
     def list_vms(self, only_active: bool = False) -> list[VirtualMachine]:
         """
@@ -1919,7 +1913,7 @@ if __name__ == "__main__":
     # Пример создания ВМ с использованием нового API
 
     # Инициализация менеджера
-    with VmManager().with_default_user() as vm_manager:
+    with VmManager() as vm_manager:
         # print(vm_manager.delete_vm("test-vm-03"))
         # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
         # result = vm_manager.create_vm(simple_hotplug_vm_config)

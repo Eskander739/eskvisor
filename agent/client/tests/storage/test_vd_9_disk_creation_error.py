@@ -18,7 +18,7 @@ def test_vd_09_disk_creation_error(storage_session, disk_format):
     Получить корректное сообщение об ошибке.
     """
 
-    # ______________________Создание диска с размером превыщающим размер хранилища_______________________
+    # ______________________Создание диска с размером превыщающим размер храни
     random_name = random.randint(10000, 99999)
     attach_disk_create = DiskCreate(
         name=f"disk-test-{random_name}", size_gb=65536, format=disk_format, sparse=False

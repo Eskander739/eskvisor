@@ -1087,7 +1087,8 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
         try:
             self.logger.debug(f"Создание пула из XML: {pool_xml}")
 
-            # Всегда используем define + create для гарантии создания конфигурационного файла
+            # Всегда используем define + create для гарантии создания
+            # конфигурационного файла
             pool = self.conn.storagePoolDefineXML(pool_xml, 0)
 
             if not pool:
@@ -1112,7 +1113,7 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
             # Включаем автозапуск
             try:
                 pool.setAutostart(True)
-            except:
+            except BaseException:
                 pass  # Не критично если не удалось установить автозапуск
 
             self.logger.info("Пул хранения успешно создан")
@@ -1128,7 +1129,7 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
                     pool.setAutostart(True)
                     self.logger.info("Пул создан через CreateXML")
                     return True
-            except:
+            except BaseException:
                 pass
 
             return False
@@ -1151,7 +1152,7 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
         storage_path = None
 
         if request.storage_xml:
-            self.logger.info(f"Создание пула из предоставленного XML")
+            self.logger.info("Создание пула из предоставленного XML")
             return request.storage_xml, storage_path
 
         elif request.pool_type == StoragePoolType.DIR:

@@ -19,7 +19,7 @@ def test_vd_07_delete_disk(storage_session, sparse, disk_format):
 
     Удалить диск с подтверждением. Проверить, что место освобождается.
     """
-    # ____________________________________Создание диска____________________________________
+    # ____________________________________Создание диска______________________
     random_name = random.randint(10000, 99999)
     attach_disk_create = DiskCreate(
         name=f"disk-test-{random_name}", size_gb=0.2, format=disk_format, sparse=sparse
@@ -42,7 +42,7 @@ def test_vd_07_delete_disk(storage_session, sparse, disk_format):
     assert vm_disk.file_path_exists is True
     assert vm_disk.path == attach_disk_create.path
 
-    # ____________________________________Удаление диска____________________________________
+    # ____________________________________Удаление диска______________________
     storage_session.delete_disk(path=vm_disk.path)
     vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
     assert vm_disk.message == CommandMessagesEnum.disk_not_found.value

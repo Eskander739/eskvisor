@@ -25,11 +25,11 @@ def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False
     try:
-        # _____________________________Проверка отсутствия снапшота_______________________________
+        # _____________________________Проверка отсутствия снапшота_______________
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
-        # ____________________________Создание снапшота работающей ВМ_____________________________
+        # ____________________________Создание снапшота работающей ВМ_____________
         vm_template = SnapshotCreateRequest(
             vm_name=vm_name, snapshot_name=snapshot_name, description=description
         )
@@ -44,12 +44,12 @@ def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(
         )
         assert create_vm_info.snapshot_info is not None
         snapshot_info = create_vm_info.snapshot_info
-        # _______________________________Проверка наличия снапшота________________________________
+        # _______________________________Проверка наличия снапшота________________
         assert snapshot_info.name == snapshot_name
         assert snapshot_info.description == description
         assert snapshot_info.vm_name == vm_name
         assert snapshot_info.state.value == VMState.RUNNING.value
-        # ____________________Проверка корректного обновления дерева снапшотов____________________
+        # ____________________Проверка корректного обновления дерева снапшотов____
         get_snapshots_tree_info = snapshot_session.get_snapshot_chain(
             vm_name, request_id
         )
@@ -73,7 +73,7 @@ def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(
         snapshot_from_snapshots = snapshots_tree.snapshots.pop()
         assert snapshot_from_snapshots.vm_name == vm_name
         assert snapshot_from_snapshots.name == snapshot_name
-        # ____________________________________Удаление снапшота____________________________________
+        # ____________________________________Удаление снапшота___________________
         delete_snapshot_info = snapshot_session.delete_snapshot(
             vm_name=vm_name,
             snapshot_name=snapshot_name,
@@ -91,11 +91,11 @@ def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(
         )
         assert delete_snapshot_info.success is True
         snapshot_deleted = True
-        # _____________________________Проверка отсутствия снапшота_______________________________
+        # _____________________________Проверка отсутствия снапшота_______________
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
-        # ____________Проверка корректного обновления дерева снапшотов после удаления_____________
+        # ____________Проверка корректного обновления дерева снапшотов после удале
         get_snapshots_tree_info = snapshot_session.get_snapshot_chain(
             vm_name, request_id
         )
@@ -108,7 +108,7 @@ def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(
         )
         assert get_snapshots_tree_info.success is False
     finally:
-        # ______________________________Удаление снапшота(постусловие)_____________________________
+        # ______________________________Удаление снапшота(постусловие)____________
         if not snapshot_deleted:
             delete_snapshot_info = snapshot_session.delete_snapshot(
                 vm_name=vm_name,

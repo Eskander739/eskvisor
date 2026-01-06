@@ -1,11 +1,7 @@
-# logger_config.py
 import logging
 import logging.handlers
 import os
 from datetime import datetime
-from typing import Optional
-
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 
 
 class DefaultLogger:

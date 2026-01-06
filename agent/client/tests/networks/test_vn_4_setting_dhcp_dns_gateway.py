@@ -50,7 +50,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
     )
     network_name = None
     try:
-        # ____________________________________Создание виртуальной изолированной сети с настройками____________________________________
+        # ____________________________________Создание виртуальной изолированной с
         nat_params = NetworkParameters(
             name=f"nat-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),
@@ -89,7 +89,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
             == CommandMessagesEnum.virtual_network_successfully_created.value
         )
 
-        # _________________________Проверка созданных настроек сети_________________________
+        # _________________________Проверка созданных настроек сети_______________
         get_network_info = network_session.get_network_info(network_name, request_id)
         assert (
             get_network_info.message == CommandMessagesEnum.virtual_network_found.value
@@ -103,7 +103,8 @@ def test_vn_04_setting_dhcp_dns_gateway(
         assert dhcp_range.end == IPv4Address("192.168.100.200")
 
         # Проверяем шлюз
-        # assert network.gateway == "192.168.100.1" # TODO: Доработать проверку шлюза, сейчас он не ставится в сети
+        # assert network.gateway == "192.168.100.1" # TODO: Доработать проверку
+        # шлюза, сейчас он не ставится в сети
 
         # Проверяем DNS серверы
         assert len(network.dns_forwarders) >= 2
@@ -116,7 +117,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
 
         vm_template.networks[0].source = nat_params.name
 
-        # ____________________________________Создание ВМ____________________________________
+        # ____________________________________Создание ВМ_________________________
         create_vm_info = vm_session.create_vm(vm_template)
         assert (
             create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
@@ -127,7 +128,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         time.sleep(60)  # Даем время ВМ загрузиться
 
-        # _________________________Проверка наличия виртуальной сети у ВМ_________________________
+        # _________________________Проверка наличия виртуальной сети у ВМ_________
         get_net_vm_info = network_session.get_vm_network_info(
             vm_template.name, request_id
         )
@@ -146,7 +147,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
         assert network_interface.source.name == nat_params.name
         assert network_interface.source.network_info.bridge == nat_params.bridge.name
 
-        # ____________________________________Подключение к ВМ и проверка DHCP____________________________________
+        # ____________________________________Подключение к ВМ и проверка DHCP____
         virsh_console.connect()
 
         # Получаем IP через DHCP и проверяем настройки
@@ -187,7 +188,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
         assert "192.168.100.1" in route_result
 
     finally:
-        # ____________________________________Удаление ВМ(постусловие)____________________________________
+        # ____________________________________Удаление ВМ(постусловие)____________
         if vm_created:
             delete_vm_info = vm_session.delete_vm_with_force(
                 name=random_name, request_id=request_id, delete_disks=False
@@ -203,7 +204,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
             delete_disk = storage_session.delete_disk(path=vm_template.disks[1].path)
             assert delete_disk is True
 
-        # ____________________________________Удаление сети(постусловие)____________________________________
+        # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)

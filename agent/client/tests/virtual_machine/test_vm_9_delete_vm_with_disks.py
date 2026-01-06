@@ -20,10 +20,10 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
     random_name = None
     vm_deleted = False
     request_id = str(uuid.uuid4())
-    kb_to_mb = lambda kb: kb / 1024
+    def kb_to_mb(kb): return kb / 1024
     get_state = vm_session.get_vm_state_by_name
     try:
-        # ____________________________________Создание ВМ____________________________________
+        # ____________________________________Создание ВМ_________________________
 
         random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         vm_template = VMCreateRequest(
@@ -45,7 +45,7 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
         for current_disk in disks_by_vm_name:
             disk_paths.append(current_disk.path)
         assert len(disks_by_vm_name) == 2
-        # ____________________________________Удаление ВМ с дисками____________________________________
+        # ____________________________________Удаление ВМ с дисками_______________
         delete_vm_info = vm_session.delete_vm_with_force(
             name=random_name, request_id=request_id
         )
@@ -62,7 +62,7 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
             assert disks_by_path.code == CommandMessagesEnum.disk_not_found.name
         vm_deleted = True
     finally:
-        # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)____________
+        # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)_
         if random_name is not None:
             if not vm_deleted:
                 delete_vm_info = vm_session.delete_vm_with_force(

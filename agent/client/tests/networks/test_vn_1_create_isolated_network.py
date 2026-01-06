@@ -17,7 +17,7 @@ def test_vn_01_create_isolated_network(network_session):
     request_id = str(uuid.uuid4())
     network_name = None
     try:
-        # ____________________________________Создание виртуальной изолированной сети____________________________________
+        # ____________________________________Создание виртуальной изолированной с
         isolated_params = NetworkParameters(
             name=f"isolated-{random.randint(1000, 9999)}",
             ipv4=True,
@@ -44,7 +44,7 @@ def test_vn_01_create_isolated_network(network_session):
         assert isolated_network.autostart is True
 
     finally:
-        # ____________________________________Удаление сети(постусловие)____________________________________
+        # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)

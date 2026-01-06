@@ -32,7 +32,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
     target_dev = "vdb"
     disk_path = None
     try:
-        # ____________________________________Создание диска____________________________________
+        # ____________________________________Создание диска______________________
         attach_disk_create = DiskCreate(
             name=f"disk-test-{RANDOM_NAME}.qcow2",
             size_gb=0.2,
@@ -58,7 +58,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
             vm_name=vm_name, path=vm_disk.path, target_dev=target_dev
         )
 
-        # ____________________________________Подключение диска____________________________________
+        # ____________________________________Подключение диска___________________
 
         storage_session.attach_disk(disk_attach, request_id=request_id)
 
@@ -70,7 +70,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         assert vm_disk.status.value == DiskStatus.ATTACHED.value
         assert vm_disk.vm_name == vm_name
 
-        # ____________________________________Отключение диска____________________________________
+        # ____________________________________Отключение диска____________________
 
         storage_session.detach_disk(
             DiskDetach(vm_name=vm_name, target_dev=disk_attach.target_dev)
@@ -81,7 +81,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
     finally:
-        # ____________________________________Удаление диска(постусловие)____________________________________
+        # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:
             storage_session.delete_disk(path=disk_path)
             vm_disk = storage_session.get_disk_info(path=disk_path)

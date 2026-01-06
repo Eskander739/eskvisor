@@ -55,7 +55,6 @@ class LibvirtClient:
         """Подключение к гипервизору"""
         try:
             # Настройка аутентификации, если указаны учетные данные
-            auth = None
             if self.username:
                 # Определяем тип аутентификации по URI
                 if self.connection_uri.startswith("qemu+ssh://"):

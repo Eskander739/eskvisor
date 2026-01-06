@@ -560,7 +560,7 @@ class StorageManager(LibvirtClient):
 
             get_vm_by_path = self._find_vm_by_disk_path(disk_attach.path)
             if get_vm_by_path:
-                self.logger.warning(f"Диск уже подключен")
+                self.logger.warning("Диск уже подключен")
                 return StorageMessage(
                     request_id=request_id,
                     message=CommandMessagesEnum.disk_already_attached_error.value,
@@ -762,7 +762,6 @@ class StorageManager(LibvirtClient):
                         self.logger.debug(f"Неизвестный режим кэширования: {cache_str}")
 
             # Извлекаем дополнительные параметры
-            address = disk_element.find("address")
             device_type = disk_element.get("device", "disk")
 
             # Для QCOW2 пытаемся получить дополнительные метаданные
@@ -856,7 +855,7 @@ class StorageManager(LibvirtClient):
                     f"Не найден диск с target_dev: {detach_disk.target_dev}"
                 )
             if not disk_xml:
-                self.logger.error(f"Диск не найден")
+                self.logger.error("Диск не найден")
                 return False
 
             vm_state, _ = vm.state()
@@ -870,7 +869,7 @@ class StorageManager(LibvirtClient):
             else:
                 vm.detachDeviceFlags(disk_xml, libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
 
-            self.logger.info(f"Диск успешно отключен")
+            self.logger.info("Диск успешно отключен")
             return True
 
         except libvirt.libvirtError as e:
@@ -910,7 +909,7 @@ class StorageManager(LibvirtClient):
 
         try:
             if not os.path.exists(source_path):
-                self.logger.error(f"Исходный файл не существует")
+                self.logger.error("Исходный файл не существует")
                 return False
             if target_path is not None:
                 target_dir = os.path.dirname(target_path)
@@ -1295,7 +1294,7 @@ class StorageManager(LibvirtClient):
                     if pool_info[0] != libvirt.VIR_STORAGE_POOL_RUNNING:
                         try:
                             pool.create(0)
-                        except:
+                        except BaseException:
                             continue
 
                     volumes = pool.listAllVolumes()

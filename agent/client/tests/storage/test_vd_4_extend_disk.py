@@ -26,7 +26,7 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         return round(data / (1024**3), 2)
 
     try:
-        # ____________________________________Создание диска____________________________________
+        # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)
         attach_disk_create = DiskCreate(
             name=f"disk-test-{random_name}",
@@ -53,7 +53,7 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         assert vm_disk.file_path_exists is True
         assert vm_disk.path == attach_disk_create.path
 
-        # ____________________________________Редактирование диска____________________________________
+        # ____________________________________Редактирование диска________________
         storage_session.extend_disk(new_size_gb=edit_disk.new_size_gb, path=disk_path)
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
         vm_disk = vm_disk.disk_info
@@ -70,7 +70,7 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         )
 
     finally:
-        # ____________________________________Удаление диска(постусловие)____________________________________
+        # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:
             storage_session.delete_disk(path=disk_path)
             vm_disk = storage_session.get_disk_info(path=disk_path)

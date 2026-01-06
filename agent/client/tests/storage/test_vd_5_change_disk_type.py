@@ -32,7 +32,7 @@ def test_vd_05_convert_disk(storage_session, disk_format, sparse):
         return round(data / (1024**3), 2)
 
     try:
-        # ____________________________________Создание диска____________________________________
+        # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)
         attach_disk_create = DiskCreate(
             name=f"disk-test-{random_name}",
@@ -59,7 +59,7 @@ def test_vd_05_convert_disk(storage_session, disk_format, sparse):
         assert vm_disk.file_path_exists is True
         assert vm_disk.path == attach_disk_create.path
 
-        # ____________________________________Изменение типа диска____________________________________
+        # ____________________________________Изменение типа диска________________
         convert_disk_info = storage_session.convert_disk_format(
             source_path=disk_path,
             target_format=disk_format_convert.get(disk_format),
@@ -91,7 +91,7 @@ def test_vd_05_convert_disk(storage_session, disk_format, sparse):
             assert round(vm_disk.capacity_bytes / (1024**3), 2) < 0.1
 
     finally:
-        # ____________________________________Удаление диска(постусловие)____________________________________
+        # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:
             storage_session.delete_disk(path=disk_path)
             vm_disk = storage_session.get_disk_info(path=disk_path)

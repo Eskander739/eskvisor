@@ -28,7 +28,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
     rp_deleted = False
     request_id = str(uuid.uuid4())
     try:
-        # ____________________________________Создание пула ресурсов____________________________________
+        # ____________________________________Создание пула ресурсов______________
         random_name = f"RP-TEST-{random.randint(10000, 99999)}"
         rp_template = ResourcePoolCreateRequest(
             name=random_name,
@@ -50,7 +50,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         assert get_rp_info.rp_info.cpu_limit == rp_template.cpu_limit
         assert get_rp_info.rp_info.memory_limit_gb == rp_template.memory_limit / 1024
         assert int(get_rp_info.rp_info.capacity_gb) == rp_template.storage_limit
-        # ____________________________________Удаление пула ресурсов_____________________________________
+        # ____________________________________Удаление пула ресурсов______________
         delete_rp_info = resource_pool_session.delete_resource_pool(
             random_name, request_id
         )
@@ -61,7 +61,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         assert get_rp_info.code == CommandMessagesEnum.rp_not_found.name
         rp_deleted = True
     finally:
-        # ______________________________Удаление пула ресурсов(постусловие)______________________________
+        # ______________________________Удаление пула ресурсов(постусловие)_______
         if not rp_deleted:
             delete_rp_info = resource_pool_session.delete_resource_pool(
                 random_name, request_id

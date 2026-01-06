@@ -19,10 +19,10 @@ def test_vm_01_create_vm(vm_session):
     """
     random_name = None
     request_id = str(uuid.uuid4())
-    kb_to_mb = lambda kb: kb / 1024
+    def kb_to_mb(kb): return kb / 1024
     get_state = vm_session.get_vm_state_by_name
     try:
-        # ____________________________________Создание ВМ____________________________________
+        # ____________________________________Создание ВМ_________________________
         random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         vm_template = VMCreateRequest(name=random_name, disks=[DiskCreate()])
         create_vm_info = vm_session.create_vm(vm_template)
@@ -37,7 +37,7 @@ def test_vm_01_create_vm(vm_session):
         assert vm_info.name == vm_template.name
         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
     finally:
-        # ____________________________________Удаление ВМ(постусловие)____________________________________
+        # ____________________________________Удаление ВМ(постусловие)____________
         if random_name is not None:
             delete_vm_info = vm_session.delete_vm_with_force(
                 name=random_name, request_id=request_id
