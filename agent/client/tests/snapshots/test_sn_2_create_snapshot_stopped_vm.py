@@ -37,6 +37,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_st
         assert snapshot_info.description == description
         assert snapshot_info.vm_name == vm_name
         assert snapshot_info.state.value == VMState.SHUTOFF.value
+        assert snapshot_info.size_bytes > 0
     finally:
         # ______________________________Удаление снапшота(постусловие)_____________________________
         if not snapshot_deleted:

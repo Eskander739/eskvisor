@@ -1,7 +1,9 @@
+import shutil
+
 import libvirt
 import os
 import uuid
-
+import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
@@ -349,7 +351,6 @@ class SnapshotManager(LibvirtClient):
             snapshot_xml = snapshot.getXMLDesc(flags=0)
 
             # Обновление описания в XML
-            import xml.etree.ElementTree as ET
             root = ET.fromstring(snapshot_xml)
 
             # Поиск и обновление элемента description
@@ -413,11 +414,7 @@ class SnapshotManager(LibvirtClient):
             Описание снапшота или пустую строку если описание отсутствует
         """
         try:
-            # Получаем XML-описание снапшота
             xml_desc = snapshot.getXMLDesc(flags=0)
-
-            # Парсим XML для извлечения описания
-            import xml.etree.ElementTree as ET
             root = ET.fromstring(xml_desc)
 
             # Ищем элемент description
@@ -446,6 +443,7 @@ class SnapshotManager(LibvirtClient):
             if snapshot:
                 # Получаем XML снапшота для извлечения полной информации
                 snapshot_xml = snapshot.getXMLDesc(flags=0)
+                print(snapshot_xml)
 
                 # Извлекаем информацию из XML
                 snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
@@ -518,7 +516,6 @@ class SnapshotManager(LibvirtClient):
             Словарь с извлеченной информацией
         """
         try:
-            import xml.etree.ElementTree as ET
 
             root = ET.fromstring(xml_desc)
             result = {}
@@ -612,8 +609,6 @@ class SnapshotManager(LibvirtClient):
             SnapshotMessage с результатом операции
         """
         try:
-            import xml.etree.ElementTree as ET
-            import shutil
 
             # Получаем исходную ВМ
             source_vm = self.conn.lookupByName(request.source_vm_name)
@@ -970,11 +965,7 @@ class SnapshotManager(LibvirtClient):
     def _get_snapshot_size(self, snapshot) -> int:
         """Получить размер снапшота в байтах"""
         try:
-            # Получаем XML снапшота
             xml_desc = snapshot.getXMLDesc(flags=0)
-
-            # Парсим XML для получения информации о дисках
-            import xml.etree.ElementTree as ET
             root = ET.fromstring(xml_desc)
 
             total_size = 0
@@ -1000,11 +991,8 @@ class SnapshotManager(LibvirtClient):
     def _check_disk_space(self, vm_name: str, required_gb: int = 1) -> bool:
         """Проверить наличие свободного места в хранилище"""
         try:
-            # Получаем информацию о дисках ВМ
             virtual_machine = self.conn.lookupByName(vm_name)
             xml_desc = virtual_machine.XMLDesc(flags=0)
-
-            import xml.etree.ElementTree as ET
             root = ET.fromstring(xml_desc)
 
             # Ищем пути к дискам
