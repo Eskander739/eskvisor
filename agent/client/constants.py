@@ -25,6 +25,17 @@ DIRECTORIES_FOR_SEARCH = [
     "/run/current-system/sw/bin",
 ]
 
+# Описания типов сетей
+NETWORK_TYPE_DESCRIPTIONS = {
+    "nat": "NAT сеть - ВМ получают доступ в интернет через NAT",
+    "route": "Routed сеть - маршрутизация без NAT",
+    "bridge": "Bridge сеть - прямое подключение к физическому интерфейсу",
+    "private": "Private сеть - изолированная с внутренним форвардингом",
+    "vepa": "VEPA сеть - Virtual Ethernet Port Aggregator",
+    "passthrough": "Passthrough сеть - прямой доступ к физическому интерфейсу",
+    "isolated": "Изолированная сеть - без доступа к внешним сетям",
+    "no-forward": "Сеть без форвардинга - только внутренняя коммуникация"
+}
 
 QEMU_EMULATORS = {
     # === x86/x86_64 архитектуры ===

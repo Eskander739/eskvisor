@@ -1,0 +1,3 @@
+CONNECTION_URI="qemu:///system"
+USERNAME="eskvisor"
+PASSWORD="P@$$w0rd12A"

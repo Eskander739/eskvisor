@@ -13,7 +13,7 @@ from agent.client.hypervisor.libvirt.models.msg import RpMessage, CommandMessage
 from agent.client.hypervisor.libvirt.models.resource_pool import (
     ResourcePoolCreateRequest, ResourcePoolAdjustRequest,
     VMPoolAssignmentRequest, ResourcePoolReservationRequest,
-    ResourcePoolLimitRequest, ResourcePoolDeleteRequest,
+    ResourcePoolLimitRequest,
     ResourcePoolInfoRequest, ResourcePoolEditRequest,
     ResourcePoolControlRequest, ResourcePool, ResourcePoolList,
     AdjustResourcePool, AddVMInResourcePool, RemoveVMInResourcePool,
@@ -796,9 +796,8 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
 
     libvirtError: ClassVar = libvirt.libvirtError
 
-    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None,
-                 password: str | None = None):
-        super().__init__(connection_uri, username, password)
+    def __init__(self):
+        super().__init__()
         # Инициализируем ResourcePoolRamCpu
         ResourcePoolRamCpu.__init__(self)
         self.logger = DefaultLogger()

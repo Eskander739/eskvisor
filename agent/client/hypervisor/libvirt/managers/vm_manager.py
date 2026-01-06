@@ -33,13 +33,12 @@ class VmManager(LibvirtClient):
 
     libvirtError = None
 
-    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None,
-                 password: str | None = None):
+    def __init__(self):
         self.cli = CLIControl()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger()
-        super().__init__(connection_uri, username, password)
-        self.storage_manager = StorageManager(connection_uri, username, password)
+        super().__init__()
+        self.storage_manager = StorageManager()
         self.storage_manager.connect()
 
     def create_vm(self, config: VMCreateRequest, dry_run: bool = False) -> dict[str, Any] | VmError | VmMessage:
@@ -1722,45 +1721,6 @@ class VmManager(LibvirtClient):
                 "success": False,
                 "error": error_msg
             }
-
-
-# Пример использования
-def edit_vm_example():
-    """Пример использования методов редактирования ВМ"""
-
-    # Настройка логирования
-
-    with VmManager() as vm_manager:
-        # Пример 1: Редактирование с помощью основного метода
-        vm_update = {
-            'name': 'updated-vm-name',
-            'memory_mb': 2048,  # Увеличиваем память до 2GB
-            'vcpus': 4,  # Увеличиваем vCPU до 4
-            'description': 'Обновленная виртуальная машина',
-            'graphics': {'type': 'vnc', 'listen': '0.0.0.0'},
-            'autostart': True,
-            'reboot_if_needed': True  # Автоматически перезагрузить если нужно
-        }
-
-        success = vm_manager.edit_vm('my-vm', vm_update)
-        print(f"Редактирование ВМ: {'Успешно' if success else 'Неудачно'}")
-
-        # Пример 2: Прямое редактирование отдельными командами
-        direct_update = {
-            'memory_mb': 4096,
-            'vcpus': 8,
-            'autostart': False,
-            'add_disk': {
-                'path': '/var/lib/libvirt/images/new-disk.qcow2',
-                'capacity_gb': 50,
-                'format': 'qcow2',
-                'target': 'vdc',
-                'bus': 'virtio'
-            }
-        }
-
-        success = vm_manager.edit_vm_direct_virsh('my-vm', direct_update)
-        print(f"Прямое редактирование ВМ: {'Успешно' if success else 'Неудачно'}")
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def create_stopped_vm():
-    with VmManager().with_default_user() as vm_manager:
+    with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
         request_id = str(uuid.uuid4())
         vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()])
@@ -62,7 +62,7 @@ def create_stopped_vm():
 
 @pytest.fixture(scope="session")
 def create_running_vm_session():
-    with VmManager().with_default_user() as vm_manager:
+    with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
         request_id = str(uuid.uuid4())
         vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()], autostart_vm=True)
@@ -75,7 +75,7 @@ def create_running_vm_session():
 
 @pytest.fixture(scope="function")
 def create_running_vm_func():
-    with VmManager().with_default_user() as vm_manager:
+    with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
         request_id = str(uuid.uuid4())
         vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()], autostart_vm=True)
@@ -89,7 +89,7 @@ def create_running_vm_func():
 
 @pytest.fixture(scope="session")
 def multi_create_stopped_vm():
-    with VmManager().with_default_user() as vm_manager:
+    with VmManager() as vm_manager:
         vm_config_names = []
         request_id = str(uuid.uuid4())
         for _ in range(2):
@@ -110,18 +110,18 @@ def multi_create_stopped_vm():
 
 @pytest.fixture(scope="session")
 def storage_session():
-    with StorageManager().with_default_user() as storage_manager:
+    with StorageManager() as storage_manager:
         yield storage_manager
 
 
 @pytest.fixture(scope="session")
 def vm_session():
-    with VmManager().with_default_user() as vm_manager:
+    with VmManager() as vm_manager:
         yield vm_manager
 
 @pytest.fixture(scope="session")
 def network_session():
-    with NetworkManager().with_default_user() as vn_manager:
+    with NetworkManager() as vn_manager:
         yield vn_manager
 
 @pytest.fixture(scope="session")
@@ -130,10 +130,10 @@ def virsh_console_session():
 
 @pytest.fixture(scope="session")
 def resource_pool_session():
-    with PoolManager().with_default_user() as rp_manager:
+    with PoolManager() as rp_manager:
         yield rp_manager
 
 @pytest.fixture(scope="session")
 def snapshot_session():
-    with SnapshotManager().with_default_user() as sn_manager:
+    with SnapshotManager() as sn_manager:
         yield sn_manager

@@ -1,33 +1,39 @@
 import getpass
+import os
 
 import libvirt
 import logging
 
+from dotenv import load_dotenv
+
 from agent.client.hypervisor.libvirt.models.node import NodeInfo
+
+CONFIG_PATH = "/home/eska/eskvisor/agent/client/.eskvisor_env"
+
+load_dotenv(CONFIG_PATH)
 
 
 class LibvirtClient:
     """Класс для управления виртуализацией через libvirt"""
 
-    def __init__(self, connection_uri: str = "qemu:///system",
-                 username: str | None = None,
-                 password: str | None = None):
+    def __init__(self):
         """
         Инициализация менеджера libvirt
 
         Args:
-            connection_uri: URI для подключения к гипервизору
+            CONNECTION_URI - URI для подключения к гипервизору
                 - qemu:///system: локальный QEMU/KVM (требует прав root)
                 - qemu:///session: сессионный QEMU/KVM
                 - qemu+ssh://user@host/system: удаленное подключение по SSH
                 - xen:/// для Xen
                 - lxc:/// для LXC
-            username: Имя пользователя для аутентификации
-            password: Пароль для аутентификации
+            USERNAME - Имя пользователя для аутентификации
+            PASSWORD - Пароль для аутентификации
         """
-        self.connection_uri = connection_uri
-        self.username = username
-        self.password = password
+        print("CONFIG_PATH: ", CONFIG_PATH)
+        self.connection_uri = os.environ.get("CONNECTION_URI")
+        self.username = os.environ.get("USERNAME")
+        self.password = os.environ.get("PASSWORD")
         self.conn = None
         self.logger = self._setup_logger()
         self.libvirtError = libvirt.libvirtError
@@ -45,61 +51,6 @@ class LibvirtClient:
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
         return logger
-
-    @classmethod
-    def with_default_user(cls, connection_uri: str = "qemu:///system") -> 'LibvirtClient':
-        """
-        Создание клиента с дефолтным пользователем eskvisor
-
-        Args:
-            connection_uri: URI для подключения
-
-        Returns:
-            Экземпляр LibvirtClient с предустановленными учетными данными
-        """
-        return cls(
-            connection_uri=connection_uri,
-            username="eskvisor",
-            password="P@$$w0rd12A"
-        )
-
-    @classmethod
-    def with_current_user(cls, connection_uri: str = "qemu:///system") -> 'LibvirtClient':
-        """
-        Создание клиента с текущим пользователем системы
-
-        Args:
-            connection_uri: URI для подключения
-
-        Returns:
-            Экземпляр LibvirtClient с текущим пользователем
-        """
-        return cls(
-            connection_uri=connection_uri,
-            username=getpass.getuser(),
-            password=None  # Пароль запросится при подключении
-        )
-
-    @classmethod
-    def with_ssh_connection(cls, hostname: str, username: str = "eskvisor",
-                            password: str = "P@$$w0rd12A") -> 'LibvirtClient':
-        """
-        Создание клиента для SSH подключения к удаленному хосту
-
-        Args:
-            hostname: Имя или IP удаленного хоста
-            username: Имя пользователя на удаленном хосте
-            password: Пароль пользователя
-
-        Returns:
-            Экземпляр LibvirtClient для SSH подключения
-        """
-        uri = f"qemu+ssh://{username}@{hostname}/system"
-        return cls(
-            connection_uri=uri,
-            username=username,
-            password=password
-        )
 
     def connect(self) -> bool:
         """Подключение к гипервизору"""

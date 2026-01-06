@@ -6,6 +6,7 @@ import ipaddress
 import libvirt
 
 from agent.client.cli import CLIControl
+from agent.client.constants import NETWORK_TYPE_DESCRIPTIONS
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.msg import NetworkMessage, CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, \
@@ -19,21 +20,8 @@ class NetworkManager(LibvirtClient):
 
     libvirtError = None
 
-    # Описания типов сетей
-    NETWORK_TYPE_DESCRIPTIONS = {
-        "nat": "NAT сеть - ВМ получают доступ в интернет через NAT",
-        "route": "Routed сеть - маршрутизация без NAT",
-        "bridge": "Bridge сеть - прямое подключение к физическому интерфейсу",
-        "private": "Private сеть - изолированная с внутренним форвардингом",
-        "vepa": "VEPA сеть - Virtual Ethernet Port Aggregator",
-        "passthrough": "Passthrough сеть - прямой доступ к физическому интерфейсу",
-        "isolated": "Изолированная сеть - без доступа к внешним сетям",
-        "no-forward": "Сеть без форвардинга - только внутренняя коммуникация"
-    }
-
-    def __init__(self, connection_uri: str = "qemu:///system", username: str | None = None,
-                 password: str | None = None):
-        super().__init__(connection_uri, username, password)
+    def __init__(self):
+        super().__init__()
         self.cli = CLIControl()
 
     def list_networks(self) -> list[str]:
@@ -730,7 +718,7 @@ class NetworkManager(LibvirtClient):
             network_type = 'no-forward'
 
         # Получаем описание типа
-        description = self.NETWORK_TYPE_DESCRIPTIONS.get(
+        description = NETWORK_TYPE_DESCRIPTIONS.get(
             network_type,
             f"Неизвестный тип сети: {network_type}"
         )
@@ -791,7 +779,7 @@ class NetworkManager(LibvirtClient):
                     network_type = 'no-forward'
 
             # Получаем описание
-            description = self.NETWORK_TYPE_DESCRIPTIONS.get(
+            description = NETWORK_TYPE_DESCRIPTIONS.get(
                 network_type,
                 f"Неизвестный тип сети: {network_type}"
             )

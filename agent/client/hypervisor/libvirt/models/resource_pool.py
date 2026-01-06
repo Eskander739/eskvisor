@@ -132,13 +132,6 @@ class VMPoolAssignmentRequest(BaseModel):
     vm_name: str
 
 
-class ResourcePoolDeleteRequest(BaseModel):
-    """Запрос на удаление пула ресурсов"""
-    request_id: str
-    name: str
-    force: bool = Field(False, description="Принудительное удаление даже если есть ВМ")
-
-
 class ResourcePoolState(BaseModel):
     name: str
     state: str
