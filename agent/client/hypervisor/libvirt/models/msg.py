@@ -10,7 +10,7 @@ from agent.client.hypervisor.libvirt.models.resource_pool import ResourcePool, R
     ResourcePoolUsageInfo, ResourcePoolState
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, DeleteSnapshotInfo, SnapshotList, \
     ClonedSnapshot, CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, \
-    CreateMultipleSnapshots
+    CreateMultipleSnapshots, SnapshotRevertSuccess
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
@@ -190,5 +190,5 @@ class SnapshotMessage(DefaultMessage):
     success: bool
     snapshot_info: (SnapshotWithParent | DeleteSnapshotInfo | SnapshotList |
                     ClonedSnapshot | CreateSnapshotChainError | CreateSnapshotChainSuccess |
-                    CreateMultipleSnapshotsError | CreateMultipleSnapshots | None) = None
+                    CreateMultipleSnapshotsError | CreateMultipleSnapshots | SnapshotRevertSuccess | None) = None
     note: str | None = None

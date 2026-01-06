@@ -6,7 +6,8 @@ from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
     MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
-    CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots
+    CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots, \
+    SnapshotRevertSuccess
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
 
 
@@ -878,13 +879,11 @@ class SnapshotManager(LibvirtClient):
                         success=True,
                         message=CommandMessagesEnum.snapshot_revert_success.value,
                         code=CommandMessagesEnum.snapshot_revert_success.name,
-                        snapshot_info={
-                            "vm_name": request.vm_name,
-                            "current_snapshot": request.snapshot_name,
-                            "parent_snapshot": parent_name,
-                            "snapshots_made_inactive": [s.name for s in snapshots_after],
-                            "note": "Snapshots created after parent have become inactive"
-                        }
+                        snapshot_info=SnapshotRevertSuccess(vm_name=request.vm_name,
+                                                            current_snapshot=request.snapshot_name,
+                                                            parent_snapshot=parent_name,
+                                                            snapshots_made_inactive=[s.name for s in snapshots_after],
+                                                            note="Snapshots created after parent have become inactive")
                     )
                 else:
                     return SnapshotMessage(

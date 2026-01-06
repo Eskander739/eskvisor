@@ -64,6 +64,20 @@ class CreateSnapshotChainSuccess(BaseModel):
     total_created: int
     chain_depth: int
 
+class SnapshotRevertSuccess(BaseModel):
+    """
+                                "vm_name": request.vm_name,
+                            "current_snapshot": request.snapshot_name,
+                            "parent_snapshot": parent_name,
+                            "snapshots_made_inactive": [s.name for s in snapshots_after],
+                            "note": "Snapshots created after parent have become inactive"
+    """
+    vm_name: str
+    current_snapshot: str
+    parent_snapshot: str
+    snapshots_made_inactive: list[str]
+    note: str | None = None
+
 
 class SnapshotList(BaseModel):
     vm_name: str
