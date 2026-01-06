@@ -7,7 +7,7 @@ from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent,
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
     MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
     CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots, \
-    SnapshotRevertSuccess
+    SnapshotRevertSuccess, SnapshotsChain
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
 
 
@@ -946,14 +946,12 @@ class SnapshotManager(LibvirtClient):
                 success=True,
                 message=CommandMessagesEnum.snapshot_found.value,
                 code=CommandMessagesEnum.snapshot_found.name,
-                snapshot_info={
-                    "vm_name": request.vm_name,
-                    "snapshots": snapshots_info,
-                    "snapshot_tree": snapshot_tree,
-                    "chains": chains,
-                    "root_snapshots": [s["name"] for s in root_snapshots],
-                    "chain_depth": max([len(c) for c in chains]) if chains else 0
-                }
+                snapshot_info=SnapshotsChain(vm_name=request.vm_name,
+                                             snapshots=snapshots_info,
+                                             snapshot_tree=snapshot_tree,
+                                             chains=chains,
+                                             root_snapshots=[s["name"] for s in root_snapshots],
+                                             chain_depth=max([len(c) for c in chains]) if chains else 0)
             )
 
         except Exception as e:
