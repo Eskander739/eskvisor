@@ -47,7 +47,16 @@ class CreateSnapshotChainError(BaseModel):
     total_requested: int
     successfully_created: int
 
+class CreateMultipleSnapshotsError(BaseModel):
+    results: list[SnapshotWithParent]
+    total_requested: int
+    successful: int
+    failed: int
 
+class CreateMultipleSnapshots(BaseModel):
+    results: list[SnapshotWithParent]
+    total_created: int
+    successful: int
 
 class CreateSnapshotChainSuccess(BaseModel):
     vm_name: str

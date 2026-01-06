@@ -6,7 +6,7 @@ from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
     MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
-    CreateSnapshotChainError, CreateSnapshotChainSuccess
+    CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
 
 
@@ -810,30 +810,20 @@ class SnapshotManager(LibvirtClient):
         """
         results = []
         errors = []
+        successful = 0
 
         for snapshot_request in request.snapshots:
             try:
                 result = self.create_snapshot(snapshot_request, request_id)
-                results.append({
-                    "vm_name": snapshot_request.vm_name,
-                    "snapshot_name": snapshot_request.snapshot_name,
-                    "success": result.success,
-                    "message": result.message,
-                    "code": result.code
-                })
+                results.append(result)
 
                 if not result.success:
                     errors.append(f"{snapshot_request.vm_name}: {result.message}")
+                else:
+                    successful += 1
 
             except Exception as e:
                 errors.append(f"{snapshot_request.vm_name}: {str(e)}")
-                results.append({
-                    "vm_name": snapshot_request.vm_name,
-                    "snapshot_name": snapshot_request.snapshot_name,
-                    "success": False,
-                    "message": str(e),
-                    "code": "SNAPSHOT_CREATE_EXCEPTION"
-                })
 
         if errors:
             return SnapshotMessage(
@@ -841,12 +831,10 @@ class SnapshotManager(LibvirtClient):
                 success=False,
                 message=CommandMessagesEnum.snapshot_create_error.value,
                 code=CommandMessagesEnum.snapshot_create_error.name,
-                snapshot_info={
-                    "results": results,
-                    "total_requested": len(request.snapshots),
-                    "successful": len([r for r in results if r["success"]]),
-                    "failed": len([r for r in results if not r["success"]])
-                },
+                snapshot_info=CreateMultipleSnapshotsError(results=results,
+                                                           total_requested=len(results),
+                                                           successful=successful,
+                                                           failed=len(errors)),
                 note="; ".join(errors)
             )
 
@@ -855,11 +843,9 @@ class SnapshotManager(LibvirtClient):
             success=True,
             message=CommandMessagesEnum.snapshot_successfully_created.value,
             code=CommandMessagesEnum.snapshot_successfully_created.name,
-            snapshot_info={
-                "results": results,
-                "total_created": len(results),
-                "successful": len(results)
-            }
+            snapshot_info=CreateMultipleSnapshots(results=results,
+                                                  total_created=len(results),
+                                                  successful=len(results))
         )
 
     def revert_to_parent_snapshot(self, request: SnapshotRevertRequest, request_id: str) -> SnapshotMessage:
