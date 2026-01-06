@@ -51,6 +51,9 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_ru
         assert get_snapshots_tree_info.snapshot_info is not None
         snapshots_tree = get_snapshots_tree_info.snapshot_info
         assert len(snapshots_tree.snapshots) == 1
+        assert snapshots_tree.snapshot_tree.get("nodes")[snapshot_name]["info"].name == snapshot_name
+        assert snapshots_tree.snapshot_tree.get("nodes")[snapshot_name]["info"].vm_name == vm_name
+        assert not snapshots_tree.snapshot_tree.get("nodes")[snapshot_name]["children"]
         snapshot_from_snapshots = snapshots_tree.snapshots.pop()
         assert snapshot_from_snapshots.vm_name == vm_name
         assert snapshot_from_snapshots.name == snapshot_name
