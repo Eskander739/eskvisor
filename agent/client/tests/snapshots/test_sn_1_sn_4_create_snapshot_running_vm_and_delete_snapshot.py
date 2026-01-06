@@ -8,7 +8,7 @@ from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("SN‑01", "SN‑04", "Создание снапшота работающей ВМ", "Удаление снапшота")
-def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(snapshot_session, create_running_vm):
+def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(snapshot_session, create_running_vm_session):
     """
     SN‑01: Создание снапшота работающей ВМ
     SN‑04: Удаление снапшота
@@ -16,7 +16,7 @@ def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(snapshot_ses
     Создать снапшот без остановки ВМ. Проверить, что снапшот появляется в дереве снапшотов ВМ.
     Удалить отдельный снапшот. Убедиться, что место освобождается и дерево снапшотов корректно обновляется.
     """
-    vm_name, request_id = create_running_vm
+    vm_name, request_id = create_running_vm_session
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False

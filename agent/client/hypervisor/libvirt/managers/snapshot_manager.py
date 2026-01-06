@@ -1,4 +1,5 @@
 import shutil
+import time
 
 import libvirt
 import os
@@ -740,6 +741,7 @@ class SnapshotManager(LibvirtClient):
 
             # Получаем исходную ВМ
             source_vm = self.conn.lookupByName(request.source_vm_name)
+            new_uuid = str(uuid.uuid4())
 
             # Получаем снапшот
             snapshot = source_vm.snapshotLookupByName(request.source_snapshot_name, flags=0)
@@ -751,15 +753,15 @@ class SnapshotManager(LibvirtClient):
             root = ET.fromstring(snapshot_xml)
 
             # Обновляем имя ВМ
-            name_elem = root.find('name')
+            name_elem = root.find("domain").find('name')
             if name_elem is not None:
                 name_elem.text = request.new_vm_name
 
             # Генерируем новый UUID если нужно
             if request.generate_new_uuid:
-                uuid_elem = root.find('uuid')
+                uuid_elem = root.find("domain").find('uuid')
                 if uuid_elem is not None:
-                    uuid_elem.text = str(uuid.uuid4())
+                    uuid_elem.text = new_uuid
 
             # Обновляем пути к дискам для новой ВМ
             for disk_elem in root.findall('.//disk'):
@@ -787,7 +789,7 @@ class SnapshotManager(LibvirtClient):
                             )
 
             # Преобразуем XML обратно в строку
-            new_xml = ET.tostring(root, encoding='unicode')
+            new_xml = ET.tostring(root.find("domain"), encoding='unicode')
 
             # Создаем новую ВМ
             new_domain = self.conn.defineXML(new_xml)
@@ -798,9 +800,8 @@ class SnapshotManager(LibvirtClient):
 
                 # Запускаем ВМ если исходная была запущена
                 source_state, _ = source_vm.state()
-                if source_state == libvirt.VIR_DOMAIN_RUNNING:
-                    new_domain.create()
-
+                # if source_state == libvirt.VIR_DOMAIN_RUNNING:
+                #     new_domain.create()
                 return SnapshotMessage(
                     request_id=request_id,
                     success=True,
@@ -809,8 +810,8 @@ class SnapshotManager(LibvirtClient):
                     snapshot_info=ClonedSnapshot(source_vm_name=request.source_vm_name,
                                                  source_snapshot_name=request.source_snapshot_name,
                                                  new_vm_name=request.new_vm_name,
-                                                 new_uuid=request.new_uuid,
-                                                 vm_started=request.source_state == libvirt.VIR_DOMAIN_RUNNING)
+                                                 new_uuid=new_uuid,
+                                                 vm_started=source_state == libvirt.VIR_DOMAIN_RUNNING)
                 )
 
             return SnapshotMessage(
