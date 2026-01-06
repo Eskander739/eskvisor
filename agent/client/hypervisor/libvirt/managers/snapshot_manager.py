@@ -656,9 +656,11 @@ class SnapshotManager(LibvirtClient):
             # Извлекаем vcpu
             vcpu_elem = root.find("domain").find("vcpu")
             if vcpu_elem is not None and vcpu_elem.text:
-                result["vcpu"] = vcpu_elem.text.strip()
+                result["vcpu"] = vcpu_elem.get("current")
+                result["max_vcpus"] = vcpu_elem.text.strip()
             else:
                 result["vcpu"] = None
+                result["max_vcpus"] = None
 
             # Извлекаем время создания
             creation_time_elem = root.find('creationTime')

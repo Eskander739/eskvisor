@@ -341,10 +341,10 @@ class VmManager(LibvirtClient):
         if config.current_memory_mb and config.current_memory_mb != config.memory_mb:
             cmd_parts.extend(["--current-memory", str(config.current_memory_mb)])
 
-        cmd_parts.extend(["--vcpus", str(config.vcpus)])
-
         if config.max_vcpus and config.max_vcpus != config.vcpus:
             cmd_parts.extend(["--vcpus", f"{config.vcpus},maxvcpus={config.max_vcpus}"])
+        else:
+            cmd_parts.extend(["--vcpus", str(config.vcpus)])
 
         cmd_parts.extend(["--arch", config.architecture.value])
 
@@ -738,71 +738,169 @@ class VmManager(LibvirtClient):
         try:
             self.logger.info(f"Редактирование свойств ВМ {vm_name}")
 
+            # Получаем домен
             vm = self.conn.lookupByName(vm_name)
             state, _ = vm.state()
             is_running = state == libvirt.VIR_DOMAIN_RUNNING
 
             self.logger.info(f"Состояние ВМ: {'запущена' if is_running else 'остановлена'}")
 
-            live_changes = []
+            # Получаем текущую XML конфигурацию
+            xml_desc = vm.XMLDesc(0)
+            self.logger.debug(f"Текущий XML: {xml_desc[:500]}...")
 
-            if vm_update.memory_mb is not None:
-                live_changes.extend(["--memory", str(vm_update.memory_mb * 1024)])
-            if vm_update.current_memory_mb is not None and is_running:
-                live_changes.extend(["--current-memory", str(vm_update.current_memory_mb * 1024)])
+            # Парсим XML
+            root = ET.fromstring(xml_desc)
+            modified = False
+
+            # Изменение vCPU
             if vm_update.vcpus is not None:
-                live_changes.extend(["--vcpus", str(vm_update.vcpus)])
+                self.logger.info(f"Изменение vCPU на {vm_update.vcpus}")
+
+                # Находим или создаем элемент vcpu
+                vcpu_elem = root.find("vcpu")
+                if vcpu_elem is None:
+                    vcpu_elem = ET.SubElement(root, "vcpu")
+
+                # Устанавливаем значение
+                vcpu_elem.text = str(vm_update.vcpus)
+                vcpu_elem.set("current", str(vm_update.vcpus))
+
+                # Обновляем элемент cpu для топологии
+                cpu_elem = root.find("cpu")
+                if cpu_elem is not None:
+                    # Обновляем топологию CPU
+                    topology = cpu_elem.find("topology")
+                    if topology is None:
+                        topology = ET.SubElement(cpu_elem, "topology")
+
+                    # Устанавливаем простую топологию: sockets = vcpus, cores = 1, threads = 1
+                    topology.set("sockets", str(vm_update.vcpus))
+                    topology.set("cores", "1")
+                    topology.set("threads", "1")
+
+                modified = True
+
+            # Изменение памяти
+            if vm_update.memory_mb is not None:
+                self.logger.info(f"Изменение памяти на {vm_update.memory_mb} MB")
+
+                # Преобразуем MB в KB (libvirt работает с KB)
+                memory_kb = vm_update.memory_mb * 1024
+
+                # Находим или создаем элемент memory
+                memory_elem = root.find("memory")
+                if memory_elem is None:
+                    memory_elem = ET.SubElement(root, "memory")
+
+                # Устанавливаем значение
+                memory_elem.text = str(memory_kb)
+                memory_elem.set("unit", "KiB")
+
+                # Обновляем currentMemory если есть
+                current_elem = root.find("currentMemory")
+                if current_elem is None:
+                    current_elem = ET.SubElement(root, "currentMemory")
+
+                current_elem.text = str(memory_kb)
+                current_elem.set("unit", "KiB")
+
+                modified = True
+
+            # Изменение max vCPU
             if vm_update.max_vcpus is not None:
-                live_changes.extend(["--vcpus", f"{vm_update.vcpus or 1},maxvcpus={vm_update.max_vcpus}"])
-            if vm_update.autostart is not None:
-                if vm_update.autostart:
-                    live_changes.extend(["--autostart"])
+                self.logger.info(f"Изменение max vCPU на {vm_update.max_vcpus}")
+
+                vcpu_elem = root.find("vcpu")
+                if vcpu_elem is None:
+                    vcpu_elem = ET.SubElement(root, "vcpu")
+
+                # Для max_vcpus используем placement="static"
+                vcpu_elem.set("placement", "static")
+                if vm_update.vcpus is not None:
+                    vcpu_elem.text = str(vm_update.max_vcpus)
+                    vcpu_elem.set("current", str(vm_update.vcpus))
                 else:
-                    live_changes.extend(["--autostart", "--disable"])
-            if vm_update.description is not None:
-                live_changes.extend(["--description", f"'{vm_update.description}'"])
-            if vm_update.name is not None and vm_update.name != vm_name and not is_running:
-                live_changes.extend(["--rename", vm_update.name])
+                    # Если vcpus не указано, получаем текущее значение
+                    current_vcpus = vcpu_elem.get("current") or vcpu_elem.text or "1"
+                    vcpu_elem.text = str(vm_update.max_vcpus)
+                    vcpu_elem.set("current", current_vcpus)
 
-            xml_params = ["cpu_model", "cpu_features", "graphics", "video_model", "machine_type",
-                          "os_variant", "boot_devices", "features", "memballoon_model", "hyperv_features", "qemu_agent"]
+                modified = True
 
-            xml_changes = any(getattr(vm_update, param) is not None for param in xml_params)
+            # Если были изменения, сохраняем новую конфигурацию
+            if modified:
+                # Конвертируем XML обратно в строку
+                new_xml = ET.tostring(root, encoding="unicode", method="xml")
+                self.logger.debug(f"Новый XML: {new_xml[:500]}...")
 
-            if live_changes and is_running:
-                success = self._apply_virsh_commands(vm_name, live_changes, is_running)
-                if not success:
-                    return VmMessage(
-                        request_id=request_id,
-                        success=False,
-                        message=CommandMessagesEnum.vm_edit_error.value,
-                        code=CommandMessagesEnum.vm_edit_error.name
-                    )
+                # Сохраняем во временный файл
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as tmp_file:
+                    tmp_file.write(new_xml)
+                    tmp_file_path = tmp_file.name
 
-            if xml_changes:
-                success = self._apply_xml_changes(vm_name, vm_update, is_running)
-                if not success:
-                    return VmMessage(
-                        request_id=request_id,
-                        success=False,
-                        message=CommandMessagesEnum.vm_edit_xml_error.value,
-                        code=CommandMessagesEnum.vm_edit_xml_error.name
-                    )
+                try:
+                    if not is_running:
+                        self.conn.defineXML(new_xml)
+                        self.logger.info("Конфигурация ВМ обновлена (остановлена)")
+                    else:
+                        try:
+                            # Пытаемся обновить с флагом --live
+                            cmd = ["virsh", "define", tmp_file_path]
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
-            reboot_needed = any(getattr(vm_update, param) is not None for param in
-                                ["cpu_model", "cpu_features", "machine_type", "video_model",
-                                 "os_variant", "boot_devices", "features", "memballoon_model", "hyperv_features"])
+                            if result.returncode != 0:
+                                self.logger.warning(f"Не удалось обновить на лету: {result.stderr}")
+                                # Возможно, потребуется перезагрузка
+                        except Exception as e:
+                            self.logger.warning(f"Ошибка при обновлении на лету: {e}")
 
-            if reboot_needed and is_running and vm_update.reboot_if_needed:
-                self.logger.info(f"Перезагрузка ВМ {vm_name} для применения изменений")
-                reboot_cmd = ["virsh", "reboot", vm_name]
-                if not self._execute_virsh_command(reboot_cmd):
-                    return VmMessage(
-                        request_id=request_id,
-                        success=False,
-                        message=CommandMessagesEnum.vm_restart_error.value,
-                        code=CommandMessagesEnum.vm_restart_error.name
-                    )
+                    self.logger.info(f"Конфигурация ВМ {vm_name} обновлена")
+
+                finally:
+                    # Удаляем временный файл
+                    if os.path.exists(tmp_file_path):
+                        os.unlink(tmp_file_path)
+
+                # Если ВМ запущена и мы изменили vCPU или память, применяем изменения на лету
+                if is_running:
+                    try:
+                        if vm_update.vcpus is not None:
+                            # Пытаемся изменить vCPU на лету
+                            flags = libvirt.VIR_DOMAIN_VCPU_LIVE
+                            vm.setVcpusFlags(vm_update.vcpus, flags)
+                            self.logger.info(f"vCPU изменено на лету на {vm_update.vcpus}")
+
+                        if vm_update.memory_mb is not None:
+                            # Пытаемся изменить память на лету
+                            memory_kb = vm_update.memory_mb * 1024
+                            flags = libvirt.VIR_DOMAIN_MEM_LIVE
+                            vm.setMemoryFlags(memory_kb, flags)
+                            self.logger.info(f"Память изменена на лету на {vm_update.memory_mb} MB")
+                    except Exception as e:
+                        self.logger.warning(f"Не удалось применить изменения на лету: {e}")
+                        self.logger.info("Для полного применения изменений может потребоваться перезагрузка ВМ")
+
+            else:
+                self.logger.info("Нет изменений для применения")
+
+            # Перечитываем домен после изменений
+            vm = self.conn.lookupByName(vm_name)
+
+            # Проверяем, что изменения применились
+            if vm_update.vcpus is not None:
+                # Получаем обновленную информацию
+                new_xml = vm.XMLDesc(0)
+                new_root = ET.fromstring(new_xml)
+                new_vcpu_elem = new_root.find("vcpu")
+
+                if new_vcpu_elem is not None:
+                    actual_vcpus = new_vcpu_elem.text
+                    self.logger.info(f"Фактическое количество vCPU после изменения: {actual_vcpus}")
+
+                    if actual_vcpus != str(vm_update.vcpus):
+                        self.logger.warning(f"vCPU не изменилось: ожидалось {vm_update.vcpus}, получено {actual_vcpus}")
+
             self.logger.info(f"ВМ {vm_name} успешно обновлена")
             return VmMessage(
                 request_id=request_id,
@@ -812,20 +910,22 @@ class VmManager(LibvirtClient):
             )
 
         except self.libvirtError as e:
-            self.logger.error(f"ВМ {vm_name} не найдена: {e}")
+            self.logger.error(f"Ошибка при редактировании ВМ {vm_name}: {e}")
             return VmMessage(
                 request_id=request_id,
                 success=False,
-                message=CommandMessagesEnum.vm_found_error.value,
-                code=CommandMessagesEnum.vm_found_error.name
+                message=CommandMessagesEnum.vm_edit_error.value,
+                code=CommandMessagesEnum.vm_edit_error.name,
+                note=str(e)
             )
         except Exception as e:
-            self.logger.exception(f"Ошибка при редактировании ВМ: {e}")
+            self.logger.exception(f"Неожиданная ошибка при редактировании ВМ: {e}")
             return VmMessage(
                 request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.vm_edit_unexpected_error.value,
-                code=CommandMessagesEnum.vm_edit_unexpected_error.name
+                code=CommandMessagesEnum.vm_edit_unexpected_error.name,
+                note=str(e)
             )
 
     def _apply_virsh_commands(self, vm_name: str, changes: list[str], is_running: bool) -> bool:
@@ -1223,10 +1323,17 @@ class VmManager(LibvirtClient):
                              success=False,
                              note=str(e))
 
-    def reboot_vm(self, name: str, request_id: str) -> VmMessage:
+    def reboot_vm(self, name: str, request_id: str, hard_reset: bool = False) -> VmMessage:
         """Перезагрузка виртуальной машины"""
         try:
             domain = self.conn.lookupByName(name)
+            if hard_reset:
+                domain.reset()
+                self.logger.info(f"Выполнена жесткая перезагрузка для ВМ {name}")
+                return VmMessage(request_id=request_id,
+                                 message=CommandMessagesEnum.vm_successfully_restarted.value,
+                                 code=CommandMessagesEnum.vm_successfully_restarted.name,
+                                 success=True)
             if domain.reboot(0) == 0:
                 self.logger.info(f"ВМ {name} перезагружается")
                 return VmMessage(request_id=request_id,

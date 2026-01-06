@@ -1,9 +1,7 @@
-import time
 import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import DiskType
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotDeleteRequest
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -55,21 +53,21 @@ def test_sn_03_restore_vm_from_snapshot(snapshot_session, create_stopped_vm, vm_
         assert vm_config.max_memory == vm_info.vm_info.max_memory
         assert vm_config.vcpus == vm_info.vm_info.vcpus
         # ____________________________________Изменение ресурсов ВМ____________________________________
-        vm_session.shutoff_vm(vm_name, request_id, True)
+        vm_session.start_vm(vm_name, request_id)
         edit_vm_info = vm_session.edit_vm(vm_name, VmUpdateRequest(vcpus=3), request_id)
-        assert edit_vm_info.message == CommandMessagesEnum.vm_edit_success.value
+        assert edit_vm_info.message == CommandMessagesEnum.vm_edit_success.value, edit_vm_info.note
         assert edit_vm_info.code == CommandMessagesEnum.vm_edit_success.name
-        assert wait_while_not(lambda: get_state(vm_name) == VMState.SHUTOFF.value)
+        assert wait_while_not(lambda: get_state(vm_name) == VMState.RUNNING.value)
         vm_get_info = vm_session.get_vm_by_name(vm_name, request_id)
         assert vm_get_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name
-        assert vm_get_info.vm_info.vcpus == 3
+        assert wait_while_not(lambda: vm_session.get_vm_by_name(vm_name, request_id).vm_info.vcpus == 3, timeout=30)
         # ________________________________Восстановление ВМ из снапшота________________________________
         revert_vm_info = snapshot_session.revert_to_snapshot(vm_name, snapshot_name, request_id)
         assert revert_vm_info.message == CommandMessagesEnum.snapshot_revert_success.value
         assert revert_vm_info.code == CommandMessagesEnum.snapshot_revert_success.name
         # __________________Проверка конфигурации ВМ после восстановления из снапшота__________________
-        assert wait_while_not(lambda: get_state(vm_name) == VMState.RUNNING.value)
+        assert wait_while_not(lambda: get_state(vm_name) == VMState.SHUTOFF.value)
         vm_get_info = vm_session.get_vm_by_name(vm_name, request_id)
         assert vm_get_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name

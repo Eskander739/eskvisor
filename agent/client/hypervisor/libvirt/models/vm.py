@@ -29,7 +29,7 @@ class VMCreateRequest(BaseModel):
     memory_mb: int = 1024
     current_memory_mb: int | None = None
     vcpus: int = 2
-    max_vcpus: int | None = None
+    max_vcpus: int | None = 4
     cpu_model: str | None = None
     cpu_features: list[str] | None = None
 

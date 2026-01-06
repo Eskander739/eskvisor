@@ -36,13 +36,16 @@ def test_vm_05_change_resource(vm_session):
         assert vm_info.vcpus == vm_template.vcpus
         assert vm_info.name == vm_template.name
         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
+        assert vm_info.vcpus == vm_template.vcpus
         # ____________________________________Изменение ресурсов ВМ____________________________________
-        vm_session.edit_vm(random_name, VmUpdateRequest(vcpus=3), request_id)
+        edit_vm_info = vm_session.edit_vm(random_name, VmUpdateRequest(vcpus=3), request_id)
+        assert edit_vm_info.message == CommandMessagesEnum.vm_edit_success.value
+        assert edit_vm_info.code == CommandMessagesEnum.vm_edit_success.name
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         vm_get_info = vm_session.get_vm_by_name(random_name, request_id)
         assert vm_get_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name
-        assert vm_get_info.vm_info.vcpus == 3
+        assert wait_while_not(lambda: vm_session.get_vm_by_name(random_name, request_id).vm_info.vcpus == 3, timeout=30)
 
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________________________________
