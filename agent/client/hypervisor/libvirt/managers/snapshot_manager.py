@@ -5,7 +5,7 @@ import uuid
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
-    MultipleSnapshotsRequest, SnapshotChainRequest
+    MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
 
 
@@ -228,20 +228,10 @@ class SnapshotManager(LibvirtClient):
 
             if snapshot:
                 self.logger.info(f"Снапшот '{request.snapshot_name}' успешно создан для VM '{request.vm_name}'")
-                return SnapshotMessage(
-                    request_id=request_id,
-                    success=True,
-                    message=CommandMessagesEnum.snapshot_successfully_created.value,
-                    code=CommandMessagesEnum.snapshot_successfully_created.name,
-                    snapshot_info={
-                        "vm_name": request.vm_name,
-                        "snapshot_name": request.snapshot_name,
-                        "description": request.description,
-                        "disk_only": request.disk_only,
-                        "quiesce": request.quiesce and is_running,
-                        "vm_state": "running" if is_running else "stopped"
-                    }
-                )
+                current_shanpshot = self.get_current_snapshot(request.vm_name, request_id)
+                current_shanpshot.message = CommandMessagesEnum.snapshot_successfully_created.value
+                current_shanpshot.code = CommandMessagesEnum.snapshot_successfully_created.name
+                return current_shanpshot
 
             return SnapshotMessage(
                 request_id=request_id,
@@ -296,11 +286,9 @@ class SnapshotManager(LibvirtClient):
                 success=True,
                 message=CommandMessagesEnum.snapshot_successfully_deleted.value,
                 code=CommandMessagesEnum.snapshot_successfully_deleted.name,
-                snapshot_info={
-                    "vm_name": request.vm_name,
-                    "snapshot_name": request.snapshot_name,
-                    "remove_children": request.remove_children
-                }
+                snapshot_info=DeleteSnapshotInfo(vm_name=request.vm_name,
+                                                 snapshot_name=request.snapshot_name,
+                                                 remove_children=request.remove_children)
             )
 
         except self.libvirtError as e:
@@ -475,7 +463,6 @@ class SnapshotManager(LibvirtClient):
         Returns:
             SnapshotMessage с информацией о текущем снапшоте в rp_info
         """
-
         try:
             virtual_machine = self.conn.lookupByName(vm_name)
             snapshot = virtual_machine.snapshotCurrent(flags=0)
@@ -487,45 +474,38 @@ class SnapshotManager(LibvirtClient):
                 # Извлекаем информацию из XML
                 snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
 
-                snapshot_data = SnapshotWithParent(
-                    name=snapshot.getName(),
-                    description=snapshot_info_dict.get("description"),
-                    created=snapshot_info_dict.get("creation_time"),
-                    state=snapshot_info_dict.get("state")
-                )
-
                 # Информация о родительском снапшоте
                 try:
                     parent_snapshot = snapshot.getParent()
                     if parent_snapshot:
                         parent_xml = parent_snapshot.getXMLDesc(flags=0)
                         parent_info_dict = self._parse_snapshot_xml(parent_xml)
-
-                        snapshot_data.parent = Snapshot(
+                        parent_size = self._get_snapshot_size(parent_snapshot)
+                        parent_snapshot = Snapshot(
                             name=parent_snapshot.getName(),
+                            vm_name=snapshot.getName(),
                             description=parent_info_dict.get("description"),
                             created=parent_info_dict.get("creation_time"),
-                            state=parent_info_dict.get("state")
+                            state=parent_info_dict.get("state"),
+                            is_current=False,
+                            size_bytes=parent_size
                         )
                     else:
-                        snapshot_data.parent = None
+                        parent_snapshot = None
                 except self.libvirtError:
-                    snapshot_data.parent = None
+                    parent_snapshot = None
 
                 # Получение размера снапшота
                 size = self._get_snapshot_size(snapshot)
 
-                snapshot_info = {
-                    "name": snapshot_data.name,
-                    "description": snapshot_data.description,
-                    "created": snapshot_data.created,
-                    "state": snapshot_data.state,
-                    "parent": snapshot_data.parent.name if snapshot_data.parent else None,
-                    "size_bytes": size,
-                    "vm_name": vm_name,
-                    "is_current": True
-                }
-
+                snapshot_info = SnapshotWithParent(name=snapshot.getName(),
+                                                   description=snapshot_info_dict.get("description"),
+                                                   created=snapshot_info_dict.get("creation_time"),
+                                                   state=snapshot_info_dict.get("state"),
+                                                   parent=parent_snapshot if parent_snapshot else None,
+                                                   size_bytes=size,
+                                                   vm_name=vm_name,
+                                                   is_current=True)
                 return SnapshotMessage(
                     request_id=request_id,
                     success=True,

@@ -1,24 +1,35 @@
-import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from agent.client.hypervisor.libvirt.models.general import VMState, SnapshotState
+from agent.client.hypervisor.libvirt.models.general import SnapshotState
+
+
+class DeleteSnapshotInfo(BaseModel):
+    snapshot_name: str
+    vm_name: str
+    remove_children: bool
 
 
 class Snapshot(BaseModel):
     name: str
-    description: str
+    vm_name: str
+    description: str | None = None
     created: datetime
     state: SnapshotState
+    is_current: bool
+    size_bytes: int
 
 
 class SnapshotWithParent(BaseModel):
     name: str
+    vm_name: str
     description: str | None = None
     created: datetime
     state: SnapshotState
     parent: Snapshot | None = None
+    is_current: bool
+    size_bytes: int
 
 
 class SnapshotCreateRequest(BaseModel):
@@ -73,3 +84,20 @@ class MultipleSnapshotsRequest(BaseModel):
     """Модель запроса для создания снапшотов нескольких ВМ"""
     snapshots: list[SnapshotCreateRequest]
 
+class SnapshotInfo(BaseModel):
+    """
+                            "name": snapshot_data.name,
+                    "description": snapshot_data.description,
+                    "created": snapshot_data.created,
+                    "state": snapshot_data.state,
+                    "parent": snapshot_data.parent.name if snapshot_data.parent else None,
+                    "size_bytes": size,
+                    "vm_name": vm_name,
+                    "is_current": True
+    """
+    name: str
+    vm_name: str
+    description: str | None = None
+    created: datetime
+    state: SnapshotState
+    parent: Snapshot | None

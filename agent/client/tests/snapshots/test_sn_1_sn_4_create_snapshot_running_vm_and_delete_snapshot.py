@@ -19,15 +19,6 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_ru
 
     Создать снапшот без остановки ВМ. Проверить, что снапшот появляется в дереве снапшотов ВМ.
     Удалить отдельный снапшот. Убедиться, что место освобождается и дерево снапшотов корректно обновляется.
-
-                        "name": snapshot_data.name,
-                    "description": snapshot_data.description,
-                    "created": snapshot_data.created,
-                    "state": snapshot_data.state,
-                    "parent": snapshot_data.parent.name if snapshot_data.parent else None,
-                    "size_bytes": size,
-                    "vm_name": vm_name,
-                    "is_current": True
     """
     vm_name, request_id = create_running_vm
     description = f"snapshot-description-{uuid.uuid4()}"
@@ -46,15 +37,12 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_ru
         assert create_vm_info.message == CommandMessagesEnum.snapshot_successfully_created.value
         assert create_vm_info.code == CommandMessagesEnum.snapshot_successfully_created.name
         assert create_vm_info.snapshot_info is not None
+        snapshot_info = create_vm_info.snapshot_info
         # _______________________________Проверка наличия снапшота________________________________
-        get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
-        assert get_snapshot_info.message == CommandMessagesEnum.snapshot_found.value
-        assert get_snapshot_info.code == CommandMessagesEnum.snapshot_found.name
-
-        assert get_snapshot_info.snapshot_info.get("name") == snapshot_name
-        assert get_snapshot_info.snapshot_info.get("description") == description
-        assert get_snapshot_info.snapshot_info.get("vm_name") == vm_name
-        assert SnapshotState(get_snapshot_info.snapshot_info.get("state")).value == SnapshotState.RUNNING.value
+        assert snapshot_info.name == snapshot_name
+        assert snapshot_info.description == description
+        assert snapshot_info.vm_name == vm_name
+        assert snapshot_info.state.value == SnapshotState.RUNNING.value
         # ____________________________________Удаление снапшота____________________________________
         delete_snapshot_info = snapshot_session.delete_snapshot(SnapshotDeleteRequest(vm_name=vm_name,
                                                                                       snapshot_name=snapshot_name,
@@ -69,6 +57,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_ru
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
+        # _____________________________Проверка корректного обновления дерева снапшотов_______________________________
     finally:
         # ______________________________Удаление снапшота(постусловие)_____________________________
         if not snapshot_deleted:
