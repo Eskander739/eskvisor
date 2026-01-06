@@ -803,7 +803,7 @@ class VmManager(LibvirtClient):
                         message=CommandMessagesEnum.vm_restart_error.value,
                         code=CommandMessagesEnum.vm_restart_error.name
                     )
-
+            self.logger.info(f"ВМ {vm_name} успешно обновлена")
             return VmMessage(
                 request_id=request_id,
                 success=True,
@@ -1187,7 +1187,7 @@ class VmManager(LibvirtClient):
                              success=False,
                              note=str(e))
 
-    def shutdown_vm(self, name: str, request_id: str, force: bool = False) -> VmMessage:
+    def shutoff_vm(self, name: str, request_id: str, force: bool = False) -> VmMessage:
         """
         Выключение виртуальной машины
 

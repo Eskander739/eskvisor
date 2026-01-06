@@ -46,7 +46,7 @@ def test_vm_03_start_stop_restart_vm(vm_session):
         # assert wait_while_not(lambda: get_state(random_name) == VMState.SHUTDOWN.value, timeout=3)
         # assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value, timeout=3)
         # ____________________________________Выключение ВМ____________________________________
-        stop_vm_info = vm_session.shutdown_vm(random_name, request_id, force=True)
+        stop_vm_info = vm_session.shutoff_vm(random_name, request_id, force=True)
         assert stop_vm_info.message == CommandMessagesEnum.vm_successfully_shutdowned.value
         assert stop_vm_info.code == CommandMessagesEnum.vm_successfully_shutdowned.name
 

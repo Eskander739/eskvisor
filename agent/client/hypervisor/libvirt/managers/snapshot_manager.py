@@ -8,7 +8,7 @@ from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.disk import Disk, SnapshotDiskInfo, DiskType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
-    SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
+    SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
     MultipleSnapshotsRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
     CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots, \
     SnapshotRevertSuccess, SnapshotsChain
@@ -345,7 +345,7 @@ class SnapshotManager(LibvirtClient):
                 note=str(e)
             )
 
-    def revert_to_snapshot(self, request: SnapshotRevertRequest, request_id: str) -> SnapshotMessage:
+    def revert_to_snapshot(self, vm_name: str, snapshot_name: str, request_id: str) -> SnapshotMessage:
         """
         Восстановить виртуальную машину до состояния снапшота
 
@@ -353,12 +353,12 @@ class SnapshotManager(LibvirtClient):
             SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(request.vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
             # Восстановление до снапшота
             virtual_machine.revertToSnapshot(snapshot, flags=0)
 
-            self.logger.info(f"VM '{request.vm_name}' восстановлена до снапшота '{request.snapshot_name}'")
+            self.logger.info(f"VM '{vm_name}' восстановлена до снапшота '{snapshot_name}'")
 
 
             return SnapshotMessage(
@@ -971,7 +971,7 @@ class SnapshotManager(LibvirtClient):
                                                   successful=len(results))
         )
 
-    def revert_to_parent_snapshot(self, request: SnapshotRevertRequest, request_id: str) -> SnapshotMessage:
+    def revert_to_parent_snapshot(self, vm_name: str, snapshot_name: str, request_id: str) -> SnapshotMessage:
         """
         Восстановить ВМ до родительского снапшота (откат к более раннему состоянию)
 
@@ -979,8 +979,8 @@ class SnapshotManager(LibvirtClient):
             SnapshotMessage с результатом операции
         """
         try:
-            virtual_machine = self.conn.lookupByName(request.vm_name)
-            snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
+            virtual_machine = self.conn.lookupByName(vm_name)
+            snapshot = virtual_machine.snapshotLookupByName(snapshot_name, flags=0)
 
             # Получаем родительский снапшот
             try:
@@ -992,17 +992,17 @@ class SnapshotManager(LibvirtClient):
                     virtual_machine.revertToSnapshot(parent_snapshot, flags=0)
 
                     # Получаем список снапшотов после родительского (включая текущий)
-                    snapshots_after = self._get_snapshots_after(request.vm_name, parent_name)
+                    snapshots_after = self._get_snapshots_after(vm_name, parent_name)
 
-                    self.logger.info(f"VM '{request.vm_name}' восстановлена до родительского снапшота '{parent_name}'")
+                    self.logger.info(f"VM '{vm_name}' восстановлена до родительского снапшота '{parent_name}'")
 
                     return SnapshotMessage(
                         request_id=request_id,
                         success=True,
                         message=CommandMessagesEnum.snapshot_revert_success.value,
                         code=CommandMessagesEnum.snapshot_revert_success.name,
-                        snapshot_info=SnapshotRevertSuccess(vm_name=request.vm_name,
-                                                            current_snapshot=request.snapshot_name,
+                        snapshot_info=SnapshotRevertSuccess(vm_name=vm_name,
+                                                            current_snapshot=snapshot_name,
                                                             parent_snapshot=parent_name,
                                                             snapshots_made_inactive=[s.name for s in snapshots_after],
                                                             note="Snapshots created after parent have become inactive")

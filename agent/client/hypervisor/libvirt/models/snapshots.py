@@ -109,12 +109,6 @@ class SnapshotDeleteRequest(BaseModel):
     remove_children: bool = False
 
 
-class SnapshotRevertRequest(BaseModel):
-    """Модель запроса для восстановления из снапшота"""
-    vm_name: str
-    snapshot_name: str
-
-
 class SnapshotUpdateRequest(BaseModel):
     """Модель запроса для обновления описания снапшота"""
     vm_name: str

@@ -1,3 +1,4 @@
+import time
 import uuid
 
 import pytest
@@ -6,19 +7,22 @@ from agent.client.hypervisor.libvirt.models.disk import DiskType
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotDeleteRequest
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.vm import VmUpdateRequest
+from agent.client.tools import wait_while_not
 
 
-@pytest.mark.tags("SN‑02", "Создание снапшота остановленной ВМ")
-def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, vm_session, storage_session):
+@pytest.mark.tags("SN‑03", "Восстановление ВМ из снапшота")
+def test_sn_03_restore_vm_from_snapshot(snapshot_session, create_stopped_vm, vm_session, storage_session):
     """
-    SN‑02: Создание снапшота остановленной ВМ
+    SN‑03: Восстановление ВМ из снапшота
 
-    Создать снапшот при выключенной ВМ. Убедиться, что снапшот сохраняет состояние дисков и конфигурации.
+    Выбрать снапшот и выполнить restore. Проверить, что ВМ возвращается в состояние на момент снапшота.
     """
     vm_name, request_id = create_stopped_vm
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False
+    get_state = vm_session.get_vm_state_by_name
     try:
         # _____________________________Получение информации о ВМ_______________________________
         vm_info = vm_session.get_vm_by_name(vm_name, request_id)
@@ -37,29 +41,41 @@ def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, v
         assert create_vm_info.code == CommandMessagesEnum.snapshot_successfully_created.name
         assert create_vm_info.snapshot_info is not None
         snapshot_info = create_vm_info.snapshot_info
-        # _______________________________Проверка наличия снапшота________________________________
+        # ________________________________Проверка наличия снапшота___________________________________
         assert snapshot_info.name == snapshot_name
         assert snapshot_info.description == description
         assert snapshot_info.vm_name == vm_name
         assert snapshot_info.state.value == VMState.SHUTOFF.value
         assert snapshot_info.size_bytes > 0
-        # _______________________________Проверка конфигурации ВМ________________________________
+        # _________________________________Проверка конфигурации ВМ___________________________________
         vm_config = snapshot_info.vm_config
         assert vm_config.name == vm_name
         assert vm_config.uuid == vm_info.vm_info.uuid
         assert vm_config.memory == vm_info.vm_info.memory
         assert vm_config.max_memory == vm_info.vm_info.max_memory
         assert vm_config.vcpus == vm_info.vm_info.vcpus
-
-        # _____________________________Проверка конфигурации дисков______________________________
-        vm_disk_info = storage_session.get_disks_by_vm(vm_name, request_id)
-        for current_disk, snapshot_disk in zip(sorted(vm_disk_info), sorted(snapshot_info.disks)):
-            assert current_disk.name == snapshot_disk.name
-            assert current_disk.path == snapshot_disk.path
-            assert snapshot_disk.type.value == DiskType.SNAPSHOT.value
-            assert current_disk.format.value == snapshot_disk.format.value
+        # ____________________________________Изменение ресурсов ВМ____________________________________
+        vm_session.shutoff_vm(vm_name, request_id, True)
+        edit_vm_info = vm_session.edit_vm(vm_name, VmUpdateRequest(vcpus=3), request_id)
+        assert edit_vm_info.message == CommandMessagesEnum.vm_edit_success.value
+        assert edit_vm_info.code == CommandMessagesEnum.vm_edit_success.name
+        assert wait_while_not(lambda: get_state(vm_name) == VMState.SHUTOFF.value)
+        vm_get_info = vm_session.get_vm_by_name(vm_name, request_id)
+        assert vm_get_info.message == CommandMessagesEnum.vm_successfully_found.value
+        assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name
+        assert vm_get_info.vm_info.vcpus == 3
+        # ________________________________Восстановление ВМ из снапшота________________________________
+        revert_vm_info = snapshot_session.revert_to_snapshot(vm_name, snapshot_name, request_id)
+        assert revert_vm_info.message == CommandMessagesEnum.snapshot_revert_success.value
+        assert revert_vm_info.code == CommandMessagesEnum.snapshot_revert_success.name
+        # __________________Проверка конфигурации ВМ после восстановления из снапшота__________________
+        assert wait_while_not(lambda: get_state(vm_name) == VMState.RUNNING.value)
+        vm_get_info = vm_session.get_vm_by_name(vm_name, request_id)
+        assert vm_get_info.message == CommandMessagesEnum.vm_successfully_found.value
+        assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name
+        assert vm_get_info.vm_info.vcpus == vm_info.vm_info.vcpus
     finally:
-        # ______________________________Удаление снапшота(постусловие)_____________________________
+        # ______________________________Удаление снапшота(постусловие)_________________________________
         if not snapshot_deleted:
             delete_snapshot_info = snapshot_session.delete_snapshot(SnapshotDeleteRequest(vm_name=vm_name,
                                                                                           snapshot_name=snapshot_name,
