@@ -186,5 +186,5 @@ class RpMessage(DefaultMessage):
 class SnapshotMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
     success: bool
-    snapshot_info: SnapshotWithParent | DeleteSnapshotInfo | SnapshotList = None
+    snapshot_info: SnapshotWithParent | DeleteSnapshotInfo | SnapshotList | None = None
     note: str | None = None

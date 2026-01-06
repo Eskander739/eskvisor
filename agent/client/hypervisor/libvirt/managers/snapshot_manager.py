@@ -50,7 +50,7 @@ class SnapshotManager(LibvirtClient):
                         description=parent_snapshot_info_dict.get("description"),
                         created=parent_snapshot_info_dict.get("creation_time"),
                         state=parent_snapshot_info_dict.get("state"),
-                        is_current=False,
+                        is_current=parent_snapshot_info_dict.get("current"),
                         size_bytes=parent_size
                     )
                 except self.libvirtError:
@@ -68,7 +68,7 @@ class SnapshotManager(LibvirtClient):
                                                        parent=parent_snapshot if parent_snapshot else None,
                                                        size_bytes=size,
                                                        vm_name=vm_name,
-                                                       is_current=True)
+                                                       is_current=snapshot_info_dict.get("current"))
                     snapshots_info.append(snapshot_info)
                 except Exception as e:
                     self.logger.warning(f"Не удалось получить размер снапшота {snapshot.getName()}: {e}")
@@ -81,7 +81,7 @@ class SnapshotManager(LibvirtClient):
                                                        parent=parent_snapshot if parent_snapshot else None,
                                                        size_bytes=None,
                                                        vm_name=vm_name,
-                                                       is_current=True)
+                                                       is_current=snapshot_info_dict.get("current"))
                     snapshots_info.append(snapshot_info)
 
                 snapshots_list.append(snapshot_info)
@@ -130,38 +130,36 @@ class SnapshotManager(LibvirtClient):
             virtual_machine = self.conn.lookupByName(request.vm_name)
             snapshot = virtual_machine.snapshotLookupByName(request.snapshot_name, flags=0)
 
-            snapshot_data = SnapshotWithParent(
-                name=snapshot.getName(),
-                description=snapshot.getDescription(),
-                created=snapshot.getCreateTime(),
-                state=snapshot.getState()
-            )
-
             # Информация о родительском снапшоте
             try:
                 parent_snapshot = snapshot.getParent()
-                snapshot_data.parent = Snapshot(
+                parent_snapshot_xml = snapshot.getXMLDesc(flags=0)
+                parent_snapshot_info_dict = self._parse_snapshot_xml(parent_snapshot_xml)
+                parent_size = self._get_snapshot_size(snapshot)
+                parent_snapshot = Snapshot(
                     name=parent_snapshot.getName(),
-                    description=self._get_snapshot_description(snapshot),
-                    created=parent_snapshot.getCreateTime(),
-                    state=parent_snapshot.getState()
+                    vm_name=snapshot.getName(),
+                    description=parent_snapshot_info_dict.get("description"),
+                    created=parent_snapshot_info_dict.get("creation_time"),
+                    state=parent_snapshot_info_dict.get("state"),
+                    is_current=parent_snapshot_info_dict.get("current"),
+                    size_bytes=parent_size
                 )
             except self.libvirtError:
-                snapshot_data.parent = None
+                parent_snapshot = None
 
             # Получение размера снапшота
             size = self._get_snapshot_size(snapshot)
-
-            snapshot_info = {
-                "name": snapshot_data.name,
-                "description": snapshot_data.description,
-                "created": snapshot_data.created,
-                "state": snapshot_data.state,
-                "parent": snapshot_data.parent.name if snapshot_data.parent else None,
-                "size_bytes": size,
-                "vm_name": request.vm_name
-            }
-
+            snapshot_xml = snapshot.getXMLDesc(flags=0)
+            snapshot_info_dict = self._parse_snapshot_xml(snapshot_xml)
+            snapshot_info = SnapshotWithParent(name=snapshot.getName(),
+                                               description=snapshot_info_dict.get("description"),
+                                               created=snapshot_info_dict.get("creation_time"),
+                                               state=snapshot_info_dict.get("state"),
+                                               parent=parent_snapshot if parent_snapshot else None,
+                                               size_bytes=size,
+                                               vm_name=request.vm_name,
+                                               is_current=snapshot_info_dict.get("current"))
             return SnapshotMessage(
                 request_id=request_id,
                 success=True,
@@ -486,7 +484,7 @@ class SnapshotManager(LibvirtClient):
                             description=parent_info_dict.get("description"),
                             created=parent_info_dict.get("creation_time"),
                             state=parent_info_dict.get("state"),
-                            is_current=False,
+                            is_current=parent_info_dict.get("current"),
                             size_bytes=parent_size
                         )
                     else:
@@ -504,7 +502,7 @@ class SnapshotManager(LibvirtClient):
                                                    parent=parent_snapshot if parent_snapshot else None,
                                                    size_bytes=size,
                                                    vm_name=vm_name,
-                                                   is_current=True)
+                                                   is_current=snapshot_info_dict.get("current"))
                 return SnapshotMessage(
                     request_id=request_id,
                     success=True,
@@ -515,13 +513,9 @@ class SnapshotManager(LibvirtClient):
 
             return SnapshotMessage(
                 request_id=request_id,
-                success=True,
-                message=CommandMessagesEnum.snapshot_found.value,
-                code=CommandMessagesEnum.snapshot_found.name,
-                snapshot_info={
-                    "vm_name": vm_name,
-                    "is_current": False
-                }
+                success=False,
+                message=CommandMessagesEnum.snapshot_not_found.value,
+                code=CommandMessagesEnum.snapshot_not_found.name,
             )
 
         except self.libvirtError as e:
@@ -550,6 +544,13 @@ class SnapshotManager(LibvirtClient):
             root = ET.fromstring(xml_desc)
             result = {}
 
+            # Извлекаем имя ВМ из снапшота
+            name_elem = root.find('name')
+            if name_elem is not None and name_elem.text:
+                result["name"] = name_elem.text.strip()
+            else:
+                result["name"] = None
+
             # Извлекаем описание
             description_elem = root.find('description')
             if description_elem is not None and description_elem.text:
@@ -574,14 +575,54 @@ class SnapshotManager(LibvirtClient):
             else:
                 result["state"] = None
 
+            # Дополнительно: родительский снапшот (для цепочки)
+            parent_elem = root.find('parent')
+            if parent_elem is not None:
+                # У родителя может быть атрибут name
+                parent_name = parent_elem.get('name')
+                if parent_name:
+                    result["parent_name"] = parent_name
+
+                # Или текст внутри элемента
+                elif parent_elem.text:
+                    result["parent_name"] = parent_elem.text.strip()
+                else:
+                    result["parent_name"] = None
+            else:
+                result["parent_name"] = None
+
+            uuid_elem = root.find('uuid')
+            if uuid_elem is not None and uuid_elem.text:
+                result["uuid"] = uuid_elem.text.strip()
+            else:
+                result["uuid"] = None
+
+            # 2. Дочерние снапшоты (если есть)
+            children_elem = root.find('children')
+            if children_elem is not None:
+                children = []
+                for child in children_elem.findall('snapshot'):
+                    child_name = child.find('name')
+                    if child_name is not None and child_name.text:
+                        children.append(child_name.text.strip())
+                result["children"] = children
+            else:
+                result["children"] = []
+
+            # 3. Флаги активности
+            result["active"] = root.get('active') == '1' if root.get('active') else False
+            result["current"] = root.get('current') == '1' if root.get('current') else False
+
             return result
 
         except Exception as e:
             self.logger.warning(f"Ошибка парсинга XML снапшота: {e}")
             return {
+                "name": None,
                 "description": None,
                 "creation_time": None,
-                "state": None
+                "state": None,
+                "parent_name": None
             }
 
     def clone_vm_from_snapshot(self, request: SnapshotCloneRequest, request_id: str) -> SnapshotMessage:
