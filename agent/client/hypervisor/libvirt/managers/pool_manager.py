@@ -6,7 +6,6 @@ import re
 import xml.etree.ElementTree as ET
 import libvirt
 from pathlib import Path
-from typing import ClassVar
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.msg import RpMessage, CommandMessagesEnum
@@ -887,7 +886,7 @@ class PoolManager(LibvirtClient, ResourcePoolRamCpu):
     Поддерживает создание, редактирование, удаление пулов и управление ВМ в них.
     """
 
-    libvirtError: ClassVar = libvirt.libvirtError
+    libvirtError = libvirt.libvirtError
 
     def __init__(self):
         super().__init__()

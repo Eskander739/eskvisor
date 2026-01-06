@@ -4,7 +4,6 @@ import subprocess
 import tempfile
 import time
 import uuid
-from typing import Any, List
 from pathlib import Path
 
 import libvirt
@@ -59,7 +58,7 @@ class VmManager(LibvirtClient):
 
     def create_vm(
         self, config: VMCreateRequest, dry_run: bool = False
-    ) -> dict[str, Any] | VmError | VmMessage:
+    ) -> dict | VmError | VmMessage:
         """
         Создание виртуальной машины через virt-install
 
@@ -709,7 +708,7 @@ class VmManager(LibvirtClient):
                 code="ISO_DETACH_EXCEPTION",
             )
 
-    def list_vm_disks(self, vm_name: str) -> List[Disk]:
+    def list_vm_disks(self, vm_name: str) -> list[Disk]:
         """
         Получить список всех дисков ВМ (включая ISO)
 
@@ -1843,7 +1842,7 @@ class VmManager(LibvirtClient):
 
     def clone_vm(
         self, source_name: str, new_name: str, new_uuid: bool = True
-    ) -> dict[str, Any]:
+    ) -> dict:
         """
         Клонирование существующей ВМ
 

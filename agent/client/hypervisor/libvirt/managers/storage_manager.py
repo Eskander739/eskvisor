@@ -6,7 +6,6 @@ import re
 import shutil
 import uuid
 from datetime import datetime
-from typing import List
 import logging
 import xml.etree.ElementTree as ET
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
@@ -879,7 +878,7 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Неожиданная ошибка: {e}")
             return False
 
-    def list_disks(self, query: DiskQuery | None = None) -> List[Disk]:
+    def list_disks(self, query: DiskQuery | None = None) -> list[Disk]:
         disks = []
         try:
             # disks.extend(self._get_pool_disks(query))
@@ -1277,7 +1276,7 @@ class StorageManager(LibvirtClient):
             self.logger.error(f"Ошибка поиска ВМ: {e}")
             return None
 
-    def _get_pool_disks(self, query: DiskQuery | None) -> List[Disk]:
+    def _get_pool_disks(self, query: DiskQuery | None) -> list[Disk]:
         disks = []
         try:
             if query and query.pool:
@@ -1316,7 +1315,7 @@ class StorageManager(LibvirtClient):
 
         return disks
 
-    def _get_file_disks(self, query: DiskQuery | None) -> List[Disk]:
+    def _get_file_disks(self, query: DiskQuery | None) -> list[Disk]:
         disks = []
         standard_dirs = list(self.libvirt_config.search_dirs)
 
@@ -1344,8 +1343,8 @@ class StorageManager(LibvirtClient):
         )
 
     def _get_attached_disks(
-        self, query: DiskQuery | None, existing_disks: List[Disk] | None = None
-    ) -> List[Disk]:
+        self, query: DiskQuery | None, existing_disks: list[Disk] | None = None
+    ) -> list[Disk]:
         attached_disks = []
         try:
             vm_ids = self.conn.listDomainsID()
@@ -1402,7 +1401,7 @@ class StorageManager(LibvirtClient):
 
         return attached_disks
 
-    def _extract_disk_blocks_from_vm_xml(self, xml_desc: str) -> List[dict]:
+    def _extract_disk_blocks_from_vm_xml(self, xml_desc: str) -> list[dict]:
         disk_blocks = []
         lines = xml_desc.split("\n")
         i = 0
@@ -1521,7 +1520,7 @@ class StorageManager(LibvirtClient):
         except libvirt.libvirtError:
             return None
 
-    def _remove_duplicate_disks(self, disks: List[Disk]) -> List[Disk]:
+    def _remove_duplicate_disks(self, disks: list[Disk]) -> list[Disk]:
         unique_disks = {}
         for disk in disks:
             if disk.path not in unique_disks:
@@ -1538,7 +1537,7 @@ class StorageManager(LibvirtClient):
 
         return list(unique_disks.values())
 
-    def _apply_filters(self, disks: List[Disk], query: DiskQuery | None) -> List[Disk]:
+    def _apply_filters(self, disks: list[Disk], query: DiskQuery | None) -> list[Disk]:
         if not query:
             return disks
 
