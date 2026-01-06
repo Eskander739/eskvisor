@@ -75,7 +75,7 @@ class SnapshotsChain(BaseModel):
     vm_name: str
     snapshots: list[SnapshotWithParent]
     snapshot_tree: dict
-    chains: list[list[dict]]
+    chains: list[list[SnapshotWithParent]]
     root_snapshots: list[str]
     chain_depth: int
 
@@ -128,11 +128,6 @@ class SnapshotInfoRequest(BaseModel):
     """Модель запроса для получения информации о снапшоте"""
     vm_name: str
     snapshot_name: str
-
-
-class SnapshotChainRequest(BaseModel):
-    """Модель запроса для получения цепочки снапшотов"""
-    vm_name: str
 
 
 class MultipleSnapshotsRequest(BaseModel):

@@ -43,6 +43,17 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_ru
         assert snapshot_info.description == description
         assert snapshot_info.vm_name == vm_name
         assert snapshot_info.state.value == SnapshotState.RUNNING.value
+        # ____________________Проверка корректного обновления дерева снапшотов____________________
+        get_snapshots_tree_info = snapshot_session.get_snapshot_chain(vm_name, request_id)
+        assert get_snapshots_tree_info.message == CommandMessagesEnum.snapshot_found.value
+        assert get_snapshots_tree_info.code == CommandMessagesEnum.snapshot_found.name
+        assert get_snapshots_tree_info.success is True
+        assert get_snapshots_tree_info.snapshot_info is not None
+        snapshots_tree = get_snapshots_tree_info.snapshot_info
+        assert len(snapshots_tree.snapshots) == 1
+        snapshot_from_snapshots = snapshots_tree.snapshots.pop()
+        assert snapshot_from_snapshots.vm_name == vm_name
+        assert snapshot_from_snapshots.name == snapshot_name
         # ____________________________________Удаление снапшота____________________________________
         delete_snapshot_info = snapshot_session.delete_snapshot(SnapshotDeleteRequest(vm_name=vm_name,
                                                                                       snapshot_name=snapshot_name,
@@ -57,7 +68,11 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(snapshot_session, create_ru
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
-        # _____________________________Проверка корректного обновления дерева снапшотов_______________________________
+        # ____________Проверка корректного обновления дерева снапшотов после удаления_____________
+        get_snapshots_tree_info = snapshot_session.get_snapshot_chain(vm_name, request_id)
+        assert get_snapshots_tree_info.message == CommandMessagesEnum.snapshot_list_error.value
+        assert get_snapshots_tree_info.code == CommandMessagesEnum.snapshot_list_error.name
+        assert get_snapshots_tree_info.success is False
     finally:
         # ______________________________Удаление снапшота(постусловие)_____________________________
         if not snapshot_deleted:

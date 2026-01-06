@@ -5,7 +5,7 @@ import uuid
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, Snapshot, SnapshotInfoRequest, \
     SnapshotCreateRequest, SnapshotDeleteRequest, SnapshotRevertRequest, SnapshotUpdateRequest, SnapshotCloneRequest, \
-    MultipleSnapshotsRequest, SnapshotChainRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
+    MultipleSnapshotsRequest, DeleteSnapshotInfo, SnapshotList, ClonedSnapshot, \
     CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, CreateMultipleSnapshots, \
     SnapshotRevertSuccess, SnapshotsChain
 from agent.client.hypervisor.libvirt.models.msg import SnapshotMessage, CommandMessagesEnum
@@ -92,7 +92,7 @@ class SnapshotManager(LibvirtClient):
                 return SnapshotMessage(
                     request_id=request_id,
                     success=True,
-                    message=CommandMessagesEnum.vm_successfully_found.value,
+                    message=CommandMessagesEnum.snapshot_list_found.value,
                     code=CommandMessagesEnum.snapshot_list_found.name,
                     snapshot_info=SnapshotList(vm_name=vm_name,
                                                snapshots=snapshots_info,
@@ -102,9 +102,9 @@ class SnapshotManager(LibvirtClient):
             else:
                 return SnapshotMessage(
                     request_id=request_id,
-                    success=True,
-                    message=CommandMessagesEnum.snapshot_list_found.value,
-                    code=CommandMessagesEnum.snapshot_list_found.name,
+                    success=False,
+                    message=CommandMessagesEnum.snapshot_list_error.value,
+                    code=CommandMessagesEnum.snapshot_list_error.name,
                     snapshot_info=SnapshotList(vm_name=vm_name,
                                                snapshots=[],
                                                count=0,
@@ -913,7 +913,7 @@ class SnapshotManager(LibvirtClient):
                 note=str(e)
             )
 
-    def get_snapshot_chain(self, request: SnapshotChainRequest, request_id: str) -> SnapshotMessage:
+    def get_snapshot_chain(self, vm_name: str, request_id: str) -> SnapshotMessage:
         """
         Получить цепочку снапшотов ВМ с детальной информацией
 
@@ -922,23 +922,23 @@ class SnapshotManager(LibvirtClient):
         """
         try:
             # Получаем все снапшоты ВМ
-            snapshots_msg = self.snapshots_by_vm_name(request.vm_name, request_id)
+            snapshots_msg = self.snapshots_by_vm_name(vm_name, request_id)
 
-            if not snapshots_msg.success:
+            if snapshots_msg.message == CommandMessagesEnum.snapshot_list_error.value:
                 return snapshots_msg
 
-            snapshots_info = snapshots_msg.rp_info.get("snapshots", [])
+            snapshots_info = snapshots_msg.snapshot_info.snapshots
 
             # Строим дерево снапшотов
             snapshot_tree = self._build_snapshot_tree(snapshots_info)
 
             # Находим корневые снапшоты (без родителей)
-            root_snapshots = [s for s in snapshots_info if not s.get("parent")]
+            root_snapshots = [s for s in snapshots_info if not s.parent]
 
             # Строим цепочки
             chains = []
             for root in root_snapshots:
-                chain = self._build_chain_from_root(root["name"], snapshots_info)
+                chain = self._build_chain_from_root(root.name, snapshots_info)
                 chains.append(chain)
 
             return SnapshotMessage(
@@ -946,11 +946,11 @@ class SnapshotManager(LibvirtClient):
                 success=True,
                 message=CommandMessagesEnum.snapshot_found.value,
                 code=CommandMessagesEnum.snapshot_found.name,
-                snapshot_info=SnapshotsChain(vm_name=request.vm_name,
+                snapshot_info=SnapshotsChain(vm_name=vm_name,
                                              snapshots=snapshots_info,
                                              snapshot_tree=snapshot_tree,
                                              chains=chains,
-                                             root_snapshots=[s["name"] for s in root_snapshots],
+                                             root_snapshots=[s.name for s in root_snapshots],
                                              chain_depth=max([len(c) for c in chains]) if chains else 0)
             )
 
@@ -1096,37 +1096,38 @@ class SnapshotManager(LibvirtClient):
 
         return max_depth
 
-    def _build_snapshot_tree(self, snapshots_info: list[dict]) -> dict:
+    def _build_snapshot_tree(self, snapshots_info: list[SnapshotWithParent]) -> dict:
         """Построить дерево снапшотов"""
         tree = {}
 
         # Создаем узлы для всех снапшотов
         for snapshot in snapshots_info:
-            tree[snapshot["name"]] = {
+            tree[snapshot.name] = {
                 "info": snapshot,
                 "children": []
             }
 
         # Строим связи родитель-ребенок
         for snapshot in snapshots_info:
-            parent_name = snapshot.get("parent")
-            if parent_name and parent_name in tree:
-                tree[parent_name]["children"].append(snapshot["name"])
+            if snapshot.parent:
+                parent_name = snapshot.parent.name
+                if parent_name and parent_name in tree:
+                    tree[parent_name]["children"].append(snapshot.name)
 
         # Находим корневые узлы
-        root_nodes = [name for name, node in tree.items() if not node["info"].get("parent")]
+        root_nodes = [name for name, node in tree.items() if not node["info"].parent]
 
         return {
             "nodes": tree,
             "roots": root_nodes
         }
 
-    def _build_chain_from_root(self, root_name: str, snapshots_info: list[dict]) -> list[dict]:
+    def _build_chain_from_root(self, root_name: str, snapshots_info: list[SnapshotWithParent]) -> list[SnapshotWithParent]:
         """Построить цепочку начиная с корневого снапшота"""
         chain = []
 
         # Создаем словарь для быстрого поиска
-        snapshots_dict = {s["name"]: s for s in snapshots_info}
+        snapshots_dict = {s.name: s for s in snapshots_info}
 
         current_name = root_name
         while current_name in snapshots_dict:
@@ -1136,8 +1137,8 @@ class SnapshotManager(LibvirtClient):
             # Ищем следующего ребенка
             next_snapshot = None
             for snapshot in snapshots_info:
-                if snapshot.get("parent") == current_name:
-                    next_snapshot = snapshot["name"]
+                if snapshot.parent and snapshot.parent.name == current_name:
+                    next_snapshot = snapshot.name
                     break
 
             if next_snapshot:
