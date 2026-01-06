@@ -9,7 +9,9 @@ from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
 @pytest.mark.tags("SN‑02", "Создание снапшота остановленной ВМ")
-def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, vm_session, storage_session):
+def test_sn_02_create_snapshot_stopped_vm(
+    snapshot_session, create_stopped_vm, vm_session, storage_session
+):
     """
     SN‑02: Создание снапшота остановленной ВМ
 
@@ -29,12 +31,18 @@ def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, v
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # ____________________________Создание снапшота работающей ВМ_____________________________
-        vm_template = SnapshotCreateRequest(vm_name=vm_name,
-                                            snapshot_name=snapshot_name,
-                                            description=description)
+        vm_template = SnapshotCreateRequest(
+            vm_name=vm_name, snapshot_name=snapshot_name, description=description
+        )
         create_vm_info = snapshot_session.create_snapshot(vm_template, request_id)
-        assert create_vm_info.message == CommandMessagesEnum.snapshot_successfully_created.value
-        assert create_vm_info.code == CommandMessagesEnum.snapshot_successfully_created.name
+        assert (
+            create_vm_info.message
+            == CommandMessagesEnum.snapshot_successfully_created.value
+        )
+        assert (
+            create_vm_info.code
+            == CommandMessagesEnum.snapshot_successfully_created.name
+        )
         assert create_vm_info.snapshot_info is not None
         snapshot_info = create_vm_info.snapshot_info
         # _______________________________Проверка наличия снапшота________________________________
@@ -53,7 +61,9 @@ def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, v
 
         # _____________________________Проверка конфигурации дисков______________________________
         vm_disk_info = storage_session.get_disks_by_vm(vm_name, request_id)
-        for current_disk, snapshot_disk in zip(sorted(vm_disk_info), sorted(snapshot_info.disks)):
+        for current_disk, snapshot_disk in zip(
+            sorted(vm_disk_info), sorted(snapshot_info.disks)
+        ):
             assert current_disk.name == snapshot_disk.name
             assert current_disk.path == snapshot_disk.path
             assert snapshot_disk.type.value == DiskType.SNAPSHOT.value
@@ -61,10 +71,18 @@ def test_sn_02_create_snapshot_stopped_vm(snapshot_session, create_stopped_vm, v
     finally:
         # ______________________________Удаление снапшота(постусловие)_____________________________
         if not snapshot_deleted:
-            delete_snapshot_info = snapshot_session.delete_snapshot(vm_name=vm_name,
-                                                                    snapshot_name=snapshot_name,
-                                                                    remove_children=True,
-                                                                    request_id=request_id)
-            assert delete_snapshot_info.message == CommandMessagesEnum.snapshot_successfully_deleted.value
-            assert delete_snapshot_info.code == CommandMessagesEnum.snapshot_successfully_deleted.name
+            delete_snapshot_info = snapshot_session.delete_snapshot(
+                vm_name=vm_name,
+                snapshot_name=snapshot_name,
+                remove_children=True,
+                request_id=request_id,
+            )
+            assert (
+                delete_snapshot_info.message
+                == CommandMessagesEnum.snapshot_successfully_deleted.value
+            )
+            assert (
+                delete_snapshot_info.code
+                == CommandMessagesEnum.snapshot_successfully_deleted.name
+            )
             assert delete_snapshot_info.success is True

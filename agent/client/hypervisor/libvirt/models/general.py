@@ -3,6 +3,7 @@ from enum import Enum
 
 class VMState(Enum):
     """Состояния виртуальной машины"""
+
     NOSTATE = 0  # Нет состояния
     RUNNING = 1  # Работает
     BLOCKED = 2  # Заблокирована
@@ -15,6 +16,7 @@ class VMState(Enum):
 
 class MachineType(Enum):
     """Типы машин для эмуляции"""
+
     Q35 = "q35"  # Современный, поддерживает PCIe и hotplug
     PC = "pc"  # Стандартный PC (устаревший)
     PC_I440FX = "pc-i440fx"  # PC с i440FX чипсетом

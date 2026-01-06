@@ -9,7 +9,9 @@ from agent.client.hypervisor.libvirt.managers.network_manager import NetworkMana
 from agent.client.hypervisor.libvirt.managers.pool_manager import PoolManager
 from agent.client.hypervisor.libvirt.managers.snapshot_manager import SnapshotManager
 from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
-from agent.client.hypervisor.libvirt.managers.virsh_manager import VirshConsoleController
+from agent.client.hypervisor.libvirt.managers.virsh_manager import (
+    VirshConsoleController,
+)
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
 from agent.client.hypervisor.libvirt.models.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
@@ -29,7 +31,7 @@ def pytest_configure(config):
     console_handler.setLevel(logging.INFO)
 
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     console_handler.setFormatter(formatter)
 
@@ -54,7 +56,11 @@ def create_stopped_vm():
         vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()])
         vm_config.name = random_name
         vm_manager.create_vm(vm_config)
-        assert wait_while_not(lambda: vm_manager.get_vm_state_by_name(vm_config.name) == VMState.SHUTOFF.value, timeout=120)
+        assert wait_while_not(
+            lambda: vm_manager.get_vm_state_by_name(vm_config.name)
+            == VMState.SHUTOFF.value,
+            timeout=120,
+        )
 
         yield random_name, request_id
         vm_manager.delete_vm_with_force(vm_config.name, request_id)
@@ -65,23 +71,36 @@ def create_running_vm_session():
     with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
         request_id = str(uuid.uuid4())
-        vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()], autostart_vm=True)
+        vm_config = VMCreateRequest(
+            name=random_name, disks=[DiskCreate()], autostart_vm=True
+        )
         vm_config.name = random_name
         vm_manager.create_vm(vm_config)
-        assert wait_while_not(lambda: vm_manager.get_vm_state_by_name(vm_config.name) == VMState.RUNNING.value, timeout=120)
+        assert wait_while_not(
+            lambda: vm_manager.get_vm_state_by_name(vm_config.name)
+            == VMState.RUNNING.value,
+            timeout=120,
+        )
 
         yield random_name, request_id
         vm_manager.delete_vm_with_force(vm_config.name, request_id)
+
 
 @pytest.fixture(scope="function")
 def create_running_vm_func():
     with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
         request_id = str(uuid.uuid4())
-        vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()], autostart_vm=True)
+        vm_config = VMCreateRequest(
+            name=random_name, disks=[DiskCreate()], autostart_vm=True
+        )
         vm_config.name = random_name
         vm_manager.create_vm(vm_config)
-        assert wait_while_not(lambda: vm_manager.get_vm_state_by_name(vm_config.name) == VMState.RUNNING.value, timeout=120)
+        assert wait_while_not(
+            lambda: vm_manager.get_vm_state_by_name(vm_config.name)
+            == VMState.RUNNING.value,
+            timeout=120,
+        )
 
         yield random_name, request_id
         vm_manager.delete_vm_with_force(vm_config.name, request_id)
@@ -95,17 +114,21 @@ def multi_create_stopped_vm():
         for _ in range(2):
             current_vm_name = f"TEST-VM_{random.randint(10000, 99999)}"
             new_disk_name = f"disk-{str(random.randint(100000, 999999))}"
-            vm_config = VMCreateRequest(name=current_vm_name, disks=[DiskCreate(name=new_disk_name)])
+            vm_config = VMCreateRequest(
+                name=current_vm_name, disks=[DiskCreate(name=new_disk_name)]
+            )
             vm_config.name = current_vm_name
             vm_manager.create_vm(vm_config)
-            assert wait_while_not(lambda: vm_manager.get_vm_state_by_name(vm_config.name) == VMState.SHUTOFF.value,
-                                  timeout=120)
+            assert wait_while_not(
+                lambda: vm_manager.get_vm_state_by_name(vm_config.name)
+                == VMState.SHUTOFF.value,
+                timeout=120,
+            )
             vm_config_names.append(current_vm_name)
         yield vm_config_names, request_id
 
         for vm_config_name in vm_config_names:
             vm_manager.delete_vm_with_force(vm_config_name, request_id)
-
 
 
 @pytest.fixture(scope="session")
@@ -119,19 +142,23 @@ def vm_session():
     with VmManager() as vm_manager:
         yield vm_manager
 
+
 @pytest.fixture(scope="session")
 def network_session():
     with NetworkManager() as vn_manager:
         yield vn_manager
 
+
 @pytest.fixture(scope="session")
 def virsh_console_session():
     yield VirshConsoleController
+
 
 @pytest.fixture(scope="session")
 def resource_pool_session():
     with PoolManager() as rp_manager:
         yield rp_manager
+
 
 @pytest.fixture(scope="session")
 def snapshot_session():

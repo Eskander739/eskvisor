@@ -5,6 +5,7 @@ from agent.client.hypervisor.libvirt.models.enum import ControllerType
 
 class VMController(BaseModel):
     """Модель контроллера ВМ"""
+
     controller_type: ControllerType | str
     index: int = 0
     model: str | None = None
@@ -19,7 +20,7 @@ class VMController(BaseModel):
     def validate_model(cls, v, values):
         """Установка модели контроллера по умолчанию"""
         if v is None:
-            controller_type = values.get('controller_type')
+            controller_type = values.get("controller_type")
             default_models = {
                 ControllerType.USB: "qemu-xhci",
                 ControllerType.SCSI: "virtio-scsi",

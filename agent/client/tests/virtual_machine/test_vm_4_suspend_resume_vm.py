@@ -25,14 +25,18 @@ def test_vm_04_suspend_resume_vm(vm_session):
         random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         vm_template = VMCreateRequest(name=random_name, disks=[DiskCreate()])
         create_vm_info = vm_session.create_vm(vm_template)
-        assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        assert (
+            create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        )
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.SHUTOFF.value)
 
         # ____________________________________Запуск ВМ____________________________________
         start_vm_info = vm_session.start_vm(random_name, request_id)
-        assert start_vm_info.message == CommandMessagesEnum.vm_successfully_started.value
+        assert (
+            start_vm_info.message == CommandMessagesEnum.vm_successfully_started.value
+        )
         assert start_vm_info.code == CommandMessagesEnum.vm_successfully_started.name
 
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
@@ -44,7 +48,9 @@ def test_vm_04_suspend_resume_vm(vm_session):
         assert wait_while_not(lambda: get_state(random_name) == VMState.PAUSED.value)
         # ____________________________________Возобновление ВМ____________________________________
         resume_vm_info = vm_session.resume_vm(random_name, request_id)
-        assert resume_vm_info.message == CommandMessagesEnum.vm_successfully_resumed.value
+        assert (
+            resume_vm_info.message == CommandMessagesEnum.vm_successfully_resumed.value
+        )
         assert resume_vm_info.code == CommandMessagesEnum.vm_successfully_resumed.name
 
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
@@ -52,7 +58,14 @@ def test_vm_04_suspend_resume_vm(vm_session):
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________________________________
         if random_name is not None:
-            delete_vm_info = vm_session.delete_vm_with_force(name=random_name, request_id=request_id)
-            assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
-            assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            delete_vm_info = vm_session.delete_vm_with_force(
+                name=random_name, request_id=request_id
+            )
+            assert (
+                delete_vm_info.message
+                == CommandMessagesEnum.vm_successfully_deleted.value
+            )
+            assert (
+                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            )
             assert delete_vm_info.success is True

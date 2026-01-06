@@ -1,10 +1,17 @@
 import random
 
 import pytest
-from agent.client.hypervisor.libvirt.models.disk import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
+from agent.client.hypervisor.libvirt.models.disk import (
+    DiskCreate,
+    DiskFormat,
+    DiskStatus,
+    DiskAttach,
+    DiskDetach,
+)
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 RANDOM_NAME = random.randint(10000, 99999)
+
 
 @pytest.mark.tags("VD‑10", "Одновременное подключение одного диска к нескольким ВМ")
 def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
@@ -22,8 +29,12 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
     target_dev_to_detach = None
     try:
         # ____________________________________Создание диска____________________________________
-        attach_disk_create = DiskCreate(name=f"disk-test-{RANDOM_NAME}.qcow2", size_gb=0.2, format=DiskFormat.QCOW2,
-                                        sparse=True)
+        attach_disk_create = DiskCreate(
+            name=f"disk-test-{RANDOM_NAME}.qcow2",
+            size_gb=0.2,
+            format=DiskFormat.QCOW2,
+            sparse=True,
+        )
         attach_disk = storage_session.create_disk(attach_disk_create)
         assert attach_disk is not None, "Ошибка: диск для подключения не создан"
 
@@ -38,38 +49,74 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
 
         disk_attach_list = []
         for vm_config_name, target_dev in zip(vm_config_names, target_dev_list):
-            disk_attach_list.append(DiskAttach(vm_name=vm_config_name, path=vm_disk.path, target_dev=target_dev))
+            disk_attach_list.append(
+                DiskAttach(
+                    vm_name=vm_config_name, path=vm_disk.path, target_dev=target_dev
+                )
+            )
 
         for index, disk_attach in enumerate(disk_attach_list):
-            attach_disk_result = storage_session.attach_disk(disk_attach, request_id=request_id)
+            attach_disk_result = storage_session.attach_disk(
+                disk_attach, request_id=request_id
+            )
             if index == 0:
 
                 # ____________________________________Подключение диска____________________________________
-                assert attach_disk_result.message == CommandMessagesEnum.disk_successfully_attached.value
-                assert attach_disk_result.code == CommandMessagesEnum.disk_successfully_attached.name
-                current_vm_disk = storage_session.get_disk_info_by_target_dev(vm_name=disk_attach.vm_name,
-                                                                      target_dev=disk_attach.target_dev,
-                                                                      request_id=request_id)
+                assert (
+                    attach_disk_result.message
+                    == CommandMessagesEnum.disk_successfully_attached.value
+                )
+                assert (
+                    attach_disk_result.code
+                    == CommandMessagesEnum.disk_successfully_attached.name
+                )
+                current_vm_disk = storage_session.get_disk_info_by_target_dev(
+                    vm_name=disk_attach.vm_name,
+                    target_dev=disk_attach.target_dev,
+                    request_id=request_id,
+                )
 
-                assert current_vm_disk.message == CommandMessagesEnum.disk_founded_by_target_dev.value
-                assert current_vm_disk.code == CommandMessagesEnum.disk_founded_by_target_dev.name
+                assert (
+                    current_vm_disk.message
+                    == CommandMessagesEnum.disk_founded_by_target_dev.value
+                )
+                assert (
+                    current_vm_disk.code
+                    == CommandMessagesEnum.disk_founded_by_target_dev.name
+                )
                 vm_name_to_detach = disk_attach.vm_name
                 target_dev_to_detach = disk_attach.target_dev
             elif index == 1:
 
                 # ____________________________________Подключение диска____________________________________
-                assert attach_disk_result.message == CommandMessagesEnum.disk_already_attached_error.value
-                assert attach_disk_result.code == CommandMessagesEnum.disk_already_attached_error.name
-                current_vm_disk = storage_session.get_disk_info_by_target_dev(vm_name=disk_attach.vm_name,
-                                                                      target_dev=disk_attach.target_dev,
-                                                                      request_id=request_id)
+                assert (
+                    attach_disk_result.message
+                    == CommandMessagesEnum.disk_already_attached_error.value
+                )
+                assert (
+                    attach_disk_result.code
+                    == CommandMessagesEnum.disk_already_attached_error.name
+                )
+                current_vm_disk = storage_session.get_disk_info_by_target_dev(
+                    vm_name=disk_attach.vm_name,
+                    target_dev=disk_attach.target_dev,
+                    request_id=request_id,
+                )
 
-                assert current_vm_disk.message == CommandMessagesEnum.disk_not_found_by_target_dev.value
-                assert current_vm_disk.code == CommandMessagesEnum.disk_not_found_by_target_dev.name
+                assert (
+                    current_vm_disk.message
+                    == CommandMessagesEnum.disk_not_found_by_target_dev.value
+                )
+                assert (
+                    current_vm_disk.code
+                    == CommandMessagesEnum.disk_not_found_by_target_dev.name
+                )
 
         # ____________________________________Отключение диска____________________________________
 
-        storage_session.detach_disk(DiskDetach(vm_name=vm_name_to_detach, target_dev=target_dev_to_detach))
+        storage_session.detach_disk(
+            DiskDetach(vm_name=vm_name_to_detach, target_dev=target_dev_to_detach)
+        )
 
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
         vm_disk = vm_disk.disk_info

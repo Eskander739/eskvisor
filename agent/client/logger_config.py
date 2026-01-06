@@ -13,7 +13,9 @@ class DefaultLogger:
     Конфигурация системы логирования для StorageManager
     """
 
-    def __init__(self, name: str = "StorageManager", log_dir: str = "/var/log/virt-manager"):
+    def __init__(
+        self, name: str = "StorageManager", log_dir: str = "/var/log/virt-manager"
+    ):
         """
         Инициализация логгера
 
@@ -29,8 +31,8 @@ class DefaultLogger:
 
         # Создаем форматтер
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
 
         # Консольный обработчик
@@ -44,11 +46,11 @@ class DefaultLogger:
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir, exist_ok=True)
 
-            log_file = os.path.join(log_dir, f"storage_manager_{datetime.now().strftime('%Y%m')}.log")
+            log_file = os.path.join(
+                log_dir, f"storage_manager_{datetime.now().strftime('%Y%m')}.log"
+            )
             file_handler = logging.handlers.RotatingFileHandler(
-                log_file,
-                maxBytes=10 * 1024 * 1024,  # 10 MB
-                backupCount=5
+                log_file, maxBytes=10 * 1024 * 1024, backupCount=5  # 10 MB
             )
             file_handler.setLevel(logging.INFO)
             file_handler.setFormatter(formatter)
@@ -80,7 +82,6 @@ class DefaultLogger:
     def exception(self, message: str, exc_info: bool = True, *args, **kwargs):
         """Логирование исключения с трассировкой"""
         self.logger.exception(message, exc_info=exc_info, *args, **kwargs)
-
 
 
 # Глобальный экземпляр логгера

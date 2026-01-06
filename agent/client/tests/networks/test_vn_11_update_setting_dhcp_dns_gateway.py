@@ -10,8 +10,16 @@ from agent.client.hypervisor.libvirt.models.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, VmNetAdapter, NetworkDHCPRange, \
-    NetworkForward, NetworkBridge, DNSHost, DNSTXT, DNSForwarder
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkParameters,
+    VmNetAdapter,
+    NetworkDHCPRange,
+    NetworkForward,
+    NetworkBridge,
+    DNSHost,
+    DNSTXT,
+    DNSForwarder,
+)
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.tools import wait_while_not
 
@@ -19,8 +27,12 @@ IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
 
 @pytest.mark.tags("VN‑11", "Обновление DHCP (пул адресов, шлюз)")
-@pytest.mark.skip("Проблема в том, что DHCP-сервер сети не обновляет настройки для существующих клиентов")
-def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virsh_console_session, storage_session):
+@pytest.mark.skip(
+    "Проблема в том, что DHCP-сервер сети не обновляет настройки для существующих клиентов"
+)
+def test_vn_11_update_setting_dhcp_dns_gateway(
+    network_session, vm_session, virsh_console_session, storage_session
+):
     """
     VN‑04: Настройка DHCP (пул адресов, шлюз)
 
@@ -32,9 +44,12 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
     vm_created = None
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     virsh_console = virsh_console_session(random_name)
-    vm_template = VMCreateRequest(name=random_name, autostart_vm=True,
-                                  disks=[DiskCreate(path=IMG_PATH),
-                                         DiskCreate()], networks=[VmNetAdapter(network_type=NetworkType.NETWORK)])
+    vm_template = VMCreateRequest(
+        name=random_name,
+        autostart_vm=True,
+        disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
+        networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
+    )
     network_name = None
     try:
         # ____________________________________Создание виртуальной изолированной сети с настройками____________________________________
@@ -51,28 +66,36 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
             # Добавляем DNS серверы
             dns_forwarders=[
                 DNSForwarder(domain="example.com", addr="8.8.8.8"),
-                DNSForwarder(addr="8.8.4.4")  # DNS без домена
+                DNSForwarder(addr="8.8.4.4"),  # DNS без домена
             ],
             # Добавляем DNS записи
             dns_hosts=[
                 DNSHost(ip="192.168.100.10", hostnames=["host1", "host1.example.com"]),
-                DNSHost(ip="192.168.100.11", hostnames=["host2"])
+                DNSHost(ip="192.168.100.11", hostnames=["host2"]),
             ],
             # Добавляем TXT записи DNS
             dns_txts=[
                 DNSTXT(name="example.com", value="v=spf1 mx ~all"),
-                DNSTXT(name="_domainkey.example.com", value="k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC9...")
+                DNSTXT(
+                    name="_domainkey.example.com",
+                    value="k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC9...",
+                ),
             ],
             autostart=True,
         )
 
         network_name = nat_params.name
         created_network_info = network_session.create_network(nat_params, request_id)
-        assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
+        assert (
+            created_network_info.message
+            == CommandMessagesEnum.virtual_network_successfully_created.value
+        )
 
         # _________________________Проверка созданных настроек сети_________________________
         get_network_info = network_session.get_network_info(network_name, request_id)
-        assert get_network_info.message == CommandMessagesEnum.virtual_network_found.value
+        assert (
+            get_network_info.message == CommandMessagesEnum.virtual_network_found.value
+        )
         network = get_network_info.net_info
 
         # Проверяем DHCP диапазон
@@ -86,7 +109,9 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
 
         # ____________________________________Создание ВМ____________________________________
         create_vm_info = vm_session.create_vm(vm_template)
-        assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        assert (
+            create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        )
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         vm_created = True
         assert create_vm_info.vm_info is not None
@@ -94,9 +119,17 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
         time.sleep(60)  # Даем время ВМ загрузиться
 
         # _________________________Проверка наличия виртуальной сети у ВМ_________________________
-        get_net_vm_info = network_session.get_vm_network_info(vm_template.name, request_id)
-        assert get_net_vm_info.message == CommandMessagesEnum.virtual_network_interfaces_found.value
-        assert get_net_vm_info.code == CommandMessagesEnum.virtual_network_interfaces_found.name
+        get_net_vm_info = network_session.get_vm_network_info(
+            vm_template.name, request_id
+        )
+        assert (
+            get_net_vm_info.message
+            == CommandMessagesEnum.virtual_network_interfaces_found.value
+        )
+        assert (
+            get_net_vm_info.code
+            == CommandMessagesEnum.virtual_network_interfaces_found.name
+        )
         assert get_net_vm_info.net_info.network_interfaces.count == 1
         network_interface = get_net_vm_info.net_info.network_interfaces.interfaces.pop()
         network_mac_address = network_interface.mac_address
@@ -120,23 +153,41 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
             gateway="192.168.200.1",  # Новый шлюз
             dns_forwarders=[
                 DNSForwarder(addr="1.1.1.1"),  # Новый DNS
-                DNSForwarder(addr="1.0.0.1")
+                DNSForwarder(addr="1.0.0.1"),
             ],
             autostart=True,
         )
 
         # Обновляем сеть
-        update_network_info = network_session.edit_network(network_name, updated_params, request_id)
-        assert update_network_info.message == CommandMessagesEnum.virtual_network_successfully_updated.value
-        assert update_network_info.code == CommandMessagesEnum.virtual_network_successfully_updated.name
+        update_network_info = network_session.edit_network(
+            network_name, updated_params, request_id
+        )
+        assert (
+            update_network_info.message
+            == CommandMessagesEnum.virtual_network_successfully_updated.value
+        )
+        assert (
+            update_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_updated.name
+        )
 
         # Перезапускаем сеть для применения изменений
-        restart_network_info = network_session.restart_network(network_name, request_id, True)
-        assert restart_network_info.message == CommandMessagesEnum.virtual_network_successfully_started.value
-        assert restart_network_info.code == CommandMessagesEnum.virtual_network_successfully_started.name
+        restart_network_info = network_session.restart_network(
+            network_name, request_id, True
+        )
+        assert (
+            restart_network_info.message
+            == CommandMessagesEnum.virtual_network_successfully_started.value
+        )
+        assert (
+            restart_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_started.name
+        )
 
         # Проверяем обновленные настройки
-        get_updated_network_info = network_session.get_network_info(network_name, request_id)
+        get_updated_network_info = network_session.get_network_info(
+            network_name, request_id
+        )
         network_details = get_updated_network_info.net_info
         print("УФФФФ СУЧКА БЛЯ: ", network_details.gateway)
         assert network_details.ipv4_address == "192.168.200.0/24"
@@ -167,14 +218,16 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
 
         # Проверяем новый IP
         new_ip_result = renew_results[-3]  # Результат ip a show eth0
-        ip_match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', new_ip_result)
+        ip_match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", new_ip_result)
         if ip_match:
             new_ip_address = ip_match.group(1)
-            ip_parts = list(map(int, new_ip_address.split('.')))
+            ip_parts = list(map(int, new_ip_address.split(".")))
             assert ip_parts[0] == 192
             assert ip_parts[1] == 168
             assert ip_parts[2] == 200
-            assert 50 <= ip_parts[3] <= 60, f"IP {new_ip_address} не в новом диапазоне DHCP"
+            assert (
+                50 <= ip_parts[3] <= 60
+            ), f"IP {new_ip_address} не в новом диапазоне DHCP"
 
         # Проверяем новый шлюз
         # new_route_result = renew_results[-2]  # Результат ip route show default
@@ -187,10 +240,16 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________________________________
         if vm_created:
-            delete_vm_info = vm_session.delete_vm_with_force(name=random_name, request_id=request_id,
-                                                             delete_disks=False)
-            assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
-            assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            delete_vm_info = vm_session.delete_vm_with_force(
+                name=random_name, request_id=request_id, delete_disks=False
+            )
+            assert (
+                delete_vm_info.message
+                == CommandMessagesEnum.vm_successfully_deleted.value
+            )
+            assert (
+                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            )
             assert delete_vm_info.success is True
             delete_disk = storage_session.delete_disk(path=vm_template.disks[1].path)
             assert delete_disk is True
@@ -199,5 +258,7 @@ def test_vn_11_update_setting_dhcp_dns_gateway(network_session, vm_session, virs
         if network_name is not None:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)
-            assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            assert (
+                v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            )
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name

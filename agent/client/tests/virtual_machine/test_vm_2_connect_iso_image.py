@@ -15,7 +15,9 @@ from agent.client.tools import wait_while_not
 IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
 
 
-@pytest.mark.tags("VM‑02", "VM‑10", "Установка ОС на ВМ (загрузка с ISO)", "Просмотр консоли ВМ")
+@pytest.mark.tags(
+    "VM‑02", "VM‑10", "Установка ОС на ВМ (загрузка с ISO)", "Просмотр консоли ВМ"
+)
 def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_session):
     """
     VM‑02: Установка ОС на ВМ (загрузка с ISO)
@@ -31,20 +33,27 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
     get_state = vm_session.get_vm_state_by_name
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     virsh_console = virsh_console_session(random_name)
-    vm_template = VMCreateRequest(name=random_name, autostart_vm=True,
-                                  disks=[DiskCreate(path=IMG_PATH),
-                                         DiskCreate()], networks=[VmNetAdapter(network_type=NetworkType.USER)])
+    vm_template = VMCreateRequest(
+        name=random_name,
+        autostart_vm=True,
+        disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
+        networks=[VmNetAdapter(network_type=NetworkType.USER)],
+    )
     try:
         # ____________________________________Создание ВМ____________________________________
         create_vm_info = vm_session.create_vm(vm_template)
-        assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        assert (
+            create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        )
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         time.sleep(60)
         # ____________________________________Подключение к ВМ____________________________________
         virsh_console.connect()
-        results = virsh_console.execute_commands(["root", "cd /", "mkdir hello_eskvisor", "ls"])
+        results = virsh_console.execute_commands(
+            ["root", "cd /", "mkdir hello_eskvisor", "ls"]
+        )
         for result in results:
             if result and "hello_eskvisor" in result:
                 break
@@ -53,9 +62,16 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
     finally:
         # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)____________
         if random_name is not None:
-            delete_vm_info = vm_session.delete_vm_with_force(name=random_name, request_id=request_id, delete_disks=False)
-            assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
-            assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            delete_vm_info = vm_session.delete_vm_with_force(
+                name=random_name, request_id=request_id, delete_disks=False
+            )
+            assert (
+                delete_vm_info.message
+                == CommandMessagesEnum.vm_successfully_deleted.value
+            )
+            assert (
+                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            )
             assert delete_vm_info.success is True
             delete_disk = storage_session.delete_disk(path=vm_template.disks[1].path)
             assert delete_disk is True

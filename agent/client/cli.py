@@ -8,8 +8,6 @@ from agent.client.constants import DIRECTORIES_FOR_SEARCH, QEMU_EMULATORS
 
 class CLIControl:
 
-
-
     def virsh_net_data(self, params: str | None = None):
         """
         Получение информации о сети
@@ -51,12 +49,12 @@ class CLIControl:
             path_obj = Path(path_str)
 
             # Если путь содержит wildcards, проверяем родительскую директорию
-            if '*' in path_str or '?' in path_str:
+            if "*" in path_str or "?" in path_str:
                 # Берем родительскую директорию для проверки
                 parent_dir = path_obj.parent
                 # Если родительская директория - это текущая директория ('.') или пусто,
                 # проверяем текущую рабочую директорию
-                if str(parent_dir) == '.':
+                if str(parent_dir) == ".":
                     parent_dir = Path.cwd()
                 return parent_dir.exists() and parent_dir.is_dir()
 
@@ -69,7 +67,9 @@ class CLIControl:
             # print(f"Error checking directory {path_str}: {e}")
             return False
 
-    def search_emulators(self, new_directories: list[str] | str | None = None, only_name: bool = False):
+    def search_emulators(
+        self, new_directories: list[str] | str | None = None, only_name: bool = False
+    ):
         installed_emulators = []
 
         # Создаем список всех имен эмуляторов для поиска
@@ -82,7 +82,7 @@ class CLIControl:
         # Разбиваем на группы по 20 эмуляторов для поиска
         group_size = 20
         for i in range(0, len(emulator_names), group_size):
-            group = emulator_names[i:i + group_size]
+            group = emulator_names[i : i + group_size]
             # Создаем паттерн типа: -name "qemu-system-x86_64" -o -name "qemu-system-i386" ...
             pattern_parts = []
             for emulator in group:
@@ -109,20 +109,31 @@ class CLIControl:
             # Для каждого паттерна выполняем поиск
             for pattern in search_patterns:
                 # Убираем звездочку из пути для корректной работы find
-                dir_path = directory.rstrip('*')
+                dir_path = directory.rstrip("*")
 
                 # Формируем команду find
                 # Используем -maxdepth для оптимизации поиска в глубоких путях
-                if '*/*' in directory:  # Для сложных путей вроде /nix/store/*/bin
+                if "*/*" in directory:  # Для сложных путей вроде /nix/store/*/bin
                     # Для путей со звездочками используем другой подход
-                    base_dir = directory.split('/*')[0]
-                    command = f'find {base_dir} -type d -name "bin" 2>/dev/null | head -20'
+                    base_dir = directory.split("/*")[0]
+                    command = (
+                        f'find {base_dir} -type d -name "bin" 2>/dev/null | head -20'
+                    )
                     try:
-                        bin_dirs = subprocess.run(command, shell=True, stdout=subprocess.PIPE,
-                                                  stderr=subprocess.DEVNULL, text=True).stdout.strip().split('\n')
+                        bin_dirs = (
+                            subprocess.run(
+                                command,
+                                shell=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL,
+                                text=True,
+                            )
+                            .stdout.strip()
+                            .split("\n")
+                        )
                         for bin_dir in bin_dirs:
                             if bin_dir:
-                                find_command = f'find {bin_dir} \( {pattern} \) -type f -executable 2>/dev/null'
+                                find_command = f"find {bin_dir} \( {pattern} \) -type f -executable 2>/dev/null"
                                 finded_emulator = self.execute(find_command).split("\n")
                                 finded_emulator = [fe for fe in finded_emulator if fe]
                                 installed_emulators.extend(finded_emulator)
@@ -130,7 +141,7 @@ class CLIControl:
                         continue
                 else:
                     # Обычный поиск
-                    find_command = f'find {dir_path} \( {pattern} \) -type f -executable 2>/dev/null'
+                    find_command = f"find {dir_path} \( {pattern} \) -type f -executable 2>/dev/null"
                     finded_emulator = self.execute(find_command).split("\n")
                     finded_emulator = [fe for fe in finded_emulator if fe]
                     installed_emulators.extend(finded_emulator)
@@ -144,8 +155,11 @@ class CLIControl:
                 for directory in all_directories:
                     if emulator.count(directory) >= 1:
                         em_index = installed_emulators.index(emulator)
-                        installed_emulators[em_index] = emulator.replace(directory, "").replace("/", "").replace("\\",
-                                                                                                                 "")
+                        installed_emulators[em_index] = (
+                            emulator.replace(directory, "")
+                            .replace("/", "")
+                            .replace("\\", "")
+                        )
         return installed_emulators
 
     @property
@@ -161,8 +175,13 @@ class CLIControl:
             return emulators[0]
 
     @staticmethod
-    def execute(command: list[str] | str, shell: bool = True, by_user: str | None = "eskvisor",
-                use_sudo: bool = True, password: str | None = None) -> str:
+    def execute(
+        command: list[str] | str,
+        shell: bool = True,
+        by_user: str | None = "eskvisor",
+        use_sudo: bool = True,
+        password: str | None = None,
+    ) -> str:
         """
         Выполняет команду в shell с возможностью запуска от другого пользователя.
 
@@ -206,24 +225,26 @@ class CLIControl:
             if isinstance(cmd_to_run, str) and shell:
                 final_command = f"{' '.join(prefix)} {cmd_to_run}"
             else:
-                final_command = prefix + (cmd_to_run if isinstance(cmd_to_run, list) else [cmd_to_run])
+                final_command = prefix + (
+                    cmd_to_run if isinstance(cmd_to_run, list) else [cmd_to_run]
+                )
         else:
             final_command = cmd_to_run
 
         try:
             # Подготовка параметров для subprocess
             kwargs = {
-                'stdout': subprocess.PIPE,
-                'stderr': subprocess.STDOUT,
-                'shell': shell,
-                'text': True,
-                'encoding': 'utf-8'
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.STDOUT,
+                "shell": shell,
+                "text": True,
+                "encoding": "utf-8",
             }
 
             # Если нужно передать пароль для sudo
             if password and use_sudo:
-                kwargs['input'] = password + '\n'
-                kwargs['universal_newlines'] = True
+                kwargs["input"] = password + "\n"
+                kwargs["universal_newlines"] = True
 
             result = subprocess.run(final_command, **kwargs)
             return result.stdout

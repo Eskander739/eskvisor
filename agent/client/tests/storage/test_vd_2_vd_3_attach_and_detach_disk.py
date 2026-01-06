@@ -1,10 +1,17 @@
 import random
 
 import pytest
-from agent.client.hypervisor.libvirt.models.disk import DiskCreate, DiskFormat, DiskStatus, DiskAttach, DiskDetach
+from agent.client.hypervisor.libvirt.models.disk import (
+    DiskCreate,
+    DiskFormat,
+    DiskStatus,
+    DiskAttach,
+    DiskDetach,
+)
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 RANDOM_NAME = random.randint(10000, 99999)
+
 
 @pytest.mark.tags("VD‑02", "VD‑03", "Подключение диска к ВМ", "Отключение диска от ВМ")
 # @pytest.mark.parametrize("vm_status", (
@@ -26,10 +33,16 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
     disk_path = None
     try:
         # ____________________________________Создание диска____________________________________
-        attach_disk_create = DiskCreate(name=f"disk-test-{RANDOM_NAME}.qcow2", size_gb=0.2, format=DiskFormat.QCOW2,
-                                        sparse=True)
+        attach_disk_create = DiskCreate(
+            name=f"disk-test-{RANDOM_NAME}.qcow2",
+            size_gb=0.2,
+            format=DiskFormat.QCOW2,
+            sparse=True,
+        )
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
+        assert (
+            attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
+        )
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
 
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
@@ -41,15 +54,17 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         assert current_disk_name == attach_disk_create.name
         assert attach_disk_create.format == DiskFormat.QCOW2
 
-        disk_attach = DiskAttach(vm_name=vm_name, path=vm_disk.path, target_dev=target_dev)
+        disk_attach = DiskAttach(
+            vm_name=vm_name, path=vm_disk.path, target_dev=target_dev
+        )
 
         # ____________________________________Подключение диска____________________________________
 
         storage_session.attach_disk(disk_attach, request_id=request_id)
 
-        vm_disk = storage_session.get_disk_info_by_target_dev(vm_name=vm_name,
-                                                              target_dev=target_dev,
-                                                              request_id=request_id)
+        vm_disk = storage_session.get_disk_info_by_target_dev(
+            vm_name=vm_name, target_dev=target_dev, request_id=request_id
+        )
         vm_disk = vm_disk.disk_info
 
         assert vm_disk.status.value == DiskStatus.ATTACHED.value
@@ -57,7 +72,9 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
 
         # ____________________________________Отключение диска____________________________________
 
-        storage_session.detach_disk(DiskDetach(vm_name=vm_name, target_dev=disk_attach.target_dev))
+        storage_session.detach_disk(
+            DiskDetach(vm_name=vm_name, target_dev=disk_attach.target_dev)
+        )
 
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
         vm_disk = vm_disk.disk_info

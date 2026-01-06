@@ -3,11 +3,19 @@ import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.resource_pool import ResourcePoolCreateRequest, StoragePoolType
+from agent.client.hypervisor.libvirt.models.resource_pool import (
+    ResourcePoolCreateRequest,
+    StoragePoolType,
+)
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
-@pytest.mark.tags("RP‑01", "RP‑08", "Создание пула ресурсов (CPU, memory, storage)", "Удаление пула (пустой)")
+@pytest.mark.tags(
+    "RP‑01",
+    "RP‑08",
+    "Создание пула ресурсов (CPU, memory, storage)",
+    "Удаление пула (пустой)",
+)
 def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
     """
     RP‑01: Создание пула ресурсов (CPU, memory, storage)
@@ -22,13 +30,17 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
     try:
         # ____________________________________Создание пула ресурсов____________________________________
         random_name = f"RP-TEST-{random.randint(10000, 99999)}"
-        rp_template = ResourcePoolCreateRequest(name=random_name,
-                                                cpu_limit=2,
-                                                memory_limit=512,
-                                                storage_limit=1,
-                                                pool_type=StoragePoolType.LOGICAL,
-                                                storage_path="eska")
-        create_rp_info = resource_pool_session.create_resource_pool(rp_template, request_id)
+        rp_template = ResourcePoolCreateRequest(
+            name=random_name,
+            cpu_limit=2,
+            memory_limit=512,
+            storage_limit=1,
+            pool_type=StoragePoolType.LOGICAL,
+            storage_path="eska",
+        )
+        create_rp_info = resource_pool_session.create_resource_pool(
+            rp_template, request_id
+        )
         assert create_rp_info.message == CommandMessagesEnum.rp_create_success.value
         assert create_rp_info.code == CommandMessagesEnum.rp_create_success.name
         assert create_rp_info.rp_info is not None
@@ -36,10 +48,12 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         print("get_rp_info: ", get_rp_info)
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_limit == rp_template.cpu_limit
-        assert get_rp_info.rp_info.memory_limit_gb == rp_template.memory_limit/1024
+        assert get_rp_info.rp_info.memory_limit_gb == rp_template.memory_limit / 1024
         assert int(get_rp_info.rp_info.capacity_gb) == rp_template.storage_limit
         # ____________________________________Удаление пула ресурсов_____________________________________
-        delete_rp_info = resource_pool_session.delete_resource_pool(random_name, request_id)
+        delete_rp_info = resource_pool_session.delete_resource_pool(
+            random_name, request_id
+        )
         assert delete_rp_info.message == CommandMessagesEnum.rp_delete_success.value
         assert delete_rp_info.code == CommandMessagesEnum.rp_delete_success.name
         get_rp_info = resource_pool_session.get_pool_info(random_name, request_id)
@@ -49,6 +63,14 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)______________________________
         if not rp_deleted:
-            delete_rp_info = resource_pool_session.delete_resource_pool(random_name, request_id)
-            assert delete_rp_info.message in (CommandMessagesEnum.rp_delete_success.value, CommandMessagesEnum.rp_not_found.value)
-            assert delete_rp_info.code in (CommandMessagesEnum.rp_delete_success.name, CommandMessagesEnum.rp_not_found.name)
+            delete_rp_info = resource_pool_session.delete_resource_pool(
+                random_name, request_id
+            )
+            assert delete_rp_info.message in (
+                CommandMessagesEnum.rp_delete_success.value,
+                CommandMessagesEnum.rp_not_found.value,
+            )
+            assert delete_rp_info.code in (
+                CommandMessagesEnum.rp_delete_success.name,
+                CommandMessagesEnum.rp_not_found.name,
+            )

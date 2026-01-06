@@ -53,16 +53,19 @@ class CreateSnapshotChainError(BaseModel):
     total_requested: int
     successfully_created: int
 
+
 class CreateMultipleSnapshotsError(BaseModel):
     results: list[SnapshotWithParent]
     total_requested: int
     successful: int
     failed: int
 
+
 class CreateMultipleSnapshots(BaseModel):
     results: list[SnapshotWithParent]
     total_created: int
     successful: int
+
 
 class CreateSnapshotChainSuccess(BaseModel):
     vm_name: str
@@ -70,12 +73,14 @@ class CreateSnapshotChainSuccess(BaseModel):
     total_created: int
     chain_depth: int
 
+
 class SnapshotRevertSuccess(BaseModel):
     vm_name: str
     current_snapshot: str
     parent_snapshot: str
     snapshots_made_inactive: list[str]
     note: str | None = None
+
 
 class SnapshotsChain(BaseModel):
     vm_name: str
@@ -95,6 +100,7 @@ class SnapshotList(BaseModel):
 
 class SnapshotCreateRequest(BaseModel):
     """Модель запроса для создания снапшота"""
+
     vm_name: str
     snapshot_name: str
     description: str = ""
@@ -104,6 +110,7 @@ class SnapshotCreateRequest(BaseModel):
 
 class SnapshotCloneRequest(BaseModel):
     """Модель запроса для клонирования ВМ из снапшота"""
+
     source_vm_name: str
     source_snapshot_name: str
     new_vm_name: str
@@ -112,4 +119,5 @@ class SnapshotCloneRequest(BaseModel):
 
 class MultipleSnapshotsRequest(BaseModel):
     """Модель запроса для создания снапшотов нескольких ВМ"""
+
     snapshots: list[SnapshotCreateRequest]

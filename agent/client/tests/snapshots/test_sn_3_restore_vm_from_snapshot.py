@@ -10,7 +10,9 @@ from agent.client.tools import wait_while_not
 
 
 @pytest.mark.tags("SN‑03", "Восстановление ВМ из снапшота")
-def test_sn_03_restore_vm_from_snapshot(snapshot_session, create_stopped_vm, vm_session, storage_session):
+def test_sn_03_restore_vm_from_snapshot(
+    snapshot_session, create_stopped_vm, vm_session, storage_session
+):
     """
     SN‑03: Восстановление ВМ из снапшота
 
@@ -31,12 +33,18 @@ def test_sn_03_restore_vm_from_snapshot(snapshot_session, create_stopped_vm, vm_
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # ____________________________Создание снапшота работающей ВМ_____________________________
-        vm_template = SnapshotCreateRequest(vm_name=vm_name,
-                                            snapshot_name=snapshot_name,
-                                            description=description)
+        vm_template = SnapshotCreateRequest(
+            vm_name=vm_name, snapshot_name=snapshot_name, description=description
+        )
         create_vm_info = snapshot_session.create_snapshot(vm_template, request_id)
-        assert create_vm_info.message == CommandMessagesEnum.snapshot_successfully_created.value
-        assert create_vm_info.code == CommandMessagesEnum.snapshot_successfully_created.name
+        assert (
+            create_vm_info.message
+            == CommandMessagesEnum.snapshot_successfully_created.value
+        )
+        assert (
+            create_vm_info.code
+            == CommandMessagesEnum.snapshot_successfully_created.name
+        )
         assert create_vm_info.snapshot_info is not None
         snapshot_info = create_vm_info.snapshot_info
         # ________________________________Проверка наличия снапшота___________________________________
@@ -55,16 +63,25 @@ def test_sn_03_restore_vm_from_snapshot(snapshot_session, create_stopped_vm, vm_
         # ____________________________________Изменение ресурсов ВМ____________________________________
         vm_session.start_vm(vm_name, request_id)
         edit_vm_info = vm_session.edit_vm(vm_name, VmUpdateRequest(vcpus=3), request_id)
-        assert edit_vm_info.message == CommandMessagesEnum.vm_edit_success.value, edit_vm_info.note
+        assert (
+            edit_vm_info.message == CommandMessagesEnum.vm_edit_success.value
+        ), edit_vm_info.note
         assert edit_vm_info.code == CommandMessagesEnum.vm_edit_success.name
         assert wait_while_not(lambda: get_state(vm_name) == VMState.RUNNING.value)
         vm_get_info = vm_session.get_vm_by_name(vm_name, request_id)
         assert vm_get_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name
-        assert wait_while_not(lambda: vm_session.get_vm_by_name(vm_name, request_id).vm_info.vcpus == 3, timeout=30)
+        assert wait_while_not(
+            lambda: vm_session.get_vm_by_name(vm_name, request_id).vm_info.vcpus == 3,
+            timeout=30,
+        )
         # ________________________________Восстановление ВМ из снапшота________________________________
-        revert_vm_info = snapshot_session.revert_to_snapshot(vm_name, snapshot_name, request_id)
-        assert revert_vm_info.message == CommandMessagesEnum.snapshot_revert_success.value
+        revert_vm_info = snapshot_session.revert_to_snapshot(
+            vm_name, snapshot_name, request_id
+        )
+        assert (
+            revert_vm_info.message == CommandMessagesEnum.snapshot_revert_success.value
+        )
         assert revert_vm_info.code == CommandMessagesEnum.snapshot_revert_success.name
         # __________________Проверка конфигурации ВМ после восстановления из снапшота__________________
         assert wait_while_not(lambda: get_state(vm_name) == VMState.SHUTOFF.value)
@@ -75,10 +92,18 @@ def test_sn_03_restore_vm_from_snapshot(snapshot_session, create_stopped_vm, vm_
     finally:
         # ______________________________Удаление снапшота(постусловие)_________________________________
         if not snapshot_deleted:
-            delete_snapshot_info = snapshot_session.delete_snapshot(vm_name=vm_name,
-                                                                    snapshot_name=snapshot_name,
-                                                                    remove_children=True,
-                                                                    request_id=request_id)
-            assert delete_snapshot_info.message == CommandMessagesEnum.snapshot_successfully_deleted.value
-            assert delete_snapshot_info.code == CommandMessagesEnum.snapshot_successfully_deleted.name
+            delete_snapshot_info = snapshot_session.delete_snapshot(
+                vm_name=vm_name,
+                snapshot_name=snapshot_name,
+                remove_children=True,
+                request_id=request_id,
+            )
+            assert (
+                delete_snapshot_info.message
+                == CommandMessagesEnum.snapshot_successfully_deleted.value
+            )
+            assert (
+                delete_snapshot_info.code
+                == CommandMessagesEnum.snapshot_successfully_deleted.name
+            )
             assert delete_snapshot_info.success is True

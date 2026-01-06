@@ -4,8 +4,12 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkForward, NetworkBridge, \
-    NetworkDHCPRange
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkParameters,
+    NetworkForward,
+    NetworkBridge,
+    NetworkDHCPRange,
+)
 
 
 @pytest.mark.tags("VN‑02", "Создание NAT-сети")
@@ -31,8 +35,14 @@ def test_vn_02_create_nat_network(network_session):
         )
         network_name = nat_params.name
         created_network_info = network_session.create_network(nat_params, request_id)
-        assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
-        assert created_network_info.code == CommandMessagesEnum.virtual_network_successfully_created.name
+        assert (
+            created_network_info.message
+            == CommandMessagesEnum.virtual_network_successfully_created.value
+        )
+        assert (
+            created_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_created.name
+        )
         nat_network = created_network_info.net_info
         assert nat_network.network_type.type == "nat"
         assert nat_network.name == nat_params.name
@@ -44,5 +54,7 @@ def test_vn_02_create_nat_network(network_session):
         if network_name is not None:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)
-            assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            assert (
+                v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            )
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name

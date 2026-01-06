@@ -44,7 +44,7 @@ class LibvirtClient:
         if not logger.handlers:
             handler = logging.StreamHandler()
             formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
             )
             handler.setFormatter(formatter)
             logger.addHandler(handler)
@@ -64,9 +64,9 @@ class LibvirtClient:
                         self.connection_uri,
                         [
                             [libvirt.VIR_CRED_AUTHNAME, libvirt.VIR_CRED_PASSPHRASE],
-                            self._auth_callback
+                            self._auth_callback,
                         ],
-                        0
+                        0,
                     )
                 else:
                     # Для локальных подключений
@@ -75,10 +75,13 @@ class LibvirtClient:
                         self.conn = libvirt.openAuth(
                             self.connection_uri,
                             [
-                                [libvirt.VIR_CRED_AUTHNAME, libvirt.VIR_CRED_PASSPHRASE],
-                                self._auth_callback
+                                [
+                                    libvirt.VIR_CRED_AUTHNAME,
+                                    libvirt.VIR_CRED_PASSPHRASE,
+                                ],
+                                self._auth_callback,
                             ],
-                            0
+                            0,
                         )
                     else:
                         # Если пароля нет, пробуем обычное подключение
@@ -94,7 +97,9 @@ class LibvirtClient:
             if self.password is None:
                 self.logger.info(f"Успешное подключение к {self.connection_uri}")
             else:
-                self.logger.info(f"Успешное подключение под пользователем {self.username} к {self.connection_uri}")
+                self.logger.info(
+                    f"Успешное подключение под пользователем {self.username} к {self.connection_uri}"
+                )
             self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
             self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
             return True
@@ -118,7 +123,9 @@ class LibvirtClient:
                     credential[4] = self.password
                 else:
                     # Если пароль не указан, запрашиваем у пользователя
-                    credential[4] = getpass.getpass(f"Введите пароль для {self.username}: ")
+                    credential[4] = getpass.getpass(
+                        f"Введите пароль для {self.username}: "
+                    )
             else:
                 return -1  # Неподдерживаемый тип аутентификации
         return 0
@@ -138,19 +145,20 @@ class LibvirtClient:
         """Контекстный менеджер для автоматического отключения"""
         self.disconnect()
 
-
     def get_node_info(self) -> NodeInfo | None:
         """Получение информации о хосте"""
         try:
             info = self.conn.getInfo()
-            return NodeInfo(model=info[0],
-                            memory=info[1],
-                            cpus=info[2],
-                            mhz=info[3],
-                            nodes=info[4],
-                            sockets=info[5],
-                            cores=info[6],
-                            threads=info[7])
+            return NodeInfo(
+                model=info[0],
+                memory=info[1],
+                cpus=info[2],
+                mhz=info[3],
+                nodes=info[4],
+                sockets=info[5],
+                cores=info[6],
+                threads=info[7],
+            )
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка получения информации о хосте: {e}")

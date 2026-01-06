@@ -2,11 +2,13 @@ import os
 from pathlib import Path
 
 from agent.client.hypervisor.libvirt.models.disk import DiskFormat
-from agent.client.hypervisor.libvirt.models.resource_pool import StoragePoolType, POOL_TYPE_DESCRIPTIONS
+from agent.client.hypervisor.libvirt.models.resource_pool import (
+    StoragePoolType,
+    POOL_TYPE_DESCRIPTIONS,
+)
 
 
 class LibvirtConfig:
-
 
     @property
     def search_dirs(self) -> tuple:
@@ -16,7 +18,7 @@ class LibvirtConfig:
             "/var/lib/libvirt/images",
             f"{str(Path.home())}/.local/share/libvirt/images",
             "/opt/vm_disks",
-            os.path.expanduser("~/vm_disks")
+            os.path.expanduser("~/vm_disks"),
         )
 
     @property
@@ -131,11 +133,16 @@ class LibvirtConfig:
             },
         }
 
-        return info.get(pool_type, {
-            "description": POOL_TYPE_DESCRIPTIONS.get(pool_type, "Неизвестный тип пула"),
-            "requires": ["Специфические параметры конфигурации"],
-            "recommended_for": "Специализированные сценарии",
-            "performance": "Зависит от конфигурации",
-            "scalability": "Зависит от конфигурации",
-            "redundancy": "Зависит от конфигурации",
-        })
+        return info.get(
+            pool_type,
+            {
+                "description": POOL_TYPE_DESCRIPTIONS.get(
+                    pool_type, "Неизвестный тип пула"
+                ),
+                "requires": ["Специфические параметры конфигурации"],
+                "recommended_for": "Специализированные сценарии",
+                "performance": "Зависит от конфигурации",
+                "scalability": "Зависит от конфигурации",
+                "redundancy": "Зависит от конфигурации",
+            },
+        )

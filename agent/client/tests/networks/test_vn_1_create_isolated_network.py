@@ -26,9 +26,17 @@ def test_vn_01_create_isolated_network(network_session):
             autostart=True,
         )
         network_name = isolated_params.name
-        created_network_info = network_session.create_network(isolated_params, request_id)
-        assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
-        assert created_network_info.code == CommandMessagesEnum.virtual_network_successfully_created.name
+        created_network_info = network_session.create_network(
+            isolated_params, request_id
+        )
+        assert (
+            created_network_info.message
+            == CommandMessagesEnum.virtual_network_successfully_created.value
+        )
+        assert (
+            created_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_created.name
+        )
         isolated_network = created_network_info.net_info
         assert isolated_network.network_type.type == "no-forward"
         assert isolated_network.name == isolated_params.name
@@ -40,5 +48,7 @@ def test_vn_01_create_isolated_network(network_session):
         if network_name is not None:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)
-            assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            assert (
+                v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            )
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name

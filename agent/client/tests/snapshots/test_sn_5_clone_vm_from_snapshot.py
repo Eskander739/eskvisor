@@ -2,8 +2,10 @@ import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, \
-    SnapshotCloneRequest
+from agent.client.hypervisor.libvirt.models.snapshots import (
+    SnapshotCreateRequest,
+    SnapshotCloneRequest,
+)
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.tools import wait_while_not
@@ -11,7 +13,9 @@ from agent.client.tools import wait_while_not
 
 @pytest.mark.tags("SN‑05", "Клонирование ВМ из снапшота")
 @pytest.mark.parametrize("vm_state", (VMState.SHUTOFF, VMState.RUNNING, VMState.PAUSED))
-def test_sn_05_clone_vm_from_snapshot(snapshot_session, create_running_vm_func, vm_session, storage_session, vm_state):
+def test_sn_05_clone_vm_from_snapshot(
+    snapshot_session, create_running_vm_func, vm_session, storage_session, vm_state
+):
     """
     SN‑05: Клонирование ВМ из снапшота
 
@@ -42,12 +46,18 @@ def test_sn_05_clone_vm_from_snapshot(snapshot_session, create_running_vm_func, 
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # __________________________________Создание снапшота ВМ__________________________________
-        vm_template = SnapshotCreateRequest(vm_name=vm_name,
-                                            snapshot_name=snapshot_name,
-                                            description=description)
+        vm_template = SnapshotCreateRequest(
+            vm_name=vm_name, snapshot_name=snapshot_name, description=description
+        )
         create_vm_info = snapshot_session.create_snapshot(vm_template, request_id)
-        assert create_vm_info.message == CommandMessagesEnum.snapshot_successfully_created.value
-        assert create_vm_info.code == CommandMessagesEnum.snapshot_successfully_created.name
+        assert (
+            create_vm_info.message
+            == CommandMessagesEnum.snapshot_successfully_created.value
+        )
+        assert (
+            create_vm_info.code
+            == CommandMessagesEnum.snapshot_successfully_created.name
+        )
         assert create_vm_info.snapshot_info is not None
         snapshot_info = create_vm_info.snapshot_info
         # ________________________________Проверка наличия снапшота___________________________________
@@ -64,11 +74,17 @@ def test_sn_05_clone_vm_from_snapshot(snapshot_session, create_running_vm_func, 
         assert vm_config.max_memory == vm_info.vm_info.max_memory
         assert vm_config.vcpus == vm_info.vm_info.vcpus
         # ________________________________Клонирование ВМ из снапшота________________________________
-        revert_vm_info = snapshot_session.clone_vm_from_snapshot(SnapshotCloneRequest(source_vm_name=vm_name,
-                                                                                      source_snapshot_name=snapshot_name,
-                                                                                      new_vm_name=new_vm_name),
-                                                                 request_id)
-        assert revert_vm_info.message == CommandMessagesEnum.snapshot_clone_success.value
+        revert_vm_info = snapshot_session.clone_vm_from_snapshot(
+            SnapshotCloneRequest(
+                source_vm_name=vm_name,
+                source_snapshot_name=snapshot_name,
+                new_vm_name=new_vm_name,
+            ),
+            request_id,
+        )
+        assert (
+            revert_vm_info.message == CommandMessagesEnum.snapshot_clone_success.value
+        )
         assert revert_vm_info.code == CommandMessagesEnum.snapshot_clone_success.name
         # ___________________Проверка конфигурации ВМ после клонирования из снапшота___________________
         get_vm_info = vm_session.get_vm_by_name(new_vm_name, request_id)
@@ -83,7 +99,9 @@ def test_sn_05_clone_vm_from_snapshot(snapshot_session, create_running_vm_func, 
         assert vm_config.vcpus == vm_info.vm_info.vcpus
         assert wait_while_not(lambda: get_state(vm_name) == vm_state.value)
         # ______________________Проверка дисков ВМ после клонирования из снапшота______________________
-        disks_cloned_vm = sorted(storage_session.get_disks_by_vm(new_vm_name, request_id))
+        disks_cloned_vm = sorted(
+            storage_session.get_disks_by_vm(new_vm_name, request_id)
+        )
         disks_vm = sorted(storage_session.get_disks_by_vm(vm_name, request_id))
         for disk_cloned, just_disk in zip(disks_cloned_vm, disks_vm):
             assert disk_cloned.name != just_disk.name
@@ -100,16 +118,31 @@ def test_sn_05_clone_vm_from_snapshot(snapshot_session, create_running_vm_func, 
     finally:
         # ______________________________Удаление снапшота(постусловие)_________________________________
         if not snapshot_deleted:
-            delete_snapshot_info = snapshot_session.delete_snapshot(vm_name=vm_name,
-                                                                    snapshot_name=snapshot_name,
-                                                                    remove_children=True,
-                                                                    request_id=request_id)
-            assert delete_snapshot_info.message == CommandMessagesEnum.snapshot_successfully_deleted.value
-            assert delete_snapshot_info.code == CommandMessagesEnum.snapshot_successfully_deleted.name
+            delete_snapshot_info = snapshot_session.delete_snapshot(
+                vm_name=vm_name,
+                snapshot_name=snapshot_name,
+                remove_children=True,
+                request_id=request_id,
+            )
+            assert (
+                delete_snapshot_info.message
+                == CommandMessagesEnum.snapshot_successfully_deleted.value
+            )
+            assert (
+                delete_snapshot_info.code
+                == CommandMessagesEnum.snapshot_successfully_deleted.name
+            )
             assert delete_snapshot_info.success is True
         # ____________________________________Удаление ВМ(постусловие)____________________________________
         if cloned_vm_created:
-            delete_vm_info = vm_session.delete_vm_with_force(name=new_vm_name, request_id=request_id)
-            assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
-            assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            delete_vm_info = vm_session.delete_vm_with_force(
+                name=new_vm_name, request_id=request_id
+            )
+            assert (
+                delete_vm_info.message
+                == CommandMessagesEnum.vm_successfully_deleted.value
+            )
+            assert (
+                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            )
             assert delete_vm_info.success is True

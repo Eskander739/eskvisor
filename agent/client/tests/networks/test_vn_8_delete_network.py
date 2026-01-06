@@ -4,19 +4,28 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkForward, NetworkBridge, \
-    NetworkDHCPRange
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkParameters,
+    NetworkForward,
+    NetworkBridge,
+    NetworkDHCPRange,
+)
 
 
 @pytest.mark.tags("VN‑08", "Удаление сети")
-@pytest.mark.parametrize("network_model", (
+@pytest.mark.parametrize(
+    "network_model",
+    (
         NetworkParameters(
             name=f"nat-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(name="virbr-test-ntt", stp="on", delay=0),
             ipv4_address="192.168.100.0/24",
-            dhcp_ranges=[NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")],
-            autostart=True),
+            dhcp_ranges=[
+                NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
+            ],
+            autostart=True,
+        ),
         NetworkParameters(
             name=f"isolated-{random.randint(1000, 9999)}",
             ipv4=True,
@@ -28,9 +37,10 @@ from agent.client.hypervisor.libvirt.models.network import NetworkParameters, Ne
             name=f"bridge-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="bridge"),
             bridge=NetworkBridge(name="virbr-test-bridge"),
-            autostart=True
-        )
-))
+            autostart=True,
+        ),
+    ),
+)
 def test_vn_08_delete_network(network_session, network_model):
     """
     VN‑08: Удаление сети
@@ -44,11 +54,22 @@ def test_vn_08_delete_network(network_session, network_model):
         # ____________________________________Создание виртуальной сети____________________________________
         network_name = network_model.name
         created_network_info = network_session.create_network(network_model, request_id)
-        assert created_network_info.message == CommandMessagesEnum.virtual_network_successfully_created.value
+        assert (
+            created_network_info.message
+            == CommandMessagesEnum.virtual_network_successfully_created.value
+        )
         # ____________________________________Удаление виртуальной сети____________________________________
-        delete_network_info = network_session.delete_network(network_name, request_id, True)
-        assert delete_network_info.message == CommandMessagesEnum.virtual_network_successfully_deleted.value
-        assert delete_network_info.code == CommandMessagesEnum.virtual_network_successfully_deleted.name
+        delete_network_info = network_session.delete_network(
+            network_name, request_id, True
+        )
+        assert (
+            delete_network_info.message
+            == CommandMessagesEnum.virtual_network_successfully_deleted.value
+        )
+        assert (
+            delete_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_deleted.name
+        )
         v_network = network_session.get_network_info(network_name, request_id)
         assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
         assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
@@ -62,5 +83,7 @@ def test_vn_08_delete_network(network_session, network_model):
         if network_name is not None and not network_deleted:
             network_session.delete_network(network_name, request_id, True)
             v_network = network_session.get_network_info(network_name, request_id)
-            assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            assert (
+                v_network.message == CommandMessagesEnum.virtual_network_not_found.value
+            )
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name

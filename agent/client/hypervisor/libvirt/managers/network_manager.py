@@ -8,9 +8,21 @@ import libvirt
 from agent.client.cli import CLIControl
 from agent.client.constants import NETWORK_TYPE_DESCRIPTIONS
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.msg import NetworkMessage, CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkTypeInfo, NetworkInfo, \
-    NetworkInterfacesInfo, VmInfo, NetworkInterfacesList, DNSForwarder, DNSHost, DNSTXT
+from agent.client.hypervisor.libvirt.models.msg import (
+    NetworkMessage,
+    CommandMessagesEnum,
+)
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkParameters,
+    NetworkTypeInfo,
+    NetworkInfo,
+    NetworkInterfacesInfo,
+    VmInfo,
+    NetworkInterfacesList,
+    DNSForwarder,
+    DNSHost,
+    DNSTXT,
+)
 
 
 class NetworkManager(LibvirtClient):
@@ -33,7 +45,9 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка получения списка сетей: {e}")
             return []
 
-    def create_network(self, params: NetworkParameters, request_id: str) -> NetworkMessage:
+    def create_network(
+        self, params: NetworkParameters, request_id: str
+    ) -> NetworkMessage:
         """Создание виртуальной сети"""
         try:
             # Определяем тип сети перед созданием
@@ -44,13 +58,14 @@ class NetworkManager(LibvirtClient):
             )
 
             # Дополнительная валидация для bridge сетей
-            if network_type_info.type == "bridge" and (params.dhcp_ranges or params.dhcp_hosts):
+            if network_type_info.type == "bridge" and (
+                params.dhcp_ranges or params.dhcp_hosts
+            ):
                 self.logger.warning(
                     f"Bridge сети обычно не используют DHCP. Сеть: '{params.name}'"
                 )
 
             xml_config = self._generate_network_xml(params)
-            print(xml_config)
             network = self.conn.networkDefineXML(xml_config)
 
             if params.uuid:
@@ -68,27 +83,38 @@ class NetworkManager(LibvirtClient):
             )
 
             created_network = self.get_network_info(params.name, request_id)
-            assert created_network.message == CommandMessagesEnum.virtual_network_found.value
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_successfully_created.value,
-                                  code=CommandMessagesEnum.virtual_network_successfully_created.name,
-                                  net_info=created_network.net_info,
-                                  success=True)
+            assert (
+                created_network.message
+                == CommandMessagesEnum.virtual_network_found.value
+            )
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_successfully_created.value,
+                code=CommandMessagesEnum.virtual_network_successfully_created.name,
+                net_info=created_network.net_info,
+                success=True,
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка создания сети '{params.name}': {e}")
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_create_error.value,
-                                  code=CommandMessagesEnum.virtual_network_create_error.name,
-                                  success=False,
-                                  note=str(e))
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_create_error.value,
+                code=CommandMessagesEnum.virtual_network_create_error.name,
+                success=False,
+                note=str(e),
+            )
         except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при создании сети '{params.name}': {e}")
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_create_error.value,
-                                  code=CommandMessagesEnum.virtual_network_create_error.name,
-                                  success=False,
-                                  note=str(e))
+            self.logger.error(
+                f"Неожиданная ошибка при создании сети '{params.name}': {e}"
+            )
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_create_error.value,
+                code=CommandMessagesEnum.virtual_network_create_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def _has_vms_connected_to_network(self, network_name: str) -> bool:
         """
@@ -120,8 +146,13 @@ class NetworkManager(LibvirtClient):
             self.logger.debug(f"Ошибка проверки ВМ в сети '{network_name}': {e}")
             return False
 
-    def delete_network(self, network_name: str, request_id: str, force: bool = False,
-                       approve_admin: bool = False) -> NetworkMessage:
+    def delete_network(
+        self,
+        network_name: str,
+        request_id: str,
+        force: bool = False,
+        approve_admin: bool = False,
+    ) -> NetworkMessage:
         """Удаление виртуальной сети"""
         try:
             network = self.conn.networkLookupByName(network_name)
@@ -130,42 +161,57 @@ class NetworkManager(LibvirtClient):
             network_type = self._get_network_type_from_xml(network.XMLDesc(0))
             if self._has_vms_connected_to_network(network_name) and not approve_admin:
                 self.logger.info(
-                    f"Сеть '{network_name}' (тип: {network_type}) не может быть удалена с подключенными ВМ без подтверждения администратора")
-                return NetworkMessage(request_id=request_id,
-                                      message=CommandMessagesEnum.virtual_network_have_connected_vms.value,
-                                      code=CommandMessagesEnum.virtual_network_have_connected_vms.name,
-                                      success=False)
+                    f"Сеть '{network_name}' (тип: {network_type}) не может быть удалена с подключенными ВМ без подтверждения администратора"
+                )
+                return NetworkMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.virtual_network_have_connected_vms.value,
+                    code=CommandMessagesEnum.virtual_network_have_connected_vms.name,
+                    success=False,
+                )
 
             if network.isActive():
                 if force:
                     network.destroy()
-                    self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) остановлена перед удалением")
+                    self.logger.info(
+                        f"Сеть '{network_name}' (тип: {network_type}) остановлена перед удалением"
+                    )
                 else:
                     self.logger.error(
                         f"Сеть '{network_name}' активна. Используйте force=True для принудительного удаления"
                     )
-                    return NetworkMessage(request_id=request_id,
-                                          message=CommandMessagesEnum.virtual_network_delete_error.value,
-                                          code=CommandMessagesEnum.virtual_network_delete_error.name,
-                                          success=False,
-                                          note="use force=True for force delete")
+                    return NetworkMessage(
+                        request_id=request_id,
+                        message=CommandMessagesEnum.virtual_network_delete_error.value,
+                        code=CommandMessagesEnum.virtual_network_delete_error.name,
+                        success=False,
+                        note="use force=True for force delete",
+                    )
 
             network.undefine()
-            self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) успешно удалена")
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_successfully_deleted.value,
-                                  code=CommandMessagesEnum.virtual_network_successfully_deleted.name,
-                                  success=True)
+            self.logger.info(
+                f"Сеть '{network_name}' (тип: {network_type}) успешно удалена"
+            )
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_successfully_deleted.value,
+                code=CommandMessagesEnum.virtual_network_successfully_deleted.name,
+                success=True,
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления сети '{network_name}': {e}")
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_delete_error.value,
-                                  code=CommandMessagesEnum.virtual_network_delete_error.name,
-                                  success=False,
-                                  note=str(e))
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_delete_error.value,
+                code=CommandMessagesEnum.virtual_network_delete_error.name,
+                success=False,
+                note=str(e),
+            )
 
-    def restart_network(self, network_name: str, request_id: str, force: bool = False) -> NetworkMessage:
+    def restart_network(
+        self, network_name: str, request_id: str, force: bool = False
+    ) -> NetworkMessage:
         """Перезапуск виртуальной сети с опциональной проверкой подключенных ВМ"""
         try:
             network = self.conn.networkLookupByName(network_name)
@@ -181,39 +227,47 @@ class NetworkManager(LibvirtClient):
                     message=CommandMessagesEnum.virtual_network_have_connected_vms.value,
                     code=CommandMessagesEnum.virtual_network_have_connected_vms.name,
                     success=False,
-                    note="Network has connected VMs, use force=True to restart anyway"
+                    note="Network has connected VMs, use force=True to restart anyway",
                 )
 
             # Если сеть активна, останавливаем
             was_active = network.isActive()
             if was_active:
                 network.destroy()
-                self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) остановлена для перезапуска")
+                self.logger.info(
+                    f"Сеть '{network_name}' (тип: {network_type}) остановлена для перезапуска"
+                )
                 import time
+
                 time.sleep(2)  # Даем время для корректного завершения
 
             # Запускаем сеть
             network.create()
             self.logger.info(
-                f"Сеть '{network_name}' (тип: {network_type}) запущена {'после перезапуска' if was_active else ''}")
+                f"Сеть '{network_name}' (тип: {network_type}) запущена {'после перезапуска' if was_active else ''}"
+            )
 
             return NetworkMessage(
                 request_id=request_id,
                 message=CommandMessagesEnum.virtual_network_successfully_started.value,
                 code=CommandMessagesEnum.virtual_network_successfully_started.name,
                 success=True,
-                note=f"Сеть '{network_name}' успешно {'перезапущена' if was_active else 'запущена'}"
+                note=f"Сеть '{network_name}' успешно {'перезапущена' if was_active else 'запущена'}",
             )
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка перезапуска сети '{network_name}': {e}")
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_restart_error.value,
-                                  code=CommandMessagesEnum.virtual_network_restart_error.name,
-                                  success=False,
-                                  note=str(e))
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_restart_error.value,
+                code=CommandMessagesEnum.virtual_network_restart_error.name,
+                success=False,
+                note=str(e),
+            )
 
-    def edit_network(self, network_name: str, params: NetworkParameters, request_id: str) -> NetworkMessage:
+    def edit_network(
+        self, network_name: str, params: NetworkParameters, request_id: str
+    ) -> NetworkMessage:
         """Редактирование виртуальной сети"""
         try:
             # Получаем текущую сеть
@@ -239,8 +293,11 @@ class NetworkManager(LibvirtClient):
             # Если сеть активна, деактивируем её для редактирования
             if was_active:
                 network.destroy()
-                self.logger.info(f"Сеть '{network_name}' остановлена для редактирования")
+                self.logger.info(
+                    f"Сеть '{network_name}' остановлена для редактирования"
+                )
                 import time
+
                 time.sleep(1)  # Даем время для корректного завершения
 
             # ⭐ ВАЖНО: УДАЛЯЕМ старую сеть перед созданием новой ⭐
@@ -273,32 +330,40 @@ class NetworkManager(LibvirtClient):
             # Получаем информацию об обновленной сети
             updated_info = self.get_network_info(params.name, request_id)
 
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_successfully_updated.value,
-                                  code=CommandMessagesEnum.virtual_network_successfully_updated.name,
-                                  success=True,
-                                  net_info=updated_info.net_info if updated_info.success else None)
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_successfully_updated.value,
+                code=CommandMessagesEnum.virtual_network_successfully_updated.name,
+                success=True,
+                net_info=updated_info.net_info if updated_info.success else None,
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка редактирования сети '{network_name}': {e}")
 
             # Попытка восстановить оригинальную сеть в случае ошибки
             try:
-                if 'old_xml' in locals():
-                    self.logger.warning(f"Попытка восстановления оригинальной сети '{network_name}'")
+                if "old_xml" in locals():
+                    self.logger.warning(
+                        f"Попытка восстановления оригинальной сети '{network_name}'"
+                    )
                     self.conn.networkDefineXML(old_xml)
                     restored = self.conn.networkLookupByName(network_name)
-                    restored.setAutostart(autostart if 'autostart' in locals() else True)
-                    if was_active if 'was_active' in locals() else False:
+                    restored.setAutostart(
+                        autostart if "autostart" in locals() else True
+                    )
+                    if was_active if "was_active" in locals() else False:
                         restored.create()
             except Exception as restore_error:
                 self.logger.error(f"Не удалось восстановить сеть: {restore_error}")
 
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_update_error.value,
-                                  code=CommandMessagesEnum.virtual_network_update_error.name,
-                                  success=False,
-                                  note=str(e))
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_update_error.value,
+                code=CommandMessagesEnum.virtual_network_update_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def get_network_info(self, network_name: str, request_id: str) -> NetworkMessage:
         """Получение информации о сети"""
@@ -314,33 +379,41 @@ class NetworkManager(LibvirtClient):
             info = NetworkInfo(
                 name=network.name(),
                 uuid=network.UUIDString(),
-                bridge_name=network.bridgeName() if hasattr(network, 'bridgeName') else None,
+                bridge_name=(
+                    network.bridgeName() if hasattr(network, "bridgeName") else None
+                ),
                 active=network.isActive(),
                 persistent=network.isPersistent(),
                 autostart=network.autostart(),
                 network_type=network_type_info,
                 xml=xml_desc,
-                gateway=parsed_settings.get('gateway'),
-                dns_forwarders=parsed_settings.get('dns_forwarders', []),
-                dns_hosts=parsed_settings.get('dns_hosts', []),
-                dns_txts=parsed_settings.get('dns_txts', []),
-                ipv4_address=parsed_settings.get('ipv4_address'),
-                dhcp_ranges=parsed_settings.get('dhcp_ranges', [])
+                gateway=parsed_settings.get("gateway"),
+                dns_forwarders=parsed_settings.get("dns_forwarders", []),
+                dns_hosts=parsed_settings.get("dns_hosts", []),
+                dns_txts=parsed_settings.get("dns_txts", []),
+                ipv4_address=parsed_settings.get("ipv4_address"),
+                dhcp_ranges=parsed_settings.get("dhcp_ranges", []),
             )
 
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_found.value,
-                                  code=CommandMessagesEnum.virtual_network_found.name,
-                                  success=True,
-                                  net_info=info)
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_found.value,
+                code=CommandMessagesEnum.virtual_network_found.name,
+                success=True,
+                net_info=info,
+            )
 
         except self.libvirtError as e:
-            self.logger.error(f"Ошибка получения информации о сети '{network_name}': {e}")
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.virtual_network_not_found.value,
-                                  code=CommandMessagesEnum.virtual_network_not_found.name,
-                                  success=False,
-                                  note=str(e))
+            self.logger.error(
+                f"Ошибка получения информации о сети '{network_name}': {e}"
+            )
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_network_not_found.value,
+                code=CommandMessagesEnum.virtual_network_not_found.name,
+                success=False,
+                note=str(e),
+            )
 
     def _generate_network_xml(self, params: NetworkParameters) -> str:
         """Генерация XML конфигурации сети"""
@@ -394,8 +467,13 @@ class NetworkManager(LibvirtClient):
         # IP конфигурация
         if params.ipv4 and params.ipv4_address:
             ip_elem = ET.SubElement(root, "ip")
-            ip_elem.set("address", str(ipaddress.ip_network(str(params.ipv4_address)).network_address))
-            ip_elem.set("prefix", str(ipaddress.ip_network(str(params.ipv4_address)).prefixlen))
+            ip_elem.set(
+                "address",
+                str(ipaddress.ip_network(str(params.ipv4_address)).network_address),
+            )
+            ip_elem.set(
+                "prefix", str(ipaddress.ip_network(str(params.ipv4_address)).prefixlen)
+            )
             ip_elem.set("family", "ipv4")
             # Gateway
             if params.gateway:
@@ -425,8 +503,13 @@ class NetworkManager(LibvirtClient):
         # IPv6 конфигурация
         if params.ipv6 and params.ipv6_address:
             ip6_elem = ET.SubElement(root, "ip")
-            ip6_elem.set("address", str(ipaddress.ip_network(str(params.ipv6_address)).network_address))
-            ip6_elem.set("prefix", str(ipaddress.ip_network(str(params.ipv6_address)).prefixlen))
+            ip6_elem.set(
+                "address",
+                str(ipaddress.ip_network(str(params.ipv6_address)).network_address),
+            )
+            ip6_elem.set(
+                "prefix", str(ipaddress.ip_network(str(params.ipv6_address)).prefixlen)
+            )
             ip6_elem.set("family", "ipv6")
 
         # Маршруты
@@ -443,8 +526,13 @@ class NetworkManager(LibvirtClient):
         dns_elem = None
 
         # Создаем элемент DNS, если есть любые DNS настройки
-        if (params.dns_forwarders or params.dns_hosts or params.dns_txts or
-                params.dns and (params.dns.forwarders or params.dns.hosts or params.dns.txt_records)):
+        if (
+            params.dns_forwarders
+            or params.dns_hosts
+            or params.dns_txts
+            or params.dns
+            and (params.dns.forwarders or params.dns.hosts or params.dns.txt_records)
+        ):
             dns_elem = ET.SubElement(root, "dns")
 
             # Обрабатываем новые DNS forwarders
@@ -522,7 +610,7 @@ class NetworkManager(LibvirtClient):
             ET.SubElement(root, "isolated")
 
         # Преобразуем в строку
-        xml_str = ET.tostring(root, encoding='unicode')
+        xml_str = ET.tostring(root, encoding="unicode")
 
         # Добавляем XML заголовок
         xml_header = '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -533,12 +621,12 @@ class NetworkManager(LibvirtClient):
         try:
             root = ET.fromstring(xml_desc)
             settings = {
-                'gateway': None,
-                'dns_forwarders': [],
-                'dns_hosts': [],
-                'dns_txts': [],
-                'ipv4_address': None,
-                'dhcp_ranges': []
+                "gateway": None,
+                "dns_forwarders": [],
+                "dns_hosts": [],
+                "dns_txts": [],
+                "ipv4_address": None,
+                "dhcp_ranges": [],
             }
 
             # Парсим gateway из элемента ip
@@ -546,59 +634,54 @@ class NetworkManager(LibvirtClient):
             if ip_elem is not None:
                 gateway_elem = ip_elem.find("gateway")
                 if gateway_elem is not None:
-                    settings['gateway'] = gateway_elem.get('addr')
+                    settings["gateway"] = gateway_elem.get("addr")
 
                 # Парсим IPv4 адрес
-                address = ip_elem.get('address')
-                prefix = ip_elem.get('prefix')
+                address = ip_elem.get("address")
+                prefix = ip_elem.get("prefix")
                 if address and prefix:
-                    settings['ipv4_address'] = f"{address}/{prefix}"
+                    settings["ipv4_address"] = f"{address}/{prefix}"
 
             # Парсим DHCP диапазоны
             dhcp_elem = root.find(".//dhcp")
             if dhcp_elem is not None:
                 for range_elem in dhcp_elem.findall("range"):
-                    start = range_elem.get('start')
-                    end = range_elem.get('end')
+                    start = range_elem.get("start")
+                    end = range_elem.get("end")
                     if start and end:
-                        settings['dhcp_ranges'].append({
-                            'start': start,
-                            'end': end
-                        })
+                        settings["dhcp_ranges"].append({"start": start, "end": end})
 
             # Парсим DNS настройки
             dns_elem = root.find("dns")
             if dns_elem is not None:
                 # Парсим forwarders
                 for forwarder_elem in dns_elem.findall("forwarder"):
-                    domain = forwarder_elem.get('domain')
-                    addr = forwarder_elem.get('addr')
+                    domain = forwarder_elem.get("domain")
+                    addr = forwarder_elem.get("addr")
                     if addr:
-                        settings['dns_forwarders'].append(
+                        settings["dns_forwarders"].append(
                             DNSForwarder(domain=domain, addr=addr)
                         )
 
                 # Парсим hosts
                 for host_elem in dns_elem.findall("host"):
-                    ip = host_elem.get('ip')
+                    ip = host_elem.get("ip")
                     hostnames = []
                     for hostname_elem in host_elem.findall("hostname"):
                         if hostname_elem.text:
                             hostnames.append(hostname_elem.text)
 
                     if ip and hostnames:
-                        settings['dns_hosts'].append(
+                        settings["dns_hosts"].append(
                             DNSHost(ip=ip, hostnames=hostnames)
                         )
 
                 # Парсим TXT записи
                 for txt_elem in dns_elem.findall("txt"):
-                    name = txt_elem.get('name')
-                    value = txt_elem.get('value')
+                    name = txt_elem.get("name")
+                    value = txt_elem.get("value")
                     if name and value:
-                        settings['dns_txts'].append(
-                            DNSTXT(name=name, value=value)
-                        )
+                        settings["dns_txts"].append(DNSTXT(name=name, value=value))
 
             return settings
 
@@ -619,7 +702,9 @@ class NetworkManager(LibvirtClient):
             return True
 
         except self.libvirtError as e:
-            self.logger.error(f"Ошибка установки автозапуска для сети '{network_name}': {e}")
+            self.logger.error(
+                f"Ошибка установки автозапуска для сети '{network_name}': {e}"
+            )
             return False
 
     def start_network(self, network_name: str) -> bool:
@@ -630,10 +715,14 @@ class NetworkManager(LibvirtClient):
 
             if not network.isActive():
                 network.create()
-                self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) запущена")
+                self.logger.info(
+                    f"Сеть '{network_name}' (тип: {network_type}) запущена"
+                )
                 return True
             else:
-                self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) уже запущена")
+                self.logger.info(
+                    f"Сеть '{network_name}' (тип: {network_type}) уже запущена"
+                )
                 return True
 
         except self.libvirtError as e:
@@ -648,10 +737,14 @@ class NetworkManager(LibvirtClient):
 
             if network.isActive():
                 network.destroy()
-                self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) остановлена")
+                self.logger.info(
+                    f"Сеть '{network_name}' (тип: {network_type}) остановлена"
+                )
                 return True
             else:
-                self.logger.info(f"Сеть '{network_name}' (тип: {network_type}) уже остановлена")
+                self.logger.info(
+                    f"Сеть '{network_name}' (тип: {network_type}) уже остановлена"
+                )
                 return True
 
         except self.libvirtError as e:
@@ -676,24 +769,29 @@ class NetworkManager(LibvirtClient):
                     info = NetworkInfo(
                         name=network.name(),
                         uuid=network.UUIDString(),
-                        bridge_name=network.bridgeName() if hasattr(network, 'bridgeName') else None,
+                        bridge_name=(
+                            network.bridgeName()
+                            if hasattr(network, "bridgeName")
+                            else None
+                        ),
                         active=network.isActive(),
                         persistent=network.isPersistent(),
                         autostart=network.autostart(),
                         network_type=network_type_info,
                         xml=xml_desc,
-                        gateway=parsed_settings.get('gateway'),
-                        dns_forwarders=parsed_settings.get('dns_forwarders', []),
-                        dns_hosts=parsed_settings.get('dns_hosts', []),
-                        dns_txts=parsed_settings.get('dns_txts', []),
-                        ipv4_address=parsed_settings.get('ipv4_address'),
-                        dhcp_ranges=parsed_settings.get('dhcp_ranges', [])
-
+                        gateway=parsed_settings.get("gateway"),
+                        dns_forwarders=parsed_settings.get("dns_forwarders", []),
+                        dns_hosts=parsed_settings.get("dns_hosts", []),
+                        dns_txts=parsed_settings.get("dns_txts", []),
+                        ipv4_address=parsed_settings.get("ipv4_address"),
+                        dhcp_ranges=parsed_settings.get("dhcp_ranges", []),
                     )
 
                     networks_info.append(info)
                 except Exception as e:
-                    self.logger.warning(f"Ошибка получения информации о сети {network.name()}: {e}")
+                    self.logger.warning(
+                        f"Ошибка получения информации о сети {network.name()}: {e}"
+                    )
 
             return networks_info
 
@@ -711,16 +809,15 @@ class NetworkManager(LibvirtClient):
 
         # Определяем основной тип сети
         if params.isolated:
-            network_type = 'isolated'
+            network_type = "isolated"
         elif params.forward:
             network_type = params.forward.mode
         else:
-            network_type = 'no-forward'
+            network_type = "no-forward"
 
         # Получаем описание типа
         description = NETWORK_TYPE_DESCRIPTIONS.get(
-            network_type,
-            f"Неизвестный тип сети: {network_type}"
+            network_type, f"Неизвестный тип сети: {network_type}"
         )
 
         return NetworkTypeInfo(
@@ -730,7 +827,7 @@ class NetworkManager(LibvirtClient):
             has_ipv4=has_ipv4,
             has_ipv6=has_ipv6,
             has_bridge=has_bridge,
-            description=description
+            description=description,
         )
 
     def _get_network_type_from_xml(self, xml_desc: str) -> str:
@@ -739,22 +836,22 @@ class NetworkManager(LibvirtClient):
             root = ET.fromstring(xml_desc)
 
             # Проверяем на изолированную сеть
-            isolated_elem = root.find('isolated')
+            isolated_elem = root.find("isolated")
             if isolated_elem is not None:
-                return 'isolated'
+                return "isolated"
 
             # Проверяем на наличие forward
-            forward_elem = root.find('forward')
+            forward_elem = root.find("forward")
             if forward_elem is not None:
-                mode = forward_elem.get('mode', 'nat')
+                mode = forward_elem.get("mode", "nat")
                 return mode
 
             # Сеть без форвардинга
-            return 'no-forward'
+            return "no-forward"
 
         except ET.ParseError as e:
             self.logger.error(f"Ошибка парсинга XML при определении типа сети: {e}")
-            return 'unknown'
+            return "unknown"
 
     def _get_network_type_info_from_xml(self, xml_desc: str) -> NetworkTypeInfo:
         """Получение полной информации о типе сети из XML"""
@@ -768,20 +865,19 @@ class NetworkManager(LibvirtClient):
             has_bridge = root.find("bridge") is not None
 
             # Определяем основной тип
-            isolated_elem = root.find('isolated')
+            isolated_elem = root.find("isolated")
             if isolated_elem is not None:
-                network_type = 'isolated'
+                network_type = "isolated"
             else:
-                forward_elem = root.find('forward')
+                forward_elem = root.find("forward")
                 if forward_elem is not None:
-                    network_type = forward_elem.get('mode', 'nat')
+                    network_type = forward_elem.get("mode", "nat")
                 else:
-                    network_type = 'no-forward'
+                    network_type = "no-forward"
 
             # Получаем описание
             description = NETWORK_TYPE_DESCRIPTIONS.get(
-                network_type,
-                f"Неизвестный тип сети: {network_type}"
+                network_type, f"Неизвестный тип сети: {network_type}"
             )
 
             return NetworkTypeInfo(
@@ -791,34 +887,33 @@ class NetworkManager(LibvirtClient):
                 has_ipv4=has_ipv4,
                 has_ipv6=has_ipv6,
                 has_bridge=has_bridge,
-                description=description
+                description=description,
             )
 
         except ET.ParseError as e:
             self.logger.error(f"Ошибка парсинга XML: {e}")
             return NetworkTypeInfo(
-                type='unknown',
-                description='Ошибка определения типа сети'
+                type="unknown", description="Ошибка определения типа сети"
             )
 
     def _validate_network_parameters(self, params: NetworkParameters):
         """Дополнительная валидация параметров сети"""
         # Валидация для bridge сетей
-        if params.forward and params.forward.mode == 'bridge':
+        if params.forward and params.forward.mode == "bridge":
             if not params.forward.dev and not params.forward.interface:
                 self.logger.warning(
                     f"Bridge сеть '{params.name}': рекомендуется указать dev или interface"
                 )
 
         # Валидация для routed сетей
-        if params.forward and params.forward.mode == 'route':
+        if params.forward and params.forward.mode == "route":
             if params.bridge:
                 self.logger.warning(
                     f"Routed сеть '{params.name}': параметр bridge обычно не используется"
                 )
 
         # Валидация для NAT сетей
-        if params.forward and params.forward.mode == 'nat':
+        if params.forward and params.forward.mode == "nat":
             if not params.ipv4_address:
                 self.logger.warning(
                     f"NAT сеть '{params.name}': рекомендуется указать ipv4_address"
@@ -829,34 +924,31 @@ class NetworkManager(LibvirtClient):
         networks = self.list_all_networks()
 
         summary = {
-            'total': len(networks),
-            'active': 0,
-            'inactive': 0,
-            'by_type': {},
-            'by_autostart': {
-                'enabled': 0,
-                'disabled': 0
-            }
+            "total": len(networks),
+            "active": 0,
+            "inactive": 0,
+            "by_type": {},
+            "by_autostart": {"enabled": 0, "disabled": 0},
         }
 
         for network in networks:
             # Подсчет активных/неактивных
             if network.active:
-                summary['active'] += 1
+                summary["active"] += 1
             else:
-                summary['inactive'] += 1
+                summary["inactive"] += 1
 
             # Подсчет по типам
             network_type = network.network_type.type
-            if network_type not in summary['by_type']:
-                summary['by_type'][network_type] = 0
-            summary['by_type'][network_type] += 1
+            if network_type not in summary["by_type"]:
+                summary["by_type"][network_type] = 0
+            summary["by_type"][network_type] += 1
 
             # Подсчет по автозапуску
             if network.autostart:
-                summary['by_autostart']['enabled'] += 1
+                summary["by_autostart"]["enabled"] += 1
             else:
-                summary['by_autostart']['disabled'] += 1
+                summary["by_autostart"]["disabled"] += 1
 
         return summary
 
@@ -871,7 +963,9 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка проверки видимости сети '{network_name}': {e}")
             return False
 
-    def enable_network_with_autostart(self, network_name: str, start_now: bool = True) -> bool:
+    def enable_network_with_autostart(
+        self, network_name: str, start_now: bool = True
+    ) -> bool:
         """
         Включает сеть и настраивает автозапуск.
 
@@ -892,7 +986,9 @@ class NetworkManager(LibvirtClient):
             # Настраиваем автозапуск
             autostart_success = self.set_network_autostart(network_name, True)
             if not autostart_success:
-                self.logger.error(f"Не удалось настроить автозапуск для сети '{network_name}'")
+                self.logger.error(
+                    f"Не удалось настроить автозапуск для сети '{network_name}'"
+                )
                 return False
 
             # Запускаем сеть, если требуется
@@ -917,10 +1013,14 @@ class NetworkManager(LibvirtClient):
             return True
 
         except self.libvirtError as e:
-            self.logger.error(f"Ошибка включения сети '{network_name}' с автозапуском: {e}")
+            self.logger.error(
+                f"Ошибка включения сети '{network_name}' с автозапуском: {e}"
+            )
             return False
         except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при включении сети '{network_name}': {e}")
+            self.logger.error(
+                f"Неожиданная ошибка при включении сети '{network_name}': {e}"
+            )
             return False
 
     def get_vm_network_info(self, vm_name: str, request_id: str) -> NetworkMessage:
@@ -929,134 +1029,167 @@ class NetworkManager(LibvirtClient):
         try:
             vm = self.conn.lookupByName(vm_name)
         except libvirt.libvirtError as e:
-            return NetworkMessage(request_id=request_id,
-                                  message=CommandMessagesEnum.vm_found_error.value,
-                                  code=CommandMessagesEnum.vm_found_error.name,
-                                  success=False,
-                                  note=str(e))
+            return NetworkMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.vm_found_error.value,
+                code=CommandMessagesEnum.vm_found_error.name,
+                success=False,
+                note=str(e),
+            )
 
         xml_desc = vm.XMLDesc(0)
         root = ET.fromstring(xml_desc)
 
         interfaces = []
 
-        for iface in root.findall('.//devices/interface'):
+        for iface in root.findall(".//devices/interface"):
             # Определяем драйвер по умолчанию на основе модели
-            model = iface.find('model').get('type') if iface.find('model') is not None else ''
+            model = (
+                iface.find("model").get("type")
+                if iface.find("model") is not None
+                else ""
+            )
 
             # Значения драйвера по умолчанию для разных моделей
             default_drivers = {
-                'virtio': {'name': 'virtio-net-pci', 'queues': '1', 'iommu': 'off'},
-                'e1000': {'name': 'e1000', 'queues': '1', 'iommu': 'off'},
-                'rtl8139': {'name': 'rtl8139', 'queues': '1', 'iommu': 'off'},
-                'vmxnet3': {'name': 'vmxnet3', 'queues': '1', 'iommu': 'off'}
+                "virtio": {"name": "virtio-net-pci", "queues": "1", "iommu": "off"},
+                "e1000": {"name": "e1000", "queues": "1", "iommu": "off"},
+                "rtl8139": {"name": "rtl8139", "queues": "1", "iommu": "off"},
+                "vmxnet3": {"name": "vmxnet3", "queues": "1", "iommu": "off"},
             }
 
             interface_info = {
                 # Основные поля
-                "interface_type": iface.get('type', ''),
-                "mac_address": iface.find('mac').get('address') if iface.find('mac') is not None else '',
+                "interface_type": iface.get("type", ""),
+                "mac_address": (
+                    iface.find("mac").get("address")
+                    if iface.find("mac") is not None
+                    else ""
+                ),
                 "model": model,
-
                 # Драйвер с подстановкой значений по умолчанию
                 "driver": {},
-
                 # Источник подключения
                 "source": {},
-                "host_interface": iface.find('target').get('dev') if iface.find('target') is not None else '',
-
+                "host_interface": (
+                    iface.find("target").get("dev")
+                    if iface.find("target") is not None
+                    else ""
+                ),
                 # Состояние связи (по умолчанию 'up')
-                "link_state": {"state": "up", "description": "Канал активен по умолчанию"},
-
+                "link_state": {
+                    "state": "up",
+                    "description": "Канал активен по умолчанию",
+                },
                 # Boot order (если не указан, значит не используется для загрузки)
                 "boot_order": None,
-                "boot_order_description": "Не используется для PXE загрузки" if iface.find(
-                    'boot') is None else "Используется для сетевой загрузки",
-
+                "boot_order_description": (
+                    "Не используется для PXE загрузки"
+                    if iface.find("boot") is None
+                    else "Используется для сетевой загрузки"
+                ),
                 # ROM (по умолчанию отключен)
-                "rom_bar": {"enabled": "off", "description": "ROM отключен по умолчанию"},
-
+                "rom_bar": {
+                    "enabled": "off",
+                    "description": "ROM отключен по умолчанию",
+                },
                 # Filter (по умолчанию нет фильтрации)
-                "filter": {"name": "none", "description": "Фильтрация трафика не настроена"},
-
+                "filter": {
+                    "name": "none",
+                    "description": "Фильтрация трафика не настроена",
+                },
                 # MTU (по умолчанию 1500)
                 "mtu": {"size": "1500", "description": "Стандартный MTU по умолчанию"},
-
                 # Коалесцирование (актуально для virtio)
-                "coalescing": {"enabled": "false", "description": "Коалесцирование отключено по умолчанию"}
+                "coalescing": {
+                    "enabled": "false",
+                    "description": "Коалесцирование отключено по умолчанию",
+                },
             }
 
             # Заполняем драйвер (явные настройки или значения по умолчанию)
-            driver = iface.find('driver')
+            driver = iface.find("driver")
             if driver is not None:
                 # Используем явные настройки
                 interface_info["driver"] = {
-                    "name": driver.get('name', default_drivers.get(model, {}).get('name', 'unknown')),
-                    "queues": driver.get('queues', default_drivers.get(model, {}).get('queues', '1')),
-                    "iommu": driver.get('iommu', default_drivers.get(model, {}).get('iommu', 'off')),
-                    "txmode": driver.get('txmode', ''),
-                    "rxmode": driver.get('rxmode', ''),
-                    "description": "Настройки драйвера из конфигурации"
+                    "name": driver.get(
+                        "name", default_drivers.get(model, {}).get("name", "unknown")
+                    ),
+                    "queues": driver.get(
+                        "queues", default_drivers.get(model, {}).get("queues", "1")
+                    ),
+                    "iommu": driver.get(
+                        "iommu", default_drivers.get(model, {}).get("iommu", "off")
+                    ),
+                    "txmode": driver.get("txmode", ""),
+                    "rxmode": driver.get("rxmode", ""),
+                    "description": "Настройки драйвера из конфигурации",
                 }
             else:
                 # Используем значения по умолчанию для модели
                 interface_info["driver"] = {
-                    "name": default_drivers.get(model, {}).get('name', 'unknown'),
-                    "queues": default_drivers.get(model, {}).get('queues', '1'),
-                    "iommu": default_drivers.get(model, {}).get('iommu', 'off'),
-                    "description": f"Стандартный драйвер для модели {model}"
+                    "name": default_drivers.get(model, {}).get("name", "unknown"),
+                    "queues": default_drivers.get(model, {}).get("queues", "1"),
+                    "iommu": default_drivers.get(model, {}).get("iommu", "off"),
+                    "description": f"Стандартный драйвер для модели {model}",
                 }
 
-            source = iface.find('source')
+            source = iface.find("source")
             if source is not None:
-                if source.get('network'):
+                if source.get("network"):
                     interface_info["source"] = {
                         "type": "network",
-                        "name": source.get('network'),
+                        "name": source.get("network"),
                         "description": "Виртуальная сеть libvirt",
-                        "network_uuid": self._get_network_uuid(self.conn, source.get('network'))  # Можно добавить
+                        "network_uuid": self._get_network_uuid(
+                            self.conn, source.get("network")
+                        ),  # Можно добавить
                     }
 
             # Проверяем link state
-            link = iface.find('link')
+            link = iface.find("link")
             if link is not None:
                 interface_info["link_state"] = {
-                    "state": link.get('state', 'up'),
-                    "description": "Явно заданное состояние канала"
+                    "state": link.get("state", "up"),
+                    "description": "Явно заданное состояние канала",
                 }
 
             # Проверяем boot
-            boot = iface.find('boot')
+            boot = iface.find("boot")
             if boot is not None:
-                interface_info["boot_order"] = boot.get('order')
-                interface_info["boot_order_description"] = f"Порядок загрузки: {boot.get('order')}"
+                interface_info["boot_order"] = boot.get("order")
+                interface_info["boot_order_description"] = (
+                    f"Порядок загрузки: {boot.get('order')}"
+                )
 
             # Проверяем rom
-            rom = iface.find('rom')
+            rom = iface.find("rom")
             if rom is not None:
                 interface_info["rom_bar"] = {
-                    "enabled": rom.get('bar', 'on'),
-                    "file": rom.get('file', ''),
-                    "description": "ROM настроен явно"
+                    "enabled": rom.get("bar", "on"),
+                    "file": rom.get("file", ""),
+                    "description": "ROM настроен явно",
                 }
 
             # Проверяем фильтр
-            filterref = iface.find('filterref')
+            filterref = iface.find("filterref")
             if filterref is not None:
                 interface_info["filter"] = {
-                    "name": filterref.get('filter'),
+                    "name": filterref.get("filter"),
                     "parameters": {},
-                    "description": "Применен сетевой фильтр"
+                    "description": "Применен сетевой фильтр",
                 }
-                for param in filterref.findall('parameter'):
-                    interface_info["filter"]["parameters"][param.get('name')] = param.get('value')
+                for param in filterref.findall("parameter"):
+                    interface_info["filter"]["parameters"][param.get("name")] = (
+                        param.get("value")
+                    )
 
             # Проверяем MTU
-            mtu = iface.find('mtu')
+            mtu = iface.find("mtu")
             if mtu is not None:
                 interface_info["mtu"] = {
-                    "size": mtu.get('size'),
-                    "description": "MTU задан явно"
+                    "size": mtu.get("size"),
+                    "description": "MTU задан явно",
                 }
 
             interfaces.append(interface_info)
@@ -1072,22 +1205,29 @@ class NetworkManager(LibvirtClient):
                         "persistent": network.isPersistent(),
                         "autostart": network.autostart(),
                         "bridge": network.bridgeName() if network.isActive() else None,
-                        "uuid": network.UUIDString()
+                        "uuid": network.UUIDString(),
                     }
                 except libvirt.libvirtError:
                     iface["source"]["network_info"] = {"error": "Network not found"}
 
-        net_info = NetworkInterfacesInfo(vm_info=VmInfo(name=vm_name,
-                                                        uuid=vm.UUIDString(),
-                                                        state="running" if vm.isActive() else "shut off",
-                                                        has_guest_agent=self._check_guest_agent(vm)),
-                                         network_interfaces=NetworkInterfacesList(count=len(interfaces),
-                                                                                  interfaces=interfaces))
-        return NetworkMessage(request_id=request_id,
-                              message=CommandMessagesEnum.virtual_network_interfaces_found.value,
-                              code=CommandMessagesEnum.virtual_network_interfaces_found.name,
-                              net_info=net_info,
-                              success=True)
+        net_info = NetworkInterfacesInfo(
+            vm_info=VmInfo(
+                name=vm_name,
+                uuid=vm.UUIDString(),
+                state="running" if vm.isActive() else "shut off",
+                has_guest_agent=self._check_guest_agent(vm),
+            ),
+            network_interfaces=NetworkInterfacesList(
+                count=len(interfaces), interfaces=interfaces
+            ),
+        )
+        return NetworkMessage(
+            request_id=request_id,
+            message=CommandMessagesEnum.virtual_network_interfaces_found.value,
+            code=CommandMessagesEnum.virtual_network_interfaces_found.name,
+            net_info=net_info,
+            success=True,
+        )
 
     def _get_network_uuid(self, conn, network_name):
         """Получить UUID сети"""
@@ -1106,8 +1246,14 @@ class NetworkManager(LibvirtClient):
         except:
             return False
 
-    def detach_vm_network_interface(self, vm_name: str, mac_address: str, request_id: str,
-                                    persistent: bool = True, live: bool = True) -> NetworkMessage:
+    def detach_vm_network_interface(
+        self,
+        vm_name: str,
+        mac_address: str,
+        request_id: str,
+        persistent: bool = True,
+        live: bool = True,
+    ) -> NetworkMessage:
         """Отключение сетевого интерфейса от виртуальной машины"""
         try:
             # Проверяем существование ВМ
@@ -1120,7 +1266,7 @@ class NetworkManager(LibvirtClient):
                     message=CommandMessagesEnum.vm_found_error.value,
                     code=CommandMessagesEnum.vm_found_error.name,
                     success=False,
-                    note=f"VM not found: {e}"
+                    note=f"VM not found: {e}",
                 )
 
             # Проверяем существование интерфейса с указанным MAC
@@ -1128,42 +1274,55 @@ class NetworkManager(LibvirtClient):
             root = ET.fromstring(xml_desc)
 
             interface_found = False
-            for iface in root.findall('.//devices/interface'):
-                mac_elem = iface.find('mac')
-                if mac_elem is not None and mac_elem.get('address') == mac_address:
+            for iface in root.findall(".//devices/interface"):
+                mac_elem = iface.find("mac")
+                if mac_elem is not None and mac_elem.get("address") == mac_address:
                     interface_found = True
                     break
 
             if not interface_found:
-                self.logger.error(f"Сетевой интерфейс с MAC '{mac_address}' не найден у ВМ '{vm_name}'")
+                self.logger.error(
+                    f"Сетевой интерфейс с MAC '{mac_address}' не найден у ВМ '{vm_name}'"
+                )
                 return NetworkMessage(
                     request_id=request_id,
                     message=CommandMessagesEnum.virtual_network_interface_not_found.value,
                     code=CommandMessagesEnum.virtual_network_interface_not_found.name,
                     success=False,
-                    note=f"Network interface with MAC {mac_address} not found"
+                    note=f"Network interface with MAC {mac_address} not found",
                 )
 
             # Строим команду virsh detach-interface
-            cmd = ['virsh', '--connect', self.connection_uri, 'detach-interface', vm_name, 'network']
+            cmd = [
+                "virsh",
+                "--connect",
+                self.connection_uri,
+                "detach-interface",
+                vm_name,
+                "network",
+            ]
 
             if mac_address:
-                cmd.extend(['--mac', mac_address])
+                cmd.extend(["--mac", mac_address])
 
             if persistent:
-                cmd.append('--persistent')
+                cmd.append("--persistent")
 
             if live:
-                cmd.append('--live')
+                cmd.append("--live")
             else:
-                cmd.append('--config')
+                cmd.append("--config")
 
             # Выполняем команду
-            self.logger.info(f"Отключение сетевого интерфейса {mac_address} от ВМ {vm_name}")
+            self.logger.info(
+                f"Отключение сетевого интерфейса {mac_address} от ВМ {vm_name}"
+            )
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode == 0:
-                self.logger.info(f"Сетевой интерфейс {mac_address} успешно отключен от ВМ {vm_name}")
+                self.logger.info(
+                    f"Сетевой интерфейс {mac_address} успешно отключен от ВМ {vm_name}"
+                )
 
                 # Получаем обновленную информацию о сетевых интерфейсах ВМ
                 network_info = self.get_vm_network_info(vm_name, request_id)
@@ -1174,17 +1333,19 @@ class NetworkManager(LibvirtClient):
                     code=CommandMessagesEnum.virtual_network_interface_detached.name,
                     success=True,
                     net_info=network_info.net_info if network_info.success else None,
-                    note="Network interface successfully detached"
+                    note="Network interface successfully detached",
                 )
             else:
                 error_msg = result.stderr.strip()
-                self.logger.error(f"Ошибка отключения интерфейса {mac_address}: {error_msg}")
+                self.logger.error(
+                    f"Ошибка отключения интерфейса {mac_address}: {error_msg}"
+                )
                 return NetworkMessage(
                     request_id=request_id,
                     message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
                     code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
                     success=False,
-                    note=error_msg
+                    note=error_msg,
                 )
 
         except subprocess.CalledProcessError as e:
@@ -1194,16 +1355,18 @@ class NetworkManager(LibvirtClient):
                 message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
                 code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
         except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при отключении сетевого интерфейса: {e}")
+            self.logger.error(
+                f"Неожиданная ошибка при отключении сетевого интерфейса: {e}"
+            )
             return NetworkMessage(
                 request_id=request_id,
                 message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
                 code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
 
@@ -1216,7 +1379,7 @@ if __name__ == "__main__":
         print(f"Всего сетей: {summary['total']}")
         print(f"Активных: {summary['active']}, Неактивных: {summary['inactive']}")
         print("По типам:")
-        for net_type, count in summary['by_type'].items():
+        for net_type, count in summary["by_type"].items():
             print(f"  - {net_type}: {count}")
 
         print("\n=== Подробная информация о сетях ===")

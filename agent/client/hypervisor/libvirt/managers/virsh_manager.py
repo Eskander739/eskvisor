@@ -36,28 +36,35 @@ class VirshConsoleController:
 
         try:
             # Запускаем virsh console
-            self.child = pexpect.spawn(f'virsh --connect qemu:///system console {self.vm_name}', timeout=timeout)
+            self.child = pexpect.spawn(
+                f"virsh --connect qemu:///system console {self.vm_name}",
+                timeout=timeout,
+            )
             # self.child.logfile = sys.stdout.buffer
 
             # Ждем приветственного сообщения
             try:
-                self.child.expect(['Escape character', 'connected to domain'], timeout=10)
+                self.child.expect(
+                    ["Escape character", "connected to domain"], timeout=10
+                )
                 logger.info("Соединение с консолью установлено")
             except pexpect.TIMEOUT:
                 logger.warning("Таймаут ожидания приветствия, продолжаем...")
 
             # Активируем консоль через Ctrl+D
             logger.info("Активирую консоль (Ctrl+D)...")
-            self.child.send('\x04')  # Ctrl+D
+            self.child.send("\x04")  # Ctrl+D
             time.sleep(1)
 
             # Нажимаем Enter для гарантии
-            self.child.sendline('')
+            self.child.sendline("")
             time.sleep(0.5)
 
             # Проверяем активацию
             try:
-                self.child.expect(['login:', 'Login:', '$', '#', ':', '~#', '~$'], timeout=3)
+                self.child.expect(
+                    ["login:", "Login:", "$", "#", ":", "~#", "~$"], timeout=3
+                )
                 logger.info("Консоль активирована")
                 self.connected = True
 
@@ -70,13 +77,13 @@ class VirshConsoleController:
             except pexpect.TIMEOUT:
                 logger.warning("Консоль не ответила, пробую еще раз...")
                 # Вторая попытка
-                self.child.send('\x04')
+                self.child.send("\x04")
                 time.sleep(1)
-                self.child.sendline('\n\n')
+                self.child.sendline("\n\n")
                 time.sleep(1)
 
                 try:
-                    self.child.expect([':', '$', '#'], timeout=2)
+                    self.child.expect([":", "$", "#"], timeout=2)
                     logger.info("Консоль активирована на второй попытке")
                     self.connected = True
                     self._start_io_threads()
@@ -108,12 +115,14 @@ class VirshConsoleController:
                 if self.child.isalive():
                     try:
                         # Пробуем прочитать данные
-                        index = self.child.expect(['\n', '\r', pexpect.TIMEOUT], timeout=0.1)
+                        index = self.child.expect(
+                            ["\n", "\r", pexpect.TIMEOUT], timeout=0.1
+                        )
 
                         if index != 2:  # Не таймаут
                             # Получаем вывод до совпадения
-                            before = self.child.before.decode('utf-8', errors='ignore')
-                            after = self.child.after.decode('utf-8', errors='ignore')
+                            before = self.child.before.decode("utf-8", errors="ignore")
+                            after = self.child.after.decode("utf-8", errors="ignore")
 
                             # Объединяем данные
                             data = before + after
@@ -124,7 +133,7 @@ class VirshConsoleController:
 
                                 if cleaned_data:
                                     # Помещаем в очередь для обработки
-                                    self.response_queue.put(('output', cleaned_data))
+                                    self.response_queue.put(("output", cleaned_data))
 
                                     # Выводим только если включен вывод
                                     if self.echo_enabled:
@@ -149,11 +158,12 @@ class VirshConsoleController:
         """Очистка вывода от эхо-копий команд и управляющих символов"""
         # Удаляем управляющие последовательности ANSI
         import re
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        data = ansi_escape.sub('', data)
+
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        data = ansi_escape.sub("", data)
 
         # Удаляем возврат каретки
-        data = data.replace('\r', '')
+        data = data.replace("\r", "")
 
         return data
 
@@ -164,7 +174,7 @@ class VirshConsoleController:
                 # Ждем команды из очереди
                 cmd_type, data = self.command_queue.get(timeout=0.1)
 
-                if cmd_type == 'command' and self.child and self.child.isalive():
+                if cmd_type == "command" and self.child and self.child.isalive():
                     # Временно отключаем вывод перед отправкой команды
                     old_echo = self.echo_enabled
                     self.echo_enabled = False
@@ -178,14 +188,14 @@ class VirshConsoleController:
                     # Ждем небольшое время для выполнения
                     time.sleep(0.5)
 
-                elif cmd_type == 'special':
+                elif cmd_type == "special":
                     # Отправка специальных символов
-                    if data == 'ctrl_d':
-                        self.child.send('\x04')
-                    elif data == 'enter':
-                        self.child.send('\n')
-                    elif data == 'ctrl_c':
-                        self.child.send('\x03')
+                    if data == "ctrl_d":
+                        self.child.send("\x04")
+                    elif data == "enter":
+                        self.child.send("\n")
+                    elif data == "ctrl_c":
+                        self.child.send("\x03")
 
                 self.command_queue.task_done()
 
@@ -221,7 +231,7 @@ class VirshConsoleController:
             sys.stdout.flush()
 
         # Отправляем команду
-        self.command_queue.put(('command', command))
+        self.command_queue.put(("command", command))
         if wait_for_response:
             output = ""
             start_time = time.time()
@@ -231,7 +241,7 @@ class VirshConsoleController:
                 try:
                     # Пытаемся получить ответ
                     resp_type, data = self.response_queue.get(timeout=0.1)
-                    if resp_type == 'output':
+                    if resp_type == "output":
                         # Игнорируем эхо команды (если есть)
                         if not response_started and command in data:
                             data = data.replace(command, "", 1)
@@ -255,23 +265,23 @@ class VirshConsoleController:
         if self.connected and self.child:
             if self.echo_enabled:
                 logger.info("Повторная активация консоли (Ctrl+D)...")
-            self.command_queue.put(('special', 'ctrl_d'))
+            self.command_queue.put(("special", "ctrl_d"))
             time.sleep(1)
-            self.command_queue.put(('special', 'enter'))
+            self.command_queue.put(("special", "enter"))
             return True
         return False
 
     def press_enter(self):
         """Нажатие Enter"""
         if self.connected and self.child:
-            self.command_queue.put(('special', 'enter'))
+            self.command_queue.put(("special", "enter"))
             return True
         return False
 
     def send_ctrl_c(self):
         """Отправка Ctrl+C"""
         if self.connected and self.child:
-            self.command_queue.put(('special', 'ctrl_c'))
+            self.command_queue.put(("special", "ctrl_c"))
             return True
         return False
 
@@ -294,21 +304,21 @@ class VirshConsoleController:
                         continue
 
                     # Обработка специальных команд
-                    if user_input.startswith(':'):
+                    if user_input.startswith(":"):
                         cmd = user_input[1:].lower()
 
-                        if cmd == 'exit':
+                        if cmd == "exit":
                             logger.info("Выход из интерактивного режима")
                             logger.info("Консоль остается подключенной")
                             break
 
-                        elif cmd == 'activate':
+                        elif cmd == "activate":
                             self.activate_console()
 
-                        elif cmd == 'enter':
+                        elif cmd == "enter":
                             self.press_enter()
 
-                        elif cmd == 'ctrl+c':
+                        elif cmd == "ctrl+c":
                             self.send_ctrl_c()
 
                         else:
@@ -316,7 +326,9 @@ class VirshConsoleController:
 
                     else:
                         # Обычная команда для ВМ
-                        response = self.send_command(user_input, wait_for_response=True, timeout=10)
+                        response = self.send_command(
+                            user_input, wait_for_response=True, timeout=10
+                        )
                         # Не выводим response, так как он уже выведен в send_command
 
                 except EOFError:
@@ -379,7 +391,7 @@ class VirshConsoleController:
                 # Проверяем наличие новых данных
                 try:
                     resp_type, data = self.response_queue.get(timeout=0.5)
-                    if resp_type == 'output':
+                    if resp_type == "output":
                         output_buffer += data
                         # Выводим в реальном времени
                         if self.echo_enabled:
@@ -415,7 +427,7 @@ class VirshConsoleController:
         if self.child:
             try:
                 # Отправляем Ctrl+] для выхода из virsh console
-                self.child.send('\x1d')
+                self.child.send("\x1d")
                 time.sleep(0.5)
                 self.child.close()
             except:
@@ -432,6 +444,8 @@ if __name__ == "__main__":
     virsh_console = VirshConsoleController("VM-TEST-31353")
 
     virsh_console.connect()
-    results = virsh_console.execute_commands(["root", "cd /", "mkdir hello_eskvisor", "ls"])
+    results = virsh_console.execute_commands(
+        ["root", "cd /", "mkdir hello_eskvisor", "ls"]
+    )
     for result in results:
         print(result)

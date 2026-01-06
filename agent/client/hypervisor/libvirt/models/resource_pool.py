@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, computed_field
 
 class ResourcePoolType(str, Enum):
     """Типы ресурсов в пуле"""
+
     CPU = "cpu"
     MEMORY = "memory"
     STORAGE = "storage"
@@ -30,6 +31,7 @@ class StoragePoolType(str, Enum):
     ISCSI_DIRECT = "iscsi-direct"  # Прямой доступ к iSCSI
     UNKNOWN = "unknown"
 
+
 POOL_TYPE_DESCRIPTIONS = {
     StoragePoolType.DIR: "Директория в локальной файловой системе",
     StoragePoolType.FS: "Форматированный раздел файловой системы",
@@ -50,6 +52,7 @@ POOL_TYPE_DESCRIPTIONS = {
 
 POOL_STATE = {0: "inactive", 1: "building", 2: "running", 3: "degraded"}
 
+
 class PoolState(Enum):
     INACTIVE = "inactive"
     BUILDING = "building"
@@ -59,6 +62,7 @@ class PoolState(Enum):
 
 class ResourcePoolCreateRequest(BaseModel):
     """Запрос на создание пула ресурсов"""
+
     name: str
     cpu_limit: int | None = Field(None, description="Лимит CPU (в ядрах)")
     memory_limit: int | None = Field(None, description="Лимит памяти (в МБ)")
@@ -75,20 +79,21 @@ class ResourcePoolCreateRequest(BaseModel):
             return None
         return int(self.storage_limit * 1024 * 1024 * 1024)  # ГБ -> байты
 
-
     class Config:
         use_enum_values = True  # Для сериализации Enum в их значения
 
 
 class ResourcePoolEditRequest(BaseModel):
     """Запрос на редактирование пула ресурсов"""
+
     request_id: str
     name: str
     cpu_limit: int | None = Field(None, description="Новый лимит CPU (в ядрах)")
     memory_limit: int | None = Field(None, description="Новый лимит памяти (в МБ)")
     storage_limit: int | None = Field(None, description="Новый лимит хранилища (в ГБ)")
-    storage_xml: str | None = Field(None, description="Новое XML описание пула хранения")
-
+    storage_xml: str | None = Field(
+        None, description="Новое XML описание пула хранения"
+    )
 
     @computed_field
     @property
@@ -101,6 +106,7 @@ class ResourcePoolEditRequest(BaseModel):
 
 class ResourcePoolAdjustRequest(BaseModel):
     """Запрос на изменение ресурсов пула"""
+
     request_id: str
     name: str
     resource_type: ResourcePoolType
@@ -110,23 +116,34 @@ class ResourcePoolAdjustRequest(BaseModel):
 
 class ResourcePoolReservationRequest(BaseModel):
     """Запрос на установку резерва ресурсов"""
+
     request_id: str
     name: str
-    cpu_reservation: int | None = Field(None, description="Гарантированный минимум CPU (в ядрах)")
-    memory_reservation: int | None = Field(None, description="Гарантированный минимум памяти (в МБ)")
+    cpu_reservation: int | None = Field(
+        None, description="Гарантированный минимум CPU (в ядрах)"
+    )
+    memory_reservation: int | None = Field(
+        None, description="Гарантированный минимум памяти (в МБ)"
+    )
 
 
 class ResourcePoolLimitRequest(BaseModel):
     """Запрос на установку лимита ресурсов"""
+
     request_id: str
     name: str
     cpu_limit: int | None = Field(None, description="Максимальный лимит CPU (в ядрах)")
-    memory_limit: int | None = Field(None, description="Максимальный лимит памяти (в МБ)")
-    storage_limit: int | None = Field(None, description="Максимальный лимит хранилища (в ГБ)")
+    memory_limit: int | None = Field(
+        None, description="Максимальный лимит памяти (в МБ)"
+    )
+    storage_limit: int | None = Field(
+        None, description="Максимальный лимит хранилища (в ГБ)"
+    )
 
 
 class VMPoolAssignmentRequest(BaseModel):
     """Запрос на назначение/изъятие ВМ из пула"""
+
     request_id: str
     pool_name: str
     vm_name: str
@@ -142,6 +159,7 @@ class ResourceMetrics(BaseModel):
     usage: int | None = None
     available: int | None = None
     percent: int | None = None
+
 
 class UsageInfo(BaseModel):
     cpu: int
@@ -165,14 +183,17 @@ class ResourcePoolUsageInfo(BaseModel):
 
 class ResourcePoolInfoRequest(BaseModel):
     """Запрос на получение информации о пуле"""
+
     request_id: str
     name: str
 
 
 class ResourcePoolControlRequest(BaseModel):
     """Запрос на управление пулом (старт/стоп)"""
+
     request_id: str
     name: str
+
 
 class AdjustResourcePool(BaseModel):
     name: str
@@ -223,7 +244,9 @@ class ResourcePool(BaseModel):
 
     # Основные метрики в байтах (сырые данные из libvirt)
     capacity_bytes: int = Field(..., description="Общая емкость в байтах")
-    allocation_bytes: int = Field(..., description="Использованное пространство в байтах")
+    allocation_bytes: int = Field(
+        ..., description="Использованное пространство в байтах"
+    )
     available_bytes: int = Field(..., description="Доступное пространство в байтах")
 
     autostart: bool
@@ -244,25 +267,25 @@ class ResourcePool(BaseModel):
     @property
     def memory_limit_gb(self) -> float:
         """Общая емкость в гигабайтах"""
-        return self.memory_limit / (1024 ** 3)
+        return self.memory_limit / (1024**3)
 
     @computed_field
     @property
     def capacity_gb(self) -> float:
         """Общая емкость в гигабайтах"""
-        return self.capacity_bytes / (1024 ** 3)
+        return self.capacity_bytes / (1024**3)
 
     @computed_field
     @property
     def allocation_gb(self) -> float:
         """Использованное пространство в гигабайтах"""
-        return self.allocation_bytes / (1024 ** 3)
+        return self.allocation_bytes / (1024**3)
 
     @computed_field
     @property
     def available_gb(self) -> float:
         """Доступное пространство в гигабайтах"""
-        return self.available_bytes / (1024 ** 3)
+        return self.available_bytes / (1024**3)
 
     @computed_field
     @property
@@ -284,25 +307,25 @@ class ResourcePool(BaseModel):
     @property
     def capacity_tb(self) -> float:
         """Общая емкость в терабайтах"""
-        return self.capacity_bytes / (1024 ** 4)
+        return self.capacity_bytes / (1024**4)
 
     @computed_field
     @property
     def allocation_tb(self) -> float:
         """Использованное пространство в терабайтах"""
-        return self.allocation_bytes / (1024 ** 4)
+        return self.allocation_bytes / (1024**4)
 
     @computed_field
     @property
     def available_tb(self) -> float:
         """Доступное пространство в терабайтах"""
-        return self.available_bytes / (1024 ** 4)
+        return self.available_bytes / (1024**4)
 
     # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
     def get_human_readable_size(self, size_bytes: int) -> str:
         """Конвертирует размер в байтах в человекочитаемый формат"""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
             if size_bytes < 1024.0:
                 return f"{size_bytes:.2f} {unit}"
             size_bytes /= 1024.0
@@ -334,7 +357,7 @@ class ResourcePool(BaseModel):
             "available": self.available_human,
             "usage_percent": f"{self.usage_percent:.1f}%",
             "type": self.type.value if self.type else "unknown",
-            "vms_count": len(self.vms)
+            "vms_count": len(self.vms),
         }
 
 

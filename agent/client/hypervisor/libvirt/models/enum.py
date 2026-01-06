@@ -3,6 +3,7 @@ from enum import Enum
 
 class Architecture(str, Enum):
     """Поддерживаемые архитектуры процессоров"""
+
     X86_64 = "x86_64"
     I386 = "i386"
     ARM64 = "aarch64"
@@ -14,6 +15,7 @@ class Architecture(str, Enum):
 
 class EmulatorType(str, Enum):
     """Типы эмуляторов/гипервизоров"""
+
     KVM = "kvm"
     QEMU = "qemu"
     XEN = "xen"
@@ -24,6 +26,7 @@ class EmulatorType(str, Enum):
 
 class OSType(str, Enum):
     """Типы операционных систем"""
+
     LINUX = "linux"
     WINDOWS = "windows"
     MACOS = "macos"
@@ -34,6 +37,7 @@ class OSType(str, Enum):
 
 class DiskType(str, Enum):
     """Типы дисков"""
+
     FILE = "file"
     BLOCK = "block"
     DIR = "dir"
@@ -46,17 +50,19 @@ class DiskType(str, Enum):
 
 class DiskFormat(str, Enum):
     """Форматы дисков"""
+
     QCOW2 = "qcow2"
     RAW = "raw"
     VMDK = "vmdk"
     VDI = "vdi"
     VHD = "vhd"
     VHDX = "vhdx"
-    ISO = "iso" # Для образов
+    ISO = "iso"  # Для образов
 
 
 class NetworkType(str, Enum):
     """Типы сетевых интерфейсов"""
+
     BRIDGE = "bridge"
     NETWORK = "network"
     USER = "user"
@@ -69,6 +75,7 @@ class NetworkType(str, Enum):
 
 class NetworkModel(str, Enum):
     """Модели сетевых карт"""
+
     VIRTIO = "virtio"
     E1000 = "e1000"
     E1000E = "e1000e"
@@ -82,6 +89,7 @@ class NetworkModel(str, Enum):
 
 class GraphicsType(str, Enum):
     """Типы графических адаптеров"""
+
     VNC = "vnc"
     SPICE = "spice"
     SDL = "sdl"
@@ -91,6 +99,7 @@ class GraphicsType(str, Enum):
 
 class ControllerType(str, Enum):
     """Типы контроллеров"""
+
     USB = "usb"
     PCI = "pci"
     SCSI = "scsi"

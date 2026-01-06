@@ -2,7 +2,12 @@ import random
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import DiskFormat, DiskCreate, DiskStatus, DiskUpdate
+from agent.client.hypervisor.libvirt.models.disk import (
+    DiskFormat,
+    DiskCreate,
+    DiskStatus,
+    DiskUpdate,
+)
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
@@ -18,18 +23,28 @@ def test_vd_04_extend_disk(storage_session, disk_format):
     disk_path = None
 
     def bytes_to_gb(data: int):
-        return round(data / (1024 ** 3), 2)
+        return round(data / (1024**3), 2)
+
     try:
         # ____________________________________Создание диска____________________________________
         random_name = random.randint(10000, 99999)
-        attach_disk_create = DiskCreate(name=f"disk-test-{random_name}", size_gb=0.2, format=disk_format, sparse=False)
+        attach_disk_create = DiskCreate(
+            name=f"disk-test-{random_name}",
+            size_gb=0.2,
+            format=disk_format,
+            sparse=False,
+        )
         attach_disk = storage_session.create_disk(attach_disk_create)
         assert attach_disk is not None, "Ошибка: диск для подключения не создан"
         vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
         vm_disk = vm_disk.disk_info
-        before_change_disk_virtual_size = storage_session.get_disk_virtual_size(path=attach_disk_create.path)
+        before_change_disk_virtual_size = storage_session.get_disk_virtual_size(
+            path=attach_disk_create.path
+        )
         disk_path = vm_disk.path
-        assert bytes_to_gb(before_change_disk_virtual_size) ==  attach_disk_create.size_gb
+        assert (
+            bytes_to_gb(before_change_disk_virtual_size) == attach_disk_create.size_gb
+        )
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         current_disk_name = vm_disk.name.split(".").pop(0)
@@ -45,9 +60,14 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         disk_path = vm_disk.path
         assert vm_disk.path == attach_disk_create.path
 
-        after_change_disk_virtual_size = storage_session.get_disk_virtual_size(path=attach_disk_create.path)
+        after_change_disk_virtual_size = storage_session.get_disk_virtual_size(
+            path=attach_disk_create.path
+        )
         assert bytes_to_gb(after_change_disk_virtual_size) == edit_disk.new_size_gb
-        assert round(after_change_disk_virtual_size/before_change_disk_virtual_size, 2) == 2.5
+        assert (
+            round(after_change_disk_virtual_size / before_change_disk_virtual_size, 2)
+            == 2.5
+        )
 
     finally:
         # ____________________________________Удаление диска(постусловие)____________________________________
@@ -56,4 +76,3 @@ def test_vd_04_extend_disk(storage_session, disk_format):
             vm_disk = storage_session.get_disk_info(path=disk_path)
             assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
             assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
-

@@ -26,9 +26,13 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
         # ____________________________________Создание ВМ____________________________________
 
         random_name = f"VM-TEST-{random.randint(10000, 99999)}"
-        vm_template = VMCreateRequest(name=random_name, disks=[DiskCreate(), DiskCreate()])
+        vm_template = VMCreateRequest(
+            name=random_name, disks=[DiskCreate(), DiskCreate()]
+        )
         create_vm_info = vm_session.create_vm(vm_template)
-        assert create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        assert (
+            create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
+        )
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         assert create_vm_info.vm_info is not None
         vm_info: VirtualMachine = create_vm_info.vm_info
@@ -42,12 +46,18 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
             disk_paths.append(current_disk.path)
         assert len(disks_by_vm_name) == 2
         # ____________________________________Удаление ВМ с дисками____________________________________
-        delete_vm_info = vm_session.delete_vm_with_force(name=random_name, request_id=request_id)
-        assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
+        delete_vm_info = vm_session.delete_vm_with_force(
+            name=random_name, request_id=request_id
+        )
+        assert (
+            delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
+        )
         assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
         assert delete_vm_info.success is True
         for current_disk_path in disk_paths:
-            disks_by_path = storage_session.get_disk_info(path=current_disk_path, request_id=request_id)
+            disks_by_path = storage_session.get_disk_info(
+                path=current_disk_path, request_id=request_id
+            )
             assert disks_by_path.message == CommandMessagesEnum.disk_not_found.value
             assert disks_by_path.code == CommandMessagesEnum.disk_not_found.name
         vm_deleted = True
@@ -55,7 +65,15 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
         # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)____________
         if random_name is not None:
             if not vm_deleted:
-                delete_vm_info = vm_session.delete_vm_with_force(name=random_name, request_id=request_id)
-                assert delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
-                assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+                delete_vm_info = vm_session.delete_vm_with_force(
+                    name=random_name, request_id=request_id
+                )
+                assert (
+                    delete_vm_info.message
+                    == CommandMessagesEnum.vm_successfully_deleted.value
+                )
+                assert (
+                    delete_vm_info.code
+                    == CommandMessagesEnum.vm_successfully_deleted.name
+                )
                 assert delete_vm_info.success is True

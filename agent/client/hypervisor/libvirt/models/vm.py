@@ -5,19 +5,27 @@ from pydantic import field_validator, BaseModel, Field, model_validator
 
 from agent.client.hypervisor.libvirt.models.controller import VMController
 from agent.client.hypervisor.libvirt.models.disk import BusType, DiskCreate
-from agent.client.hypervisor.libvirt.models.enum import Architecture, EmulatorType, OSType, GraphicsType, \
-    ControllerType
+from agent.client.hypervisor.libvirt.models.enum import (
+    Architecture,
+    EmulatorType,
+    OSType,
+    GraphicsType,
+    ControllerType,
+)
 from agent.client.hypervisor.libvirt.models.general import MachineType, VMState
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 
 
 class VMCreateRequest(BaseModel):
     """Модель запроса на создание ВМ через virt-install"""
+
     # Основные параметры
 
     request_id: str = str(uuid.uuid4())
     name: str
-    install_method: str | None = "import"  # "import", "pxe", "boot", "cdrom", "location"
+    install_method: str | None = (
+        "import"  # "import", "pxe", "boot", "cdrom", "location"
+    )
     description: str | None = None
     architecture: Architecture | str = Architecture.X86_64
     emulator_type: EmulatorType = EmulatorType.KVM
@@ -52,38 +60,29 @@ class VMCreateRequest(BaseModel):
     video_model: str = "qxl"
 
     machine_type: MachineType = Field(
-        default=MachineType.Q35 if architecture == Architecture.X86_64 else MachineType.VIRT,
-        description="Тип эмулируемой машины"
+        default=(
+            MachineType.Q35 if architecture == Architecture.X86_64 else MachineType.VIRT
+        ),
+        description="Тип эмулируемой машины",
     )
 
     features: dict[str, str] = Field(
         default_factory=lambda: {"acpi": "on", "apic": "on"},
-        description="Включенные фичи ВМ"
+        description="Включенные фичи ВМ",
     )
 
-    qemu_agent: bool = Field(
-        default=False,
-        description="Включить QEMU guest agent"
-    )
+    qemu_agent: bool = Field(default=False, description="Включить QEMU guest agent")
 
-    memballoon_model: str = Field(
-        default="virtio",
-        description="Модель баллона памяти"
-    )
+    memballoon_model: str = Field(default="virtio", description="Модель баллона памяти")
 
     hyperv_features: dict[str, str] = Field(
-        default_factory=dict,
-        description="Hyper-V фичи (для Windows)"
+        default_factory=dict, description="Hyper-V фичи (для Windows)"
     )
 
-    cpu_model: str = Field(
-        default="host-model",
-        description="Модель CPU"
-    )
+    cpu_model: str = Field(default="host-model", description="Модель CPU")
 
     cpu_features: list[str] = Field(
-        default_factory=list,
-        description="Дополнительные фичи CPU"
+        default_factory=list, description="Дополнительные фичи CPU"
     )
 
     @model_validator(mode="after")
@@ -93,12 +92,16 @@ class VMCreateRequest(BaseModel):
         if values.boot_devices:
             for current_disk in values.disks:
                 if current_disk.path is None:
-                    raise ValueError("Несовместимые параметры, "
-                                     f"нельзя использовать boot_devices='{values.boot_devices}' и диски с path=None")
+                    raise ValueError(
+                        "Несовместимые параметры, "
+                        f"нельзя использовать boot_devices='{values.boot_devices}' и диски с path=None"
+                    )
 
         if values.boot_devices is None and values.install_method is None:
-            raise ValueError("Несовместимые параметры "
-                             "нельзя использовать boot_devices=None и диски с install_method=None")
+            raise ValueError(
+                "Несовместимые параметры "
+                "нельзя использовать boot_devices=None и диски с install_method=None"
+            )
 
         return values
 
@@ -107,7 +110,7 @@ class VMCreateRequest(BaseModel):
     def set_default_variant(cls, v, values):
         """Установка варианта ОС по умолчанию"""
         if v is None:
-            os_type = values.get('os_type')
+            os_type = values.get("os_type")
             if os_type == OSType.WINDOWS:
                 return "win10"
             elif os_type == OSType.LINUX:
@@ -118,14 +121,14 @@ class VMCreateRequest(BaseModel):
     def set_current_memory(cls, v, values):
         """Установка текущей памяти, если не указана"""
         if v is None:
-            return values.get('memory_mb')
+            return values.get("memory_mb")
         return v
 
     @field_validator("max_vcpus")
     def set_max_vcpus(cls, v, values):
         """Установка максимального количества vCPUs"""
         if v is None:
-            return values.get('vcpus')
+            return values.get("vcpus")
         return v
 
     @field_validator("controllers")
@@ -139,44 +142,40 @@ class VMCreateRequest(BaseModel):
         # Для KVM/QEMU x86_64 добавляем PCI контроллер
         # if emulator_type in [EmulatorType.KVM, EmulatorType.QEMU] and architecture == Architecture.X86_64:
         #     print("controllers: ", controllers)
-            # for controller in controllers:
-            #     if controller.controller_type == ControllerType.PCI:
-            #         break
-            # else:
-            #     pci_controller = VMController(
-            #         controller_type=ControllerType.PCI,
-            #         index=0,
-            #         model="pcie-root"
-            #     )
-            #     controllers.insert(0, pci_controller)
-            # for controller in controllers:
-            #     if controller.controller_type == ControllerType.USB:
-            #         break
-            # else:
-            #     usb_controller = VMController(
-            #         controller_type=ControllerType.USB,
-            #         index=0,
-            #         model="qemu-xhci",
-            #         ports=15
-            #     )
-            #     controllers.append(usb_controller)
+        # for controller in controllers:
+        #     if controller.controller_type == ControllerType.PCI:
+        #         break
+        # else:
+        #     pci_controller = VMController(
+        #         controller_type=ControllerType.PCI,
+        #         index=0,
+        #         model="pcie-root"
+        #     )
+        #     controllers.insert(0, pci_controller)
+        # for controller in controllers:
+        #     if controller.controller_type == ControllerType.USB:
+        #         break
+        # else:
+        #     usb_controller = VMController(
+        #         controller_type=ControllerType.USB,
+        #         index=0,
+        #         model="qemu-xhci",
+        #         ports=15
+        #     )
+        #     controllers.append(usb_controller)
 
         # Добавляем SCSI контроллер если есть SCSI диски
-        disks = values.get('disks', [])
+        disks = values.get("disks", [])
         if any(disk.bus == BusType.SCSI for disk in disks):
             scsi_controller = VMController(
-                controller_type=ControllerType.SCSI,
-                index=0,
-                model="virtio-scsi"
+                controller_type=ControllerType.SCSI, index=0, model="virtio-scsi"
             )
             controllers.append(scsi_controller)
 
         # Добавляем SATA контроллер если есть SATA диски
         if any(disk.bus == BusType.SATA for disk in disks):
             sata_controller = VMController(
-                controller_type=ControllerType.SATA,
-                index=0,
-                model="ahci"
+                controller_type=ControllerType.SATA, index=0, model="ahci"
             )
             controllers.append(sata_controller)
 
@@ -184,9 +183,7 @@ class VMCreateRequest(BaseModel):
         cdrom = values.get("cdrom")
         if any(disk.bus == BusType.IDE for disk in disks) or cdrom:
             ide_controller = VMController(
-                controller_type=ControllerType.IDE,
-                index=0,
-                model="piix4-ide"
+                controller_type=ControllerType.IDE, index=0, model="piix4-ide"
             )
             controllers.append(ide_controller)
 
@@ -199,23 +196,21 @@ class VMCreateRequest(BaseModel):
             raise ValueError("Хотя бы один диск должен быть указан")
         return v
 
-
     @field_validator("graphics")
     def validate_graphics(cls, v):
         GraphicsType(v)
         return v
-
 
     @field_validator("os_type")
     def validate_os_type(cls, v):
         OSType(v)
         return v
 
-
     @field_validator("architecture")
     def validate_architecture(cls, v):
         Architecture(v)
         return v
+
 
 class VmUpdateRequest(BaseModel):
     memory_mb: int | None = None
@@ -241,6 +236,7 @@ class VmUpdateRequest(BaseModel):
 
 class VirtualMachine(BaseModel):
     """Информация о виртуальной машине"""
+
     name: str
     state: VMState
     id: int | None = None

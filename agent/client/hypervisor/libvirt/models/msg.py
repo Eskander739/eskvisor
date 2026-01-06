@@ -3,13 +3,34 @@ from enum import Enum
 from pydantic import BaseModel, model_validator
 
 from agent.client.hypervisor.libvirt.models.disk import Disk
-from agent.client.hypervisor.libvirt.models.network import NetworkInfo, NetworkInterfacesInfo
-from agent.client.hypervisor.libvirt.models.resource_pool import ResourcePool, ResourcePoolList, AdjustResourcePool, \
-    AddVMInResourcePool, RemoveVMInResourcePool, ResourcePoolReservation, ResourcePoolUpdates, DeleteResourcePool, \
-    ResourcePoolUsageInfo, ResourcePoolState
-from agent.client.hypervisor.libvirt.models.snapshots import SnapshotWithParent, DeleteSnapshotInfo, SnapshotList, \
-    ClonedSnapshot, CreateSnapshotChainError, CreateSnapshotChainSuccess, CreateMultipleSnapshotsError, \
-    CreateMultipleSnapshots, SnapshotRevertSuccess, SnapshotsChain
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkInfo,
+    NetworkInterfacesInfo,
+)
+from agent.client.hypervisor.libvirt.models.resource_pool import (
+    ResourcePool,
+    ResourcePoolList,
+    AdjustResourcePool,
+    AddVMInResourcePool,
+    RemoveVMInResourcePool,
+    ResourcePoolReservation,
+    ResourcePoolUpdates,
+    DeleteResourcePool,
+    ResourcePoolUsageInfo,
+    ResourcePoolState,
+)
+from agent.client.hypervisor.libvirt.models.snapshots import (
+    SnapshotWithParent,
+    DeleteSnapshotInfo,
+    SnapshotList,
+    ClonedSnapshot,
+    CreateSnapshotChainError,
+    CreateSnapshotChainSuccess,
+    CreateMultipleSnapshotsError,
+    CreateMultipleSnapshots,
+    SnapshotRevertSuccess,
+    SnapshotsChain,
+)
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 
@@ -62,7 +83,9 @@ class CommandMessagesEnum(Enum):
     virtual_network_found = "Virtual network found"
     virtual_network_not_found = "Virtual network not found"
     virtual_network_interfaces_found = "Virtual network interfaces found"
-    virtual_network_interface_detached = "Virtual network interface successfully detached"
+    virtual_network_interface_detached = (
+        "Virtual network interface successfully detached"
+    )
     virtual_network_interface_detach_error = "Virtual network interface detach error"
     virtual_network_interface_not_found = "Virtual network interface not found"
     virtual_network_successfully_updated = "Virtual network successfully updated"
@@ -152,8 +175,10 @@ class DefaultMessage(BaseModel):
 
         return values
 
+
 class VmError(DefaultMessage):
     pass
+
 
 class VmMessage(DefaultMessage):
     success: bool
@@ -163,6 +188,7 @@ class VmMessage(DefaultMessage):
     stderr: str | None = None
     note: str | None = None
 
+
 class StorageMessage(DefaultMessage):
     target_path: str | None = None
     note: str | None = None
@@ -170,24 +196,48 @@ class StorageMessage(DefaultMessage):
     stdout: str | None = None
     stderr: str | None = None
 
+
 class NetworkMessage(DefaultMessage):
     success: bool
     net_info: NetworkInfo | NetworkInterfacesInfo | None = None
     note: str | None = None
 
+
 class RpMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
+
     success: bool
-    rp_info: (ResourcePoolList | ResourcePool | AdjustResourcePool |
-              AddVMInResourcePool | RemoveVMInResourcePool |
-              ResourcePoolReservation | ResourcePoolUpdates |
-              DeleteResourcePool | ResourcePoolUsageInfo | ResourcePoolState | None) = None
+    rp_info: (
+        ResourcePoolList
+        | ResourcePool
+        | AdjustResourcePool
+        | AddVMInResourcePool
+        | RemoveVMInResourcePool
+        | ResourcePoolReservation
+        | ResourcePoolUpdates
+        | DeleteResourcePool
+        | ResourcePoolUsageInfo
+        | ResourcePoolState
+        | None
+    ) = None
     note: str | None = None
+
 
 class SnapshotMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
+
     success: bool
-    snapshot_info: (SnapshotWithParent | DeleteSnapshotInfo | SnapshotList |
-                    ClonedSnapshot | CreateSnapshotChainError | CreateSnapshotChainSuccess |
-                    CreateMultipleSnapshotsError | CreateMultipleSnapshots | SnapshotRevertSuccess | SnapshotsChain | None) = None
+    snapshot_info: (
+        SnapshotWithParent
+        | DeleteSnapshotInfo
+        | SnapshotList
+        | ClonedSnapshot
+        | CreateSnapshotChainError
+        | CreateSnapshotChainSuccess
+        | CreateMultipleSnapshotsError
+        | CreateMultipleSnapshots
+        | SnapshotRevertSuccess
+        | SnapshotsChain
+        | None
+    ) = None
     note: str | None = None
