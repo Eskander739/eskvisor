@@ -13,3 +13,29 @@ sudo systemctl enable libvirtd
 
 # Проверьте статус (должен быть "active (running)")
 sudo systemctl status libvirtd
+
+
+#_________________________________Создание пользователя eskvisor_______________________________________________
+# Создать пользователя
+sudo adduser eskvisor
+
+# Дать права sudo (требует ввода пароля)
+sudo usermod -aG sudo eskvisor  # Для Ubuntu/Debian
+# ИЛИ
+sudo usermod -aG wheel eskvisor  # Для CentOS/RHEL
+
+sudo usermod -a -G libvirt eskvisor
+sudo usermod -a -G kvm eskvisor
+sudo usermod -aG qemu eskvisor
+sudo usermod -aG disk eskvisor
+sudo passwd eskvisor
+
+newgrp libvirt
+newgrp kvm
+newgrp qemu
+newgrp disk
+# Указываем пароль: P@$$w0rd12A
+
+sudo systemctl daemon-reload
+sudo systemctl restart virtqemud.socket
+sudo systemctl restart virtqemud
