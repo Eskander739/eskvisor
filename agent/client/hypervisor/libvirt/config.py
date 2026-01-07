@@ -3,9 +3,7 @@ from pathlib import Path
 
 from agent.client.hypervisor.libvirt.models.disk import DiskFormat
 from agent.client.hypervisor.libvirt.models.resource_pool import (
-    StoragePoolType,
-    POOL_TYPE_DESCRIPTIONS,
-)
+    POOL_TYPE_DESCRIPTIONS, StoragePoolType)
 
 
 class LibvirtConfig:

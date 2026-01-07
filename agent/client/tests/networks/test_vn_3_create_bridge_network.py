@@ -4,11 +4,9 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import (
-    NetworkParameters,
-    NetworkForward,
-    NetworkBridge,
-)
+from agent.client.hypervisor.libvirt.models.network import (NetworkBridge,
+                                                            NetworkForward,
+                                                            NetworkParameters)
 
 
 @pytest.mark.tags("VN‑03", "Создание bridge-сети")

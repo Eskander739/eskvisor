@@ -4,6 +4,8 @@ import subprocess
 import tempfile
 import time
 import uuid
+import xml.dom.minidom as minidom
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import libvirt
@@ -12,32 +14,22 @@ from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
-import xml.dom.minidom as minidom
-import xml.etree.ElementTree as ET
-
-from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
-from agent.client.hypervisor.libvirt.models.enum import (
-    DiskFormat,
-    NetworkType,
-    GraphicsType,
-    DiskType,
-)
-from agent.client.hypervisor.libvirt.models.vm import (
-    VMCreateRequest,
-    VmUpdateRequest,
-    VirtualMachine,
-)
+from agent.client.hypervisor.libvirt.managers.storage_manager import \
+    StorageManager
+from agent.client.hypervisor.libvirt.models.disk import (BusType, Disk,
+                                                         DiskAttach,
+                                                         DiskCreate)
+from agent.client.hypervisor.libvirt.models.disk import \
+    DiskFormat as StorageDiskFormat
+from agent.client.hypervisor.libvirt.models.enum import (DiskFormat, DiskType,
+                                                         GraphicsType,
+                                                         NetworkType)
 from agent.client.hypervisor.libvirt.models.general import VMState
-from agent.client.hypervisor.libvirt.models.msg import (
-    VmError,
-    CommandMessagesEnum,
-    VmMessage,
-)
-from agent.client.hypervisor.libvirt.models.disk import (
-    DiskCreate,
-    DiskFormat as StorageDiskFormat,
-    Disk, BusType, DiskAttach,
-)
+from agent.client.hypervisor.libvirt.models.msg import (CommandMessagesEnum,
+                                                        VmError, VmMessage)
+from agent.client.hypervisor.libvirt.models.vm import (VirtualMachine,
+                                                       VMCreateRequest,
+                                                       VmUpdateRequest)
 from agent.client.logger_config import DefaultLogger
 
 
@@ -51,7 +43,7 @@ class VmManager(LibvirtClient):
     def __init__(self):
         self.cli = CLIControl()
         self.config = LibvirtConfig()
-        self.logger = DefaultLogger()
+        self.logger = DefaultLogger("VmManager")
         super().__init__()
         self.storage_manager = StorageManager()
         self.storage_manager.connect()
@@ -1840,9 +1832,7 @@ class VmManager(LibvirtClient):
     def _generate_uuid():
         return str(uuid.uuid4())
 
-    def clone_vm(
-        self, source_name: str, new_name: str, new_uuid: bool = True
-    ) -> dict:
+    def clone_vm(self, source_name: str, new_name: str, new_uuid: bool = True) -> dict:
         """
         Клонирование существующей ВМ
 

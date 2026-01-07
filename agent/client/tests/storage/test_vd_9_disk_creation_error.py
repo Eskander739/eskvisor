@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import DiskFormat, DiskCreate
+from agent.client.hypervisor.libvirt.models.disk import DiskCreate, DiskFormat
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 ERROR_MSG = " The image size is too large for file format '{}'"

@@ -1,9 +1,8 @@
 import getpass
+import logging
 import os
 
 import libvirt
-import logging
-
 from dotenv import load_dotenv
 
 from agent.client.hypervisor.libvirt.models.node import NodeInfo

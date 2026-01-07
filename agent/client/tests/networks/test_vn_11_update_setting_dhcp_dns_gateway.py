@@ -10,16 +10,14 @@ from agent.client.hypervisor.libvirt.models.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import (
-    NetworkParameters,
-    VmNetAdapter,
-    NetworkDHCPRange,
-    NetworkForward,
-    NetworkBridge,
-    DNSHost,
-    DNSTXT,
-    DNSForwarder,
-)
+from agent.client.hypervisor.libvirt.models.network import (DNSTXT,
+                                                            DNSForwarder,
+                                                            DNSHost,
+                                                            NetworkBridge,
+                                                            NetworkDHCPRange,
+                                                            NetworkForward,
+                                                            NetworkParameters,
+                                                            VmNetAdapter)
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.tools import wait_while_not
 

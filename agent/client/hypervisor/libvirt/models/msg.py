@@ -4,33 +4,16 @@ from pydantic import BaseModel, model_validator
 
 from agent.client.hypervisor.libvirt.models.disk import Disk
 from agent.client.hypervisor.libvirt.models.network import (
-    NetworkInfo,
-    NetworkInterfacesInfo,
-)
+    NetworkInfo, NetworkInterfacesInfo)
 from agent.client.hypervisor.libvirt.models.resource_pool import (
-    ResourcePool,
-    ResourcePoolList,
-    AdjustResourcePool,
-    AddVMInResourcePool,
-    RemoveVMInResourcePool,
-    ResourcePoolReservation,
-    ResourcePoolUpdates,
-    DeleteResourcePool,
-    ResourcePoolUsageInfo,
-    ResourcePoolState,
-)
+    AddVMInResourcePool, AdjustResourcePool, DeleteResourcePool,
+    RemoveVMInResourcePool, ResourcePool, ResourcePoolList,
+    ResourcePoolReservation, ResourcePoolState, ResourcePoolUpdates,
+    ResourcePoolUsageInfo)
 from agent.client.hypervisor.libvirt.models.snapshots import (
-    SnapshotWithParent,
-    DeleteSnapshotInfo,
-    SnapshotList,
-    ClonedSnapshot,
-    CreateSnapshotChainError,
-    CreateSnapshotChainSuccess,
-    CreateMultipleSnapshotsError,
-    CreateMultipleSnapshots,
-    SnapshotRevertSuccess,
-    SnapshotsChain,
-)
+    ClonedSnapshot, CreateMultipleSnapshots, CreateMultipleSnapshotsError,
+    CreateSnapshotChainError, CreateSnapshotChainSuccess, DeleteSnapshotInfo,
+    SnapshotList, SnapshotRevertSuccess, SnapshotsChain, SnapshotWithParent)
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 

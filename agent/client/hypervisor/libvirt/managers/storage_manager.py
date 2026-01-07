@@ -1,32 +1,25 @@
-import subprocess
-
-import libvirt
+import logging
 import os
 import re
 import shutil
+import subprocess
 import uuid
-from datetime import datetime
-import logging
 import xml.etree.ElementTree as ET
-from agent.client.hypervisor.libvirt.config import LibvirtConfig
-from agent.client.hypervisor.libvirt.models.disk import (
-    Disk,
-    DiskCreate,
-    DiskUpdate,
-    DiskAttach,
-    DiskDetach,
-    DiskQuery,
-    DiskFormat,
-    DiskType,
-    DiskStatus,
-    BusType,
-    CacheMode,
-)
+from datetime import datetime
+
+import libvirt
+
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.msg import (
-    StorageMessage,
-    CommandMessagesEnum,
-)
+from agent.client.hypervisor.libvirt.config import LibvirtConfig
+from agent.client.hypervisor.libvirt.models.disk import (BusType, CacheMode,
+                                                         Disk, DiskAttach,
+                                                         DiskCreate,
+                                                         DiskDetach,
+                                                         DiskFormat, DiskQuery,
+                                                         DiskStatus, DiskType,
+                                                         DiskUpdate)
+from agent.client.hypervisor.libvirt.models.msg import (CommandMessagesEnum,
+                                                        StorageMessage)
 
 
 class StorageManager(LibvirtClient):

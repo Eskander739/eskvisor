@@ -5,7 +5,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from pydantic import (BaseModel, ConfigDict, Field, field_validator,
+                      model_validator)
 
 
 class DiskFormat(Enum):

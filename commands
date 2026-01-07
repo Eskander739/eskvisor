@@ -1,3 +1,4 @@
+#____________________________________Установка библиотек для работы гипервизора_________________________________
 # Для Ubuntu/Debian:
 sudo apt update
 sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst
@@ -15,7 +16,14 @@ sudo systemctl enable libvirtd
 sudo systemctl status libvirtd
 
 
-#_________________________________Создание пользователя eskvisor_______________________________________________
+#_________________________________Запуск анализатора кода и автоформатирование black______________________________
+
+Все команды ниже нужно запускать находясь в корне проекта
+python3 -m flake8 --config=.flake8
+python3 -m black ./
+python3 -m autopep8 --in-place --recursive --aggressive .
+python3 -m isort ./
+#_________________________________Создание пользователя eskvisor__________________________________________________
 # Создать пользователя
 sudo adduser eskvisor
 

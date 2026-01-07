@@ -1,7 +1,7 @@
 import getpass
+import os
 import shlex
 import subprocess
-import os
 
 from agent.client.constants import DIRECTORIES_FOR_SEARCH, QEMU_EMULATORS
 
@@ -80,7 +80,7 @@ class CLIControl:
         # Разбиваем на группы по 20 эмуляторов для поиска
         group_size = 20
         for i in range(0, len(emulator_names), group_size):
-            group = emulator_names[i: i + group_size]
+            group = emulator_names[i : i + group_size]
             # Создаем паттерн типа: -name "qemu-system-x86_64" -o -name
             # "qemu-system-i386" ...
             pattern_parts = []

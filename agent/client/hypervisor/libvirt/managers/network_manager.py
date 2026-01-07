@@ -1,28 +1,19 @@
+import ipaddress
 import subprocess
 import uuid
 from xml.etree import ElementTree as ET
-import ipaddress
 
 import libvirt
 
 from agent.client.cli import CLIControl
 from agent.client.constants import NETWORK_TYPE_DESCRIPTIONS
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.msg import (
-    NetworkMessage,
-    CommandMessagesEnum,
-)
+from agent.client.hypervisor.libvirt.models.msg import (CommandMessagesEnum,
+                                                        NetworkMessage)
 from agent.client.hypervisor.libvirt.models.network import (
-    NetworkParameters,
-    NetworkTypeInfo,
-    NetworkInfo,
-    NetworkInterfacesInfo,
-    VmInfo,
-    NetworkInterfacesList,
-    DNSForwarder,
-    DNSHost,
-    DNSTXT,
-)
+    DNSTXT, DNSForwarder, DNSHost, NetworkInfo, NetworkInterfacesInfo,
+    NetworkInterfacesList, NetworkParameters, NetworkTypeInfo, VmInfo)
+from agent.client.logger_config import DefaultLogger
 
 
 class NetworkManager(LibvirtClient):
@@ -35,6 +26,7 @@ class NetworkManager(LibvirtClient):
     def __init__(self):
         super().__init__()
         self.cli = CLIControl()
+        self.logger = DefaultLogger("NetworkManager")
 
     def list_networks(self) -> list[str]:
         """Получение списка сетей"""

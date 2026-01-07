@@ -1,8 +1,9 @@
-import pexpect
-import time
+import queue
 import sys
 import threading
-import queue
+import time
+
+import pexpect
 
 from agent.client.logger_config import logger
 
