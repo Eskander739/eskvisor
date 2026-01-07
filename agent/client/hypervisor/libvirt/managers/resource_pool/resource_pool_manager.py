@@ -37,7 +37,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
     def __init__(self):
         super().__init__()
-        # Инициализируем ResourcePoolRamCpu
+        # Инициализируем CGroupsManager
         CGroupsManager.__init__(self)
         self.logger = DefaultLogger("ResourcePoolManager")
         self.lvm_manager = LVMStorageManager(self.logger)
