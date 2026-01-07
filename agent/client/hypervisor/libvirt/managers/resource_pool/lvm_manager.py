@@ -1,6 +1,7 @@
 import os
 import subprocess
 
+from agent.client.cli import CLIControl
 from agent.client.logger_config import DefaultLogger
 
 
@@ -9,6 +10,7 @@ class LVMStorageManager:
 
     def __init__(self, logger: DefaultLogger | None = None):
         self.logger = logger or DefaultLogger()
+        self.cli = CLIControl()
 
     def check_lvm_support(self) -> bool:
         """Проверяет поддержку LVM в системе"""
@@ -99,11 +101,16 @@ class LVMStorageManager:
                 self.logger.error(f"Устройство {device_path} не найдено")
                 return False
 
+            # Проверяем, занято ли устройство
+            device = self.cli.execute([f"zramctl {device_path}"])
+            if device_path in device and "SWAP" in device:
+                raise ValueError(f"Устройство уже занято: {device}")
             # Создаем физический том
+
             pv_create = subprocess.run(
                 ["pvcreate", device_path], capture_output=True, text=True
             )
-
+            print(f"pvcreate {device_path}")
             if pv_create.returncode != 0:
                 self.logger.error(
                     f"Ошибка создания физического тома: {pv_create.stderr}"

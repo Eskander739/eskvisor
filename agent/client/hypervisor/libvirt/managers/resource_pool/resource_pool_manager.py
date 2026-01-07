@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 
 import libvirt
 
+from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.managers.resource_pool.cgroups_manager import \
     CGroupsManager
@@ -41,6 +42,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
         CGroupsManager.__init__(self)
         self.logger = DefaultLogger("ResourcePoolManager")
         self.lvm_manager = LVMStorageManager(self.logger)
+        self.cli = CLIControl()
 
     def _extract_pool_info_from_xml(self, xml_content: str) -> dict[str, object]:
         """Извлечение информации о пуле из XML"""
@@ -414,7 +416,14 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     )
 
                 # Берем первое доступное устройство
-                device_path = available_devices[0]
+                print("available_devices: ", available_devices)
+                for current_device in available_devices:
+                    device = self.cli.execute([f"zramctl {current_device}"])
+                    if current_device in device and "SWAP" not in device:
+                        device_path = current_device
+                        break
+                else:
+                    raise ValueError(f"Отсутствуют доступные устройства: {available_devices}")
                 vg_name = f"vg_{request.name}"
 
                 self.logger.info(
@@ -574,7 +583,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
             # Добавляем capacity в XML если указан лимит хранилища
             if request.storage_limit:
-                capacity_bytes = request.storage_limit * 1024 * 1024 * 1024
+                capacity_bytes = request.storage_limit_bytes
                 self.logger.info(
                     f"Установка ограничения хранилища {request.storage_limit} ГБ ({capacity_bytes} байт)"
                 )
@@ -645,7 +654,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
             # Добавляем лимиты ресурсов в информацию о пуле
             pool_info.cpu_limit = request.cpu_limit
             pool_info.memory_limit = request.memory_limit
-            pool_info.storage_limit = request.storage_limit
+            pool_info.capacity_bytes = request.storage_limit_bytes
 
             # Для LVM пулов добавляем дополнительную информацию
             if request.pool_type == StoragePoolType.LOGICAL:
@@ -1795,7 +1804,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     vms=[],
                     cpu_limit=cgroup_pool.get("cpu_limit_cores"),
                     memory_limit=cgroup_pool.get("memory_limit"),
-                    storage_limit=None,  # storage_limit теперь только в запросе создания
+                    # storage_limit=None,  # storage_limit теперь только в запросе создания
                 ),
             )
         except self.libvirtError as e:

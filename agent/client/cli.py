@@ -177,7 +177,8 @@ class CLIControl:
     def execute(
         command: list[str] | str,
         shell: bool = True,
-        by_user: str | None = "eskvisor",
+        by_user: str | None = None,
+        # by_user: str | None = "eskvisor",
         use_sudo: bool = True,
         password: str | None = None,
     ) -> str:

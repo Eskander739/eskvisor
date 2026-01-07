@@ -31,7 +31,7 @@ sudo adduser eskvisor
 sudo usermod -aG sudo eskvisor  # Для Ubuntu/Debian
 # ИЛИ
 sudo usermod -aG wheel eskvisor  # Для CentOS/RHEL
-
+sudo usermod -a -G cdrom,libvirt,kvm,input,disk,adm,cgroup eskvisor
 sudo usermod -a -G libvirt eskvisor
 sudo usermod -a -G kvm eskvisor
 sudo usermod -aG qemu eskvisor
@@ -42,6 +42,7 @@ newgrp libvirt
 newgrp kvm
 newgrp qemu
 newgrp disk
+
 # Указываем пароль: P@$$w0rd12A
 
 sudo systemctl daemon-reload
