@@ -7,9 +7,7 @@ from dotenv import load_dotenv
 
 from agent.client.hypervisor.libvirt.models.node import NodeInfo
 
-CONFIG_PATH = "/home/eska/eskvisor/agent/client/.eskvisor_env"
-
-load_dotenv(CONFIG_PATH)
+load_dotenv()
 
 
 class LibvirtClient:
