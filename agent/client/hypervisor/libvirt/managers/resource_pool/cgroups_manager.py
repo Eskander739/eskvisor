@@ -1,5 +1,9 @@
 from pathlib import Path
 
+from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
+    CpuLimitInfo,
+    CGroupStats,
+)
 from agent.client.logger_config import DefaultLogger
 
 
@@ -79,8 +83,11 @@ class CGroupsManager:
             bool: Успешность операции
         """
         try:
-            cgroup_path = self._get_cgroup_path(pool_name)
 
+            cgroup_path = self._get_cgroup_path(pool_name)
+            self.logger.info(
+                f"Запуск удаления cgroup для пула {pool_name}: {cgroup_path}"
+            )
             if cgroup_path.exists():
                 # Удаляем директорию cgroup
                 import shutil
@@ -88,7 +95,7 @@ class CGroupsManager:
                 shutil.rmtree(cgroup_path)
 
                 if self.logger:
-                    self.logger.debug(
+                    self.logger.info(
                         f"Удален cgroup для пула {pool_name}: {cgroup_path}"
                     )
                 return True
@@ -321,7 +328,7 @@ class CGroupsManager:
                 )
             return False
 
-    def get_cgroup_stats(self, pool_name: str) -> dict[str, object]:
+    def get_cgroup_stats(self, pool_name: str) -> CGroupStats:
         """
         Получает статистику использования ресурсов из cgroup
 
@@ -331,18 +338,7 @@ class CGroupsManager:
         Returns:
             dict: Статистика использования ресурсов
         """
-        stats = {
-            "cpu_usage": 0,
-            "cpu_usage_seconds": 0,
-            "cpu_limit_cores": 0,
-            "cpu_limit_period_us": 0,
-            "cpu_limit_quota_us": 0,
-            "cpu_shares": 1024,
-            "memory_usage": 0,
-            "memory_limit": 0,
-            "memory_reservation": 0,
-            "process_count": 0,
-        }
+        stats = CGroupStats()
 
         try:
             cgroup_path = self._get_cgroup_path(pool_name)
@@ -358,8 +354,8 @@ class CGroupsManager:
                     for line in content.splitlines():
                         if line.startswith("usage_usec"):
                             usage_usec = int(line.split()[1])
-                            stats["cpu_usage"] = usage_usec
-                            stats["cpu_usage_seconds"] = (
+                            stats.cpu_usage = usage_usec
+                            stats.cpu_usage_seconds = (
                                 usage_usec / 1000000
                             )  # Конвертируем в секунды
 
@@ -371,10 +367,10 @@ class CGroupsManager:
                         quota_str, period_str = cpu_max_content.split()
                         quota_us = int(quota_str)
                         period_us = int(period_str)
-                        stats["cpu_limit_quota_us"] = quota_us
-                        stats["cpu_limit_period_us"] = period_us
+                        stats.cpu_limit_quota_us = quota_us
+                        stats.cpu_limit_period_us = period_us
                         if quota_us > 0 and period_us > 0:
-                            stats["cpu_limit_cores"] = quota_us / period_us
+                            stats.cpu_limit_cores = quota_us / period_us
 
                 # CPU shares (weight in v2)
                 cpu_weight_file = cgroup_path / "cpu.weight"
@@ -383,9 +379,7 @@ class CGroupsManager:
                     if weight_str.isdigit():
                         weight = int(weight_str)
                         # Конвертируем weight обратно в shares (100 = 1024 shares)
-                        stats["cpu_shares"] = (
-                            weight * 1024 // 100 if weight > 0 else 1024
-                        )
+                        stats.cpu_shares = weight * 1024 // 100 if weight > 0 else 1024
 
                 # Memory usage
                 memory_current_file = cgroup_path / "memory.current"
@@ -397,20 +391,20 @@ class CGroupsManager:
                 if memory_max_file.exists():
                     limit = memory_max_file.read_text().strip()
                     if limit != "max":
-                        stats["memory_limit"] = int(limit)
+                        stats.memory_limit = int(limit)
 
                 # Memory reservation
                 memory_min_file = cgroup_path / "memory.min"
                 if memory_min_file.exists():
                     min_limit = memory_min_file.read_text().strip()
                     if min_limit != "0":
-                        stats["memory_reservation"] = int(min_limit)
+                        stats.memory_reservation = int(min_limit)
 
                 # Process count
                 procs_file = cgroup_path / "cgroup.procs"
                 if procs_file.exists():
                     content = procs_file.read_text().strip()
-                    stats["process_count"] = len(content.splitlines()) if content else 0
+                    stats.process_count = len(content.splitlines()) if content else 0
 
             else:
                 # Для CGroups v1
@@ -419,10 +413,8 @@ class CGroupsManager:
                 cpuacct_usage_file = cpuacct_path / "cpuacct.usage"
                 if cpuacct_usage_file.exists():
                     usage_nsec = int(cpuacct_usage_file.read_text().strip())
-                    stats["cpu_usage"] = (
-                        usage_nsec / 1000
-                    )  # Конвертируем в микросекунды
-                    stats["cpu_usage_seconds"] = (
+                    stats.cpu_usage = usage_nsec / 1000  # Конвертируем в микросекунды
+                    stats.cpu_usage_seconds = (
                         usage_nsec / 1000000000
                     )  # Наносекунды в секунды
 
@@ -438,43 +430,43 @@ class CGroupsManager:
                     if quota_str.isdigit() and period_str.isdigit():
                         quota_us = int(quota_str)
                         period_us = int(period_str)
-                        stats["cpu_limit_quota_us"] = quota_us
-                        stats["cpu_limit_period_us"] = period_us
+                        stats.cpu_limit_quota_us = quota_us
+                        stats.cpu_limit_period_us = period_us
                         if quota_us > 0 and period_us > 0:
-                            stats["cpu_limit_cores"] = quota_us / period_us
+                            stats.cpu_limit_cores = quota_us / period_us
 
                 # CPU shares
                 cpu_shares_file = cpu_path / "cpu.shares"
                 if cpu_shares_file.exists():
                     shares_str = cpu_shares_file.read_text().strip()
                     if shares_str.isdigit():
-                        stats["cpu_shares"] = int(shares_str)
+                        stats.cpu_shares = int(shares_str)
 
                 # Memory usage
                 memory_path = self.cgroup_root / "memory" / pool_name
                 memory_usage_file = memory_path / "memory.usage_in_bytes"
                 if memory_usage_file.exists():
-                    stats["memory_usage"] = int(memory_usage_file.read_text().strip())
+                    stats.memory_usage = int(memory_usage_file.read_text().strip())
 
                 # Memory limit
                 memory_limit_file = memory_path / "memory.limit_in_bytes"
                 if memory_limit_file.exists():
                     limit = memory_limit_file.read_text().strip()
                     if limit != "-1":
-                        stats["memory_limit"] = int(limit)
+                        stats.memory_limit = int(limit)
 
                 # Memory reservation (soft limit)
                 memory_soft_limit_file = memory_path / "memory.soft_limit_in_bytes"
                 if memory_soft_limit_file.exists():
                     soft_limit = memory_soft_limit_file.read_text().strip()
                     if soft_limit != "0":
-                        stats["memory_reservation"] = int(soft_limit)
+                        stats.memory_reservation = int(soft_limit)
 
                 # Process count
                 tasks_file = memory_path / "tasks"
                 if tasks_file.exists():
                     content = tasks_file.read_text().strip()
-                    stats["process_count"] = len(content.splitlines()) if content else 0
+                    stats.process_count = len(content.splitlines()) if content else 0
 
         except Exception as e:
             if self.logger:
@@ -484,7 +476,7 @@ class CGroupsManager:
 
         return stats
 
-    def get_cpu_limit_info(self, pool_name: str) -> dict[str, object]:
+    def get_cpu_limit_info(self, pool_name: str) -> CpuLimitInfo:
         """
         Получает информацию о лимитах CPU для пула
 
@@ -498,51 +490,47 @@ class CGroupsManager:
             cgroup_path = self._get_cgroup_path(pool_name)
 
             if not cgroup_path.exists():
-                return {
-                    "cpu_limit_cores": 0,
-                    "cpu_limit_period_us": 0,
-                    "cpu_limit_quota_us": 0,
-                }
+                return CpuLimitInfo(
+                    cpu_limit_cores=0, cpu_limit_period_us=0, cpu_limit_quota_us=0
+                )
 
             if self.cgroup_version == "v2":
                 cpu_max_file = cgroup_path / "cpu.max"
                 if cpu_max_file.exists():
                     cpu_max_content = cpu_max_file.read_text().strip()
                     if cpu_max_content == "max":
-                        return {
-                            "cpu_limit_cores": 0,
-                            "cpu_limit_period_us": 0,
-                            "cpu_limit_quota_us": 0,
-                        }
+                        return CpuLimitInfo(
+                            cpu_limit_cores=0,
+                            cpu_limit_period_us=0,
+                            cpu_limit_quota_us=0,
+                        )
 
                     quota_str, period_str = cpu_max_content.split()
                     quota_us = int(quota_str)
                     period_us = int(period_str)
 
                     if quota_us <= 0 or period_us <= 0:
-                        return {
-                            "cpu_limit_cores": 0,
-                            "cpu_limit_period_us": period_us,
-                            "cpu_limit_quota_us": quota_us,
-                        }
+                        return CpuLimitInfo(
+                            cpu_limit_cores=0,
+                            cpu_limit_period_us=period_us,
+                            cpu_limit_quota_us=quota_us,
+                        )
 
                     cpu_cores = quota_us / period_us
-                    return {
-                        "cpu_limit_cores": cpu_cores,
-                        "cpu_limit_period_us": period_us,
-                        "cpu_limit_quota_us": quota_us,
-                    }
+                    return CpuLimitInfo(
+                        cpu_limit_cores=cpu_cores,
+                        cpu_limit_period_us=period_us,
+                        cpu_limit_quota_us=quota_us,
+                    )
 
             else:
                 # Для CGroups v1
                 cpu_path = self.cgroup_root / "cpu" / pool_name
 
                 if not cpu_path.exists():
-                    return {
-                        "cpu_limit_cores": 0,
-                        "cpu_limit_period_us": 0,
-                        "cpu_limit_quota_us": 0,
-                    }
+                    return CpuLimitInfo(
+                        cpu_limit_cores=0, cpu_limit_period_us=0, cpu_limit_quota_us=0
+                    )
 
                 cpu_quota_file = cpu_path / "cpu.cfs_quota_us"
                 cpu_period_file = cpu_path / "cpu.cfs_period_us"
@@ -556,18 +544,18 @@ class CGroupsManager:
                         period_us = int(period_str)
 
                         if quota_us <= 0 or period_us <= 0:
-                            return {
-                                "cpu_limit_cores": 0,
-                                "cpu_limit_period_us": period_us,
-                                "cpu_limit_quota_us": quota_us,
-                            }
+                            return CpuLimitInfo(
+                                cpu_limit_cores=0,
+                                cpu_limit_period_us=period_us,
+                                cpu_limit_quota_us=quota_us,
+                            )
 
                         cpu_cores = quota_us / period_us
-                        return {
-                            "cpu_limit_cores": cpu_cores,
-                            "cpu_limit_period_us": period_us,
-                            "cpu_limit_quota_us": quota_us,
-                        }
+                        return CpuLimitInfo(
+                            cpu_limit_cores=cpu_cores,
+                            cpu_limit_period_us=period_us,
+                            cpu_limit_quota_us=quota_us,
+                        )
 
         except Exception as e:
             if self.logger:
@@ -575,7 +563,9 @@ class CGroupsManager:
                     f"Ошибка получения информации о лимитах CPU для пула {pool_name}: {e}"
                 )
 
-        return {"cpu_limit_cores": 0, "cpu_limit_period_us": 0, "cpu_limit_quota_us": 0}
+        return CpuLimitInfo(
+            cpu_limit_cores=0, cpu_limit_period_us=0, cpu_limit_quota_us=0
+        )
 
     def _get_cgroup_path(self, pool_name: str) -> Path:
         """Возвращает путь к cgroup пула"""

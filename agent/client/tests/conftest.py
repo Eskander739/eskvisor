@@ -15,7 +15,7 @@ from agent.client.hypervisor.libvirt.managers.virsh_manager import (
     VirshConsoleController,
 )
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
-from agent.client.hypervisor.libvirt.models.disk import DiskCreate
+from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.tools import wait_while_not

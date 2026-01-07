@@ -1,11 +1,10 @@
 import random
-import time
 import uuid
 
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.resource_pool import (
+from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     ResourcePoolCreateRequest,
     StoragePoolType,
 )
@@ -17,8 +16,10 @@ from agent.client.hypervisor.libvirt.models.resource_pool import (
     "Создание пула ресурсов (CPU, memory, storage)",
     "Удаление пула (пустой)",
 )
-# @pytest.mark.parametrize("storage_type", (StoragePoolType.DIR, StoragePoolType.LOGICAL))
-def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
+@pytest.mark.parametrize("storage_type", (StoragePoolType.DIR, StoragePoolType.LOGICAL))
+def test_rp_01_rp_08_create_and_delete_resource_pool(
+    resource_pool_session, storage_type
+):
     """
     RP‑01: Создание пула ресурсов (CPU, memory, storage)
     RP‑08: Удаление пула (пустой)
@@ -37,8 +38,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
             cpu_limit=2,
             memory_limit=512,
             storage_limit=1,
-            # pool_type=StoragePoolType.DIR,
-            pool_type=StoragePoolType.LOGICAL,
+            pool_type=storage_type,
         )
         create_rp_info = resource_pool_session.create_resource_pool(
             rp_template, request_id
@@ -47,10 +47,10 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         assert create_rp_info.code == CommandMessagesEnum.rp_create_success.name
         assert create_rp_info.rp_info is not None
         get_rp_info = resource_pool_session.get_pool_info(random_name, request_id)
-        print("get_rp_info: ", get_rp_info)
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_limit == rp_template.cpu_limit
         assert get_rp_info.rp_info.memory_limit_gb == rp_template.memory_limit / 1024
+        assert get_rp_info.rp_info.type.value == storage_type.value
         if rp_template.pool_type == StoragePoolType.LOGICAL:
             assert int(get_rp_info.rp_info.capacity_gb) == rp_template.storage_limit
         # ____________________________________Удаление пула ресурсов______________
@@ -66,7 +66,6 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______
         if not rp_deleted:
-            print("rp_deleted")
             delete_rp_info = resource_pool_session.delete_resource_pool(
                 random_name, request_id
             )

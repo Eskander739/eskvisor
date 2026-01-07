@@ -6,7 +6,11 @@ import xml.etree.ElementTree as ET
 import libvirt
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.disk import Disk, DiskType, SnapshotDiskInfo
+from agent.client.hypervisor.libvirt.models.volume.disk import (
+    Disk,
+    DiskType,
+    SnapshotDiskInfo,
+)
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import (
     CommandMessagesEnum,

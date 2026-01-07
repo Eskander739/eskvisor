@@ -2,12 +2,12 @@ from enum import Enum
 
 from pydantic import BaseModel, model_validator
 
-from agent.client.hypervisor.libvirt.models.disk import Disk
+from agent.client.hypervisor.libvirt.models.volume.disk import Disk
 from agent.client.hypervisor.libvirt.models.network import (
     NetworkInfo,
     NetworkInterfacesInfo,
 )
-from agent.client.hypervisor.libvirt.models.resource_pool import (
+from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     AddVMInResourcePool,
     AdjustResourcePool,
     DeleteResourcePool,

@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 
-from agent.client.hypervisor.libvirt.models.disk import DiskFormat
-from agent.client.hypervisor.libvirt.models.resource_pool import (
+from agent.client.hypervisor.libvirt.models.volume.disk import DiskFormat
+from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     POOL_TYPE_DESCRIPTIONS,
     StoragePoolType,
 )

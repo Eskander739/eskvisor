@@ -28,7 +28,7 @@ python3 -m isort ./
 #_________________________________Создание пользователя eskvisor__________________________________________________
 # Создать пользователя
 sudo adduser eskvisor
-
+sudo EDITOR=nano visudo
 # Дать права sudo (требует ввода пароля)
 sudo usermod -aG sudo eskvisor  # Для Ubuntu/Debian
 # ИЛИ

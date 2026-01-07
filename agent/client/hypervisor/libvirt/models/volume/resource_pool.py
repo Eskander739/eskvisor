@@ -197,7 +197,7 @@ class ResourcePoolControlRequest(BaseModel):
 
 class AdjustResourcePool(BaseModel):
     name: str
-    resource_type: str
+    resource_type: ResourcePoolType
     operation: str
     value: int
     new_limit: str
@@ -211,7 +211,7 @@ class DeleteResourcePool(BaseModel):
 
 class ResourcePoolUpdates(BaseModel):
     name: str
-    limits: int | None = None
+    limits: dict | None
     updates: dict
 
 
@@ -220,13 +220,38 @@ class ResourcePoolReservation(BaseModel):
     reservations: dict
 
 
+class CpuLimitInfo(BaseModel):
+    cpu_limit_cores: int | float
+    cpu_limit_period_us: int
+    cpu_limit_quota_us: int
+
+
+class CGroupStats(BaseModel):
+    cpu_usage: int | float = 0
+    cpu_usage_seconds: int | float = 0
+    cpu_limit_cores: int | float = 0
+    cpu_limit_period_us: int = 0
+    cpu_limit_quota_us: int = 0
+    cpu_shares: int = 0
+    memory_usage: int = 0
+    memory_limit: int = 0
+    memory_reservation: int = 0
+    process_count: int = 0
+
+
+class UsageResourcePool(BaseModel):
+    cpu: int | float = 0
+    memory: int | float = 0
+    storage: int | float = 0
+
+
 class AddVMInResourcePool(BaseModel):
     name: str
     vm_name: str
     vm_cpu: int
     vm_memory: int
     total_vms: int
-    resource_usage: int
+    resource_usage: UsageResourcePool
 
 
 class RemoveVMInResourcePool(BaseModel):
@@ -235,12 +260,13 @@ class RemoveVMInResourcePool(BaseModel):
     freed_cpu: int
     freed_memory: int
     total_vms: int
-    resource_usage: int
+    resource_usage: UsageResourcePool
 
 
 class ResourcePool(BaseModel):
     name: str
     state: PoolState
+    storage_path: str | None = None
 
     # Основные метрики в байтах (сырые данные из libvirt)
     capacity_bytes: int = Field(..., description="Общая емкость в байтах")

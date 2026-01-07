@@ -11,7 +11,7 @@ import libvirt
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
-from agent.client.hypervisor.libvirt.models.disk import (
+from agent.client.hypervisor.libvirt.models.volume.disk import (
     BusType,
     CacheMode,
     Disk,

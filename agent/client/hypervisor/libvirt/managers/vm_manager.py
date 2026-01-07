@@ -15,13 +15,15 @@ from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
 from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
-from agent.client.hypervisor.libvirt.models.disk import (
+from agent.client.hypervisor.libvirt.models.volume.disk import (
     BusType,
     Disk,
     DiskAttach,
     DiskCreate,
 )
-from agent.client.hypervisor.libvirt.models.disk import DiskFormat as StorageDiskFormat
+from agent.client.hypervisor.libvirt.models.volume.disk import (
+    DiskFormat as StorageDiskFormat,
+)
 from agent.client.hypervisor.libvirt.models.enum import (
     DiskFormat,
     DiskType,
@@ -678,7 +680,7 @@ class VmManager(LibvirtClient):
         request_id = str(uuid.uuid4())
 
         try:
-            from agent.client.hypervisor.libvirt.models.disk import DiskDetach
+            from agent.client.hypervisor.libvirt.models.volume.disk import DiskDetach
 
             disk_detach = DiskDetach(vm_name=vm_name, target_dev=target_dev)
 

@@ -1,4 +1,7 @@
 from enum import Enum
+from tarfile import DIRTYPE
+
+from geopy.format import DIRECTIONS
 
 DIRECTORIES_FOR_SEARCH = [
     # Основные
@@ -186,3 +189,46 @@ class CpuModelMIPS(Enum):
     """Модели CPU MIPS"""
 
     MIPS64R6_GENERIC = "mips64r6-generic"
+
+
+DIR_SAFE_FORBIDDEN = [
+    "/",  # разделитель путей
+    "\x00",  # null byte
+    "/",  # строго запрещено
+    "\x00",  # строго запрещено
+    "\n",  # newline - очень проблематичен
+    "\r",  # carriage return - очень проблематичен
+    "\t",  # табуляция - неудобно в терминале
+    "*",  # wildcard - может сработать случайно
+    "?",  # wildcard - может сработать случайно
+    "[",
+    "]",  # glob patterns - могут сработать случайно
+]
+
+# Для проекта с LVM/виртуализацией используйте:
+LVM_SAFE_FORBIDDEN = [
+    "/",  # строго запрещено
+    "\x00",  # строго запрещено
+    " ",  # пробелы сложны в управлении
+    "\t",  # табуляция
+    "\n",  # newline
+    "\r",  # carriage return
+    "*",  # wildcard
+    "?",  # wildcard
+    "[",
+    "]",  # могут конфликтовать с glob
+    "{",
+    "}",  # могут конфликтовать с expansion
+    "|",  # pipe
+    "&",  # background
+    ";",  # command separator
+    "`",  # backtick
+    "$",  # dollar
+    "#",  # hash
+    "!",  # exclamation
+    "~",  # tilde
+    ">",
+    "<",  # redirection
+    "(",
+    ")",  # parentheses
+]

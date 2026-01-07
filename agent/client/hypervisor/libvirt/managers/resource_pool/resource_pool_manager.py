@@ -4,19 +4,29 @@ import re
 import subprocess
 import uuid
 import xml.etree.ElementTree as ET
+from pathlib import PurePosixPath
 
 import libvirt
+from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
+from agent.client.constants import LVM_SAFE_FORBIDDEN, DIR_SAFE_FORBIDDEN
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.managers.resource_pool.cgroups_manager import (
     CGroupsManager,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.lvm_manager import (
-    LVMStorageManager,
+from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.logical_volume_manager import (
+    LogicalVolumeManager,
 )
+from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.physical_volume_manager import (
+    PhysicalVolumeManager,
+)
+from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.volume_group_manager import (
+    VolumeGroupManager,
+)
+
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum, RpMessage
-from agent.client.hypervisor.libvirt.models.resource_pool import (
+from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     POOL_STATE,
     AddVMInResourcePool,
     AdjustResourcePool,
@@ -39,8 +49,11 @@ from agent.client.hypervisor.libvirt.models.resource_pool import (
     StoragePoolType,
     UsageInfo,
     VMPoolAssignmentRequest,
+    UsageResourcePool,
 )
 from agent.client.logger_config import DefaultLogger
+
+load_dotenv()
 
 
 class PoolManager(LibvirtClient, CGroupsManager):
@@ -58,17 +71,47 @@ class PoolManager(LibvirtClient, CGroupsManager):
         # Инициализируем CGroupsManager
         CGroupsManager.__init__(self)
         self.logger = DefaultLogger("ResourcePoolManager")
-        self.lvm_manager = LVMStorageManager(self.logger)
+        self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
+        self.physical_volume_manager = PhysicalVolumeManager()
+        self.volume_group_manager = VolumeGroupManager()
+        system_volume_group = self.volume_group_manager.get_volume_by_name(
+            self.system_volume_group_name
+        )
+        if system_volume_group is None:
+            valid_physical_volumes = (
+                self.physical_volume_manager.valid_physical_volumes()
+            )
+            self.volume_group_manager.create_volume_group(
+                pv_names=valid_physical_volumes,
+                volume_group_name=self.system_volume_group_name,
+            )
+        self.logic_volume_manager = LogicalVolumeManager()
         self.cli = CLIControl()
+
+    def check_lvm_support(self) -> bool:
+        """
+        Надежная проверка поддержки LVM в системе Linux.
+        Работает в разных дистрибутивах.
+
+        Returns:
+            bool: True если LVM поддерживается, False в противном случае
+        """
+        try:
+            result = self.cli.execute(["command", "-v", "lvs"])
+            if result.strip():
+                return True
+            return False
+        except Exception:
+            return False
 
     def _extract_pool_info_from_xml(self, xml_content: str) -> dict[str, object]:
         """Извлечение информации о пуле из XML"""
         info = {
             "type": None,
             "path": None,
-            "capacity": None,
-            "allocation": None,
-            "available": None,
+            "capacity": 0,
+            "allocation": 0,
+            "available": 0,
             "vg_name": None,
             "device_path": None,
         }
@@ -142,23 +185,23 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
     def _get_resource_usage_for_pool(
         self, pool_name: str, pool_vms: list[str]
-    ) -> dict[str, int]:
+    ) -> UsageResourcePool:
         """Получение информации об использовании ресурсов пулом"""
-        usage = {"cpu": 0, "memory": 0, "storage": 0}
+        usage = UsageResourcePool()
 
         try:
             # Получаем информацию о хранилище пула
             pool_info_msg = self.get_pool_info(pool_name, str(uuid.uuid4()))
             if pool_info_msg.success and pool_info_msg.rp_info:
-                usage["storage"] = pool_info_msg.rp_info.allocation_bytes
+                usage.storage = pool_info_msg.rp_info.allocation_bytes
 
             # Суммируем ресурсы всех ВМ в пуле
             for vm_name in pool_vms:
                 try:
                     domain = self.conn.lookupByName(vm_name)
                     vm_info = domain.info()
-                    usage["cpu"] += vm_info[3]  # Количество виртуальных CPU
-                    usage["memory"] += vm_info[2]  # Память в KB
+                    usage.cpu += vm_info[3]  # Количество виртуальных CPU
+                    usage.memory += vm_info[2]  # Память в KB
                 except self.libvirtError:
                     continue
 
@@ -214,9 +257,9 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     usage_info = self._get_resource_usage_for_pool(pool_name, pool_vms)
 
                     pool_info.usage = UsageInfo(
-                        cpu=usage_info["cpu"],
-                        memory=usage_info["memory"],
-                        storage=usage_info["storage"],
+                        cpu=usage_info.cpu,
+                        memory=usage_info.memory,
+                        storage=usage_info.storage,
                     )
                     pool_info.vms = pool_vms
 
@@ -302,6 +345,56 @@ class PoolManager(LibvirtClient, CGroupsManager):
             self.logger.error(f"Непредвиденная ошибка при создании пула: {e}")
             return False
 
+    @staticmethod
+    def is_valid_lvm_name(name: str) -> bool:
+        if not name or len(name) > 128:  # LVM ограничение
+            return False
+
+        # Имена '.' и '..' недопустимы
+        if name in [".", ".."]:
+            return False
+
+        # Проверка символов
+        for char in LVM_SAFE_FORBIDDEN:
+            if char in name:
+                return False
+
+        if not re.match(r"^[a-zA-Z0-9+_.-]+$", name):
+            return False
+
+        return True
+
+    @staticmethod
+    def is_valid_linux_path(path_str: str) -> bool:
+
+        # 1. Проверка на пустоту
+        if not path_str:
+            return False
+
+        if not isinstance(path_str, str):
+            return False
+
+        # 2. Проверка на null bytes
+        if "\x00" in path_str:
+            return False
+
+        # 3. Проверка длины (системные ограничения)
+        if len(path_str) > 4096:  # PATH_MAX в Linux обычно 4096
+            return False
+
+        # 4. Проверка синтаксиса через pathlib
+        try:
+            PurePosixPath(path_str)
+        except (ValueError, RuntimeError) as e:
+            return False
+
+        # 6. Проверка специальных случаев
+        # Слишком много точек подряд
+        if "..." in path_str:
+            return False
+
+        return True
+
     def _prepare_storage_pool_xml(
         self, request: ResourcePoolCreateRequest
     ) -> tuple[str, str | None]:
@@ -323,13 +416,23 @@ class PoolManager(LibvirtClient, CGroupsManager):
         elif request.pool_type == StoragePoolType.DIR:
             # Вариант 1: DIR пул с указанным путем
             if request.storage_path:
+                if not request.storage_path.startswith("/"):
+                    raise ValueError(
+                        f"Некорректный формат пути: {request.storage_path}"
+                    )
+
+                if not self.is_valid_linux_path(request.storage_path):
+                    raise ValueError(
+                        f"Некорректное путь для {StoragePoolType.DIR.value}: '{request.name}'"
+                    )
                 storage_path = request.storage_path
                 self.logger.info(f"Создание DIR пула с путем '{storage_path}'")
             else:
                 # Вариант 2: DIR пул с автоматическим путем
                 base_path = "/var/lib/libvirt/resource_pools"
                 if not os.path.exists(base_path):
-                    os.makedirs(base_path, exist_ok=True)
+                    self.cli.execute(["mkdir", base_path])
+                    self.cli.execute(["chmod", "-R", "777", base_path])
                 storage_path = os.path.join(
                     base_path, f"rp_{request.name}_{random.randint(100_000, 999_999)}"
                 )
@@ -353,118 +456,38 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
         elif request.pool_type == StoragePoolType.LOGICAL:
             # Для LVM пулов проверяем поддержку LVM
-            if not self.lvm_manager.check_lvm_support():
+            if not self.check_lvm_support():
                 raise ValueError("LVM не поддерживается в системе")
 
-            # Сценарий 1: Использовать существующий Volume Group
-            if request.storage_path and os.path.exists(request.storage_path):
-                # Если storage_path указывает на физическое устройство, создаем VG
-                if re.match(r"^/dev/", request.storage_path):
-                    # Создаем VG с именем пула
-                    vg_name = request.name
-                    device_path = request.storage_path
-
-                    self.logger.info(
-                        f"Создание нового Volume Group '{vg_name}' на устройстве {device_path}"
-                    )
-
-                    # Создаем VG
-                    if not self.lvm_manager.create_volume_group(vg_name, device_path):
-                        raise ValueError(
-                            f"Не удалось создать Volume Group {vg_name} на устройстве {device_path}"
-                        )
-
-                    # Создаем LVM пул в новом VG
-                    if not self.lvm_manager.create_lvm_pool(vg_name, request.name):
-                        raise ValueError(f"Не удалось создать LVM пул в VG {vg_name}")
-
-                    # Генерируем XML для LVM пула с новым VG
-                    xml = f"""<pool type='logical'>
-  <name>{request.name}</name>
-  <source>
-    <name>{vg_name}</name>
-    <format type='lvm2'/>
-  </source>
-  <target>
-    <path>/dev/{vg_name}</path>
-  </target>
-</pool>"""
-                else:
-                    # Предполагаем, что storage_path - это имя существующего VG
-                    vg_name = request.storage_path
-
-                    # Проверяем существование VG
-                    vgs = self.lvm_manager.list_volume_groups()
-                    if vg_name not in vgs:
-                        raise ValueError(f"Volume Group '{vg_name}' не найден")
-
-                    self.logger.info(
-                        f"Использование существующего Volume Group '{vg_name}'"
-                    )
-
-                    # Получаем информацию о VG
-                    vg_info = self.lvm_manager.get_vg_info(vg_name)
-                    if vg_info:
-                        self.logger.info(
-                            f"VG {vg_name}: размер {vg_info.get('size_bytes', 0) / (1024 ** 3):.2f} GB, "
-                            f"свободно {vg_info.get('free_bytes', 0) / (1024 ** 3):.2f} GB"
-                        )
-
-                    # Генерируем XML для LVM пула
-                    xml = f"""<pool type='logical'>
-  <name>{request.name}</name>
-  <source>
-    <name>{vg_name}</name>
-    <format type='lvm2'/>
-  </source>
-  <target>
-    <path>/dev/{vg_name}</path>
-  </target>
-</pool>"""
-            else:
-                # Сценарий 2: Автоматическое создание VG на доступном устройстве
-                self.logger.info("Поиск доступных устройств для создания LVM пула")
-
-                # Ищем доступные устройства
-                available_devices = self._find_available_devices()
-                if not available_devices:
-                    raise ValueError(
-                        "Не найдены доступные устройства для создания LVM пула"
-                    )
-
-                # Берем первое доступное устройство
-                # print("available_devices: ", available_devices)
-                # for current_device in available_devices:
-                #     device = self.cli.execute([f"zramctl {current_device}"])
-                #     if current_device in device and "SWAP" not in device:
-                #         device_path = current_device
-                #         break
-                # else:
-                #     raise ValueError(f"Отсутствуют доступные устройства: {available_devices}")
-                device_path = "/dev/nvme0n1"
-                vg_name = f"vg_{request.name}"
-
-                self.logger.info(
-                    f"Создание LVM пула с VG '{vg_name}' на устройстве {device_path}"
+            if not self.is_valid_lvm_name(request.name):
+                self.logger.error(
+                    f"Некорректное имя для {StoragePoolType.LOGICAL.value}: '{request.name}'"
+                )
+                raise ValueError(
+                    f"Некорректное имя для {StoragePoolType.LOGICAL.value}: '{request.name}'"
+                )
+            result = self.logic_volume_manager.create_volume(
+                request.name, request.storage_limit, self.system_volume_group_name
+            )
+            if f'Logical volume "{request.name}" created' not in result:
+                self.logger.error(
+                    f"Не удалось создать LVM пул {request.name} в VG {self.system_volume_group_name}: {result}"
+                )
+                raise ValueError(
+                    f"Не удалось создать LVM пул {request.name} в VG {self.system_volume_group_name}: {result}"
                 )
 
-                # Создаем VG
-                if not self.lvm_manager.create_volume_group(vg_name, device_path):
-                    raise ValueError(
-                        f"Не удалось создать Volume Group {vg_name} на устройстве {device_path}"
-                    )
-
-                # Генерируем XML для LVM пула
-                xml = f"""<pool type='logical'>
-  <name>{request.name}</name>
-  <source>
-    <name>{vg_name}</name>
-    <format type='lvm2'/>
-  </source>
-  <target>
-    <path>/dev/{vg_name}</path>
-  </target>
-</pool>"""
+            # Генерируем XML для LVM пула с новым VG
+            xml = f"""<pool type='logical'>
+              <name>{request.name}</name>
+              <source>
+                <name>{self.system_volume_group_name}</name>
+                <format type='lvm2'/>
+              </source>
+              <target>
+                <path>/dev/{self.system_volume_group_name}</path>
+              </target>
+            </pool>"""
 
         else:
             raise ValueError(
@@ -575,7 +598,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
             # Для LVM пулов предварительно проверяем доступность LVM
             if request.pool_type == StoragePoolType.LOGICAL:
                 self.logger.info(f"Проверка поддержки LVM для пула '{request.name}'")
-                if not self.lvm_manager.check_lvm_support():
+                if not self.check_lvm_support():
                     return RpMessage(
                         request_id=request_id,
                         message=CommandMessagesEnum.rp_create_error.value,
@@ -632,6 +655,10 @@ class PoolManager(LibvirtClient, CGroupsManager):
             # СОЗДАЕМ CGroups ДЛЯ CPU И RAM
             if request.cpu_limit or request.memory_limit:
                 # Создаем cgroup для пула
+                self.logger.warning(
+                    f"Запуск создания cgroup для пула {request.name} "
+                    f"с ресурсами cpu: {request.cpu_limit} and memory: {request.memory_limit}"
+                )
                 cgroup_created = self.create_pool_cgroup(request.name)
 
                 if not cgroup_created:
@@ -673,23 +700,6 @@ class PoolManager(LibvirtClient, CGroupsManager):
             pool_info.cpu_limit = request.cpu_limit
             pool_info.memory_limit = request.memory_limit
             pool_info.capacity_bytes = request.storage_limit_bytes
-
-            # Для LVM пулов добавляем дополнительную информацию
-            if request.pool_type == StoragePoolType.LOGICAL:
-                xml_content = self.get_pool_xml_by_name(request.name)
-                xml_info = self._extract_pool_info_from_xml(xml_content)
-                if xml_info.get("vg_name"):
-                    # Получаем информацию о VG
-                    vg_info = self.lvm_manager.get_vg_info(xml_info["vg_name"])
-                    if vg_info:
-                        pool_info.extra_info = {
-                            "vg_name": xml_info["vg_name"],
-                            "vg_size_bytes": vg_info.get("size_bytes"),
-                            "vg_free_bytes": vg_info.get("free_bytes"),
-                            "lvm_volumes": self.lvm_manager.get_lvm_volumes(
-                                xml_info["vg_name"]
-                            ),
-                        }
 
             return RpMessage(
                 request_id=request_id,
@@ -736,7 +746,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
             if request.resource_type == ResourcePoolType.CPU:
                 # Получаем текущий лимит CPU из CGroups
                 cpu_limit_info = self.get_cpu_limit_info(request.name)
-                current_cpu = cpu_limit_info.get("cpu_limit_cores", 0)
+                current_cpu = cpu_limit_info.cpu_limit_cores
 
                 if request.operation == "add":
                     new_cpu = current_cpu + request.value
@@ -770,8 +780,8 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 # Получаем текущий лимит памяти из CGroups
                 cgroup_stats = self.get_cgroup_stats(request.name)
                 current_memory_mb = (
-                    cgroup_stats.get("memory_limit", 0) / (1024 * 1024)
-                    if cgroup_stats.get("memory_limit", 0) > 0
+                    cgroup_stats.memory_limit / (1024 * 1024)
+                    if cgroup_stats.memory_limit > 0
                     else 0
                 )
 
@@ -820,7 +830,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 if request.operation == "add":
                     new_storage_gb = current_storage_gb + request.value
                 elif request.operation == "remove":
-                    new_storage_gb = max(0, current_storage_gb - request.value)
+                    new_storage_gb = max(0, int(current_storage_gb - request.value))
                 else:
                     return RpMessage(
                         request_id=request.request_id,
@@ -862,7 +872,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 success=True,
                 rp_info=AdjustResourcePool(
                     name=request.name,
-                    resource_type=request.resource_type.value,
+                    resource_type=request.resource_type,
                     operation=request.operation,
                     value=request.value,
                     new_limit=new_limit,
@@ -1184,7 +1194,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     note=f"Pool '{request.name}' not found",
                 )
 
-            limits = {}
+            limits: dict = {}
             updates = {}
 
             # УСТАНАВЛИВАЕМ ЛИМИТЫ CPU И RAM ЧЕРЕЗ CGroups
@@ -1260,8 +1270,8 @@ class PoolManager(LibvirtClient, CGroupsManager):
         """
         try:
             # Проверяем существование пула
-            existing_pools = self.list_storage_pools()
-            if name not in existing_pools:
+            existing_pool_info = self.get_pool_info(name, request_id)
+            if existing_pool_info.message == CommandMessagesEnum.rp_not_found.value:
                 return RpMessage(
                     request_id=request_id,
                     message=CommandMessagesEnum.rp_not_found.value,
@@ -1269,6 +1279,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     success=False,
                     note=f"Pool '{name}' not found",
                 )
+            current_pool = existing_pool_info.rp_info
 
             # Проверяем, есть ли ВМ в пуле
             pool_vms = self._get_pool_vms(name)
@@ -1300,22 +1311,30 @@ class PoolManager(LibvirtClient, CGroupsManager):
             # Удаляем cgroup для CPU и RAM
             self.delete_pool_cgroup(name)
 
-            # Для LVM пулов получаем информацию о VG перед удалением
-            pool_type = self.get_storage_pool_type(name)
-            vg_name = None
-            if pool_type == "logical":
-                try:
-                    xml_content = self.get_pool_xml_by_name(name)
-                    root = ET.fromstring(xml_content)
-                    name_elem = root.find(".//source/name")
-                    if name_elem is not None:
-                        vg_name = name_elem.text
-                except Exception:
-                    pass
+            if current_pool.type.value == StoragePoolType.LOGICAL.value:
+                self.logic_volume_manager.delete_logical_volume(
+                    name, self.system_volume_group_name
+                )
 
             # Удаляем пул хранения из libvirt
             try:
                 success = self.delete_storage_pool(name, destroy=True)
+
+                # Удаляем саму директорию
+                if current_pool.type.value == StoragePoolType.DIR.value:
+                    self.logger.info(
+                        f"Запуск удаления директории: {current_pool.storage_path}"
+                    )
+                    if os.path.exists(current_pool.storage_path):
+                        os.rmdir(current_pool.storage_path)
+                    if not os.path.exists(current_pool.storage_path):
+                        self.logger.info(
+                            f"Директория {current_pool.storage_path} успешно удалена"
+                        )
+                    else:
+                        self.logger.info(
+                            f"Ошибка при удалении директории: {current_pool.storage_path}"
+                        )
                 if not success:
                     return RpMessage(
                         request_id=request_id,
@@ -1331,15 +1350,6 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     code=CommandMessagesEnum.rp_delete_error.name,
                     success=False,
                     note=str(e),
-                )
-
-            # Для LVM пулов с созданным VG предлагаем удалить VG
-            if vg_name and vg_name.startswith(f"vg_{name}"):
-                self.logger.info(
-                    f"Для LVM пула '{name}' был создан Volume Group '{vg_name}'"
-                )
-                self.logger.info(
-                    f"Вы можете удалить его командой: vgremove -f {vg_name}"
                 )
 
             self.logger.info(f"Пул ресурсов '{name}' успешно удален")
@@ -1413,12 +1423,12 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
             # Получаем точную информацию о лимитах CPU из CGroups
             cpu_limit_info = self.get_cpu_limit_info(request.name)
-            cpu_limit_cores = cpu_limit_info.get("cpu_limit_cores", 0)
+            cpu_limit_cores = cpu_limit_info.cpu_limit_cores
 
             # Получаем лимиты памяти из CGroups
             memory_limit_mb = (
-                cgroup_stats.get("memory_limit", 0) / (1024 * 1024)
-                if cgroup_stats.get("memory_limit", 0) > 0
+                cgroup_stats.memory_limit / (1024 * 1024)
+                if cgroup_stats.memory_limit > 0
                 else None
             )
 
@@ -1428,14 +1438,16 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
             # Рассчитываем проценты использования
             cpu_percent = 0
-            cpu_usage_cores = usage_info["cpu"]  # Количество виртуальных CPU
+            cpu_usage_cores = usage_info.cpu  # Количество виртуальных CPU
             if cpu_limit_cores > 0:
-                cpu_percent = min(100, (cpu_usage_cores / cpu_limit_cores) * 100)
+                cpu_percent = min(100, int((cpu_usage_cores / cpu_limit_cores)) * 100)
 
             memory_percent = 0
             if memory_limit_mb and memory_limit_mb > 0:
-                memory_usage_mb = usage_info["memory"] / 1024  # Конвертируем KB в MB
-                memory_percent = min(100, (memory_usage_mb / memory_limit_mb) * 100)
+                memory_usage_mb = usage_info.memory / 1024  # Конвертируем KB в MB
+                memory_percent = min(
+                    100, int((memory_usage_mb / memory_limit_mb)) * 100
+                )
 
             storage_percent = (
                 (storage_usage / storage_capacity * 100) if storage_capacity else 0
@@ -1463,10 +1475,10 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 "vms_count": len(pool_vms),
                 "cpu": {
                     "limit": round(cpu_limit_cores, 2),
-                    "limit_period_us": cpu_limit_info.get("cpu_limit_period_us"),
-                    "limit_quota_us": cpu_limit_info.get("cpu_limit_quota_us"),
+                    "limit_period_us": cpu_limit_info.cpu_limit_period_us,
+                    "limit_quota_us": cpu_limit_info.cpu_limit_quota_us,
                     "usage": cpu_usage_cores,
-                    "usage_seconds": round(cgroup_stats.get("cpu_usage_seconds", 0), 2),
+                    "usage_seconds": round(cgroup_stats.cpu_usage_seconds, 2),
                     "available": (
                         round(cpu_limit_cores - cpu_usage_cores, 2)
                         if cpu_limit_cores > 0
@@ -1477,16 +1489,16 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 },
                 "memory": {
                     "limit": memory_limit_mb,
-                    "limit_bytes": cgroup_stats.get("memory_limit", 0),
-                    "usage": usage_info["memory"] / 1024,  # Конвертируем KB в MB
-                    "usage_bytes": cgroup_stats.get("memory_usage", 0),
+                    "limit_bytes": cgroup_stats.memory_limit,
+                    "usage": usage_info.memory / 1024,  # Конвертируем KB в MB
+                    "usage_bytes": cgroup_stats.memory_usage,
                     "available": (
-                        round(memory_limit_mb - (usage_info["memory"] / 1024), 2)
+                        round(memory_limit_mb - (usage_info.memory / 1024), 2)
                         if memory_limit_mb
                         else None
                     ),
                     "percent": round(memory_percent, 2),
-                    "reservation_bytes": cgroup_stats.get("memory_reservation", 0),
+                    "reservation_bytes": cgroup_stats.memory_reservation,
                 },
                 "storage": {
                     "limit": storage_capacity,
@@ -1498,8 +1510,8 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 "reservations": {},
                 "limits": {
                     "cpu": round(cpu_limit_cores, 2),
-                    "cpu_period_us": cpu_limit_info.get("cpu_limit_period_us"),
-                    "cpu_quota_us": cpu_limit_info.get("cpu_limit_quota_us"),
+                    "cpu_period_us": cpu_limit_info.cpu_limit_period_us,
+                    "cpu_quota_us": cpu_limit_info.cpu_limit_quota_us,
                     "memory": memory_limit_mb,
                     "storage": storage_capacity,
                     "storage_gb": pool_info.storage_limit,
@@ -1518,11 +1530,11 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     "is_active": pool_info.is_active,
                 },
                 "cgroup_stats": {
-                    "process_count": cgroup_stats.get("process_count", 0),
-                    "cpu_shares": cgroup_stats.get("cpu_shares", 1024),
+                    "process_count": cgroup_stats.process_count,
+                    "cpu_shares": cgroup_stats.cpu_shares,
                     "cpu_limit_cores": round(cpu_limit_cores, 2),
-                    "cpu_limit_period_us": cpu_limit_info.get("cpu_limit_period_us"),
-                    "cpu_limit_quota_us": cpu_limit_info.get("cpu_limit_quota_us"),
+                    "cpu_limit_period_us": cpu_limit_info.cpu_limit_period_us,
+                    "cpu_limit_quota_us": cpu_limit_info.cpu_limit_quota_us,
                 },
                 "lvm_info": lvm_info if lvm_info else None,
             }
@@ -1603,7 +1615,9 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 message=CommandMessagesEnum.rp_edit_success.value,
                 code=CommandMessagesEnum.rp_edit_success.name,
                 success=True,
-                rp_info=ResourcePoolUpdates(name=request.name, updates=updates),
+                rp_info=ResourcePoolUpdates(
+                    name=request.name, updates=updates, limits=None
+                ),
             )
 
         except Exception as e:
@@ -1765,7 +1779,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
             # Получаем XML пула для извлечения capacity
             xml_content = pool.XMLDesc(0)
-
+            storage_path = ET.fromstring(xml_content).find("target").find("path").text
             # Извлекаем capacity из XML
             storage_capacity_from_xml = None
             try:
@@ -1794,11 +1808,16 @@ class PoolManager(LibvirtClient, CGroupsManager):
             cgroup_pool = self.get_cgroup_stats(pool_name)
 
             # Используем capacity из XML если он есть, иначе из info[1]
-            capacity_bytes = (
-                storage_capacity_from_xml
-                if storage_capacity_from_xml is not None
-                else info[1]
-            )
+            if pool_type == StoragePoolType.LOGICAL:
+                capacity_bytes = self.logic_volume_manager.get_volume_by_name(
+                    pool_name, self.system_volume_group_name
+                ).volume_size
+            else:
+                capacity_bytes = (
+                    storage_capacity_from_xml
+                    if storage_capacity_from_xml is not None
+                    else info[1]
+                )
 
             self.logger.debug(
                 f"Итоговый capacity для пула {pool_name}: {capacity_bytes} байт "
@@ -1813,6 +1832,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 rp_info=ResourcePool(
                     name=pool_name,
                     type=pool_type,
+                    storage_path=storage_path,
                     state=POOL_STATE[info[0]],
                     capacity_bytes=capacity_bytes,
                     allocation_bytes=info[2],
@@ -1820,8 +1840,8 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     autostart=pool.autostart(),
                     is_active=pool.isActive(),
                     vms=[],
-                    cpu_limit=cgroup_pool.get("cpu_limit_cores"),
-                    memory_limit=cgroup_pool.get("memory_limit"),
+                    cpu_limit=cgroup_pool.cpu_limit_cores,
+                    memory_limit=cgroup_pool.memory_limit,
                     # storage_limit=None,  # storage_limit теперь только в запросе создания
                 ),
             )
@@ -1892,7 +1912,7 @@ class PoolManager(LibvirtClient, CGroupsManager):
 
 
 if __name__ == "__main__":
-    with PoolManager().with_default_user() as mngr:
+    with PoolManager() as mngr:
         print(mngr.list_storage_pools())
         print(mngr.list_resource_pools(str(uuid.uuid4())))
         print("asdasdasd", mngr.get_pool_info("RP-TEST-31680", str(uuid.uuid4())))
@@ -1906,5 +1926,3 @@ if __name__ == "__main__":
             print(f"available_gb: {current_rp.available_gb}")
             print(f"ПОДКЛЮЧЕННЫЕ ВМ: {current_rp.vms}")
             print("_" * 50)
-
-        print(mngr.lvm_manager.list_volume_groups())

@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import (
+from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskCreate,
     DiskFormat,
     DiskStatus,

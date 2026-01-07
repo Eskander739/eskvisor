@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from agent.client.hypervisor.libvirt.models.disk import Disk
+from agent.client.hypervisor.libvirt.models.volume.disk import Disk
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 

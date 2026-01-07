@@ -6,7 +6,7 @@ from ipaddress import IPv4Address
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import DiskCreate
+from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
