@@ -2,11 +2,13 @@ import random
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.disk import (DiskAttach,
-                                                         DiskCreate,
-                                                         DiskDetach,
-                                                         DiskFormat,
-                                                         DiskStatus)
+from agent.client.hypervisor.libvirt.models.disk import (
+    DiskAttach,
+    DiskCreate,
+    DiskDetach,
+    DiskFormat,
+    DiskStatus,
+)
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 RANDOM_NAME = random.randint(10000, 99999)

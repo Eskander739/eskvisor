@@ -9,20 +9,37 @@ import libvirt
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.managers.resource_pool.cgroups_manager import \
-    CGroupsManager
-from agent.client.hypervisor.libvirt.managers.resource_pool.lvm_manager import \
-    LVMStorageManager
-from agent.client.hypervisor.libvirt.models.msg import (CommandMessagesEnum,
-                                                        RpMessage)
+from agent.client.hypervisor.libvirt.managers.resource_pool.cgroups_manager import (
+    CGroupsManager,
+)
+from agent.client.hypervisor.libvirt.managers.resource_pool.lvm_manager import (
+    LVMStorageManager,
+)
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum, RpMessage
 from agent.client.hypervisor.libvirt.models.resource_pool import (
-    POOL_STATE, AddVMInResourcePool, AdjustResourcePool, DeleteResourcePool,
-    RemoveVMInResourcePool, ResourcePool, ResourcePoolAdjustRequest,
-    ResourcePoolControlRequest, ResourcePoolCreateRequest,
-    ResourcePoolEditRequest, ResourcePoolInfoRequest, ResourcePoolLimitRequest,
-    ResourcePoolList, ResourcePoolReservation, ResourcePoolReservationRequest,
-    ResourcePoolState, ResourcePoolType, ResourcePoolUpdates,
-    ResourcePoolUsageInfo, StoragePoolType, UsageInfo, VMPoolAssignmentRequest)
+    POOL_STATE,
+    AddVMInResourcePool,
+    AdjustResourcePool,
+    DeleteResourcePool,
+    RemoveVMInResourcePool,
+    ResourcePool,
+    ResourcePoolAdjustRequest,
+    ResourcePoolControlRequest,
+    ResourcePoolCreateRequest,
+    ResourcePoolEditRequest,
+    ResourcePoolInfoRequest,
+    ResourcePoolLimitRequest,
+    ResourcePoolList,
+    ResourcePoolReservation,
+    ResourcePoolReservationRequest,
+    ResourcePoolState,
+    ResourcePoolType,
+    ResourcePoolUpdates,
+    ResourcePoolUsageInfo,
+    StoragePoolType,
+    UsageInfo,
+    VMPoolAssignmentRequest,
+)
 from agent.client.logger_config import DefaultLogger
 
 
@@ -416,14 +433,15 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     )
 
                 # Берем первое доступное устройство
-                print("available_devices: ", available_devices)
-                for current_device in available_devices:
-                    device = self.cli.execute([f"zramctl {current_device}"])
-                    if current_device in device and "SWAP" not in device:
-                        device_path = current_device
-                        break
-                else:
-                    raise ValueError(f"Отсутствуют доступные устройства: {available_devices}")
+                # print("available_devices: ", available_devices)
+                # for current_device in available_devices:
+                #     device = self.cli.execute([f"zramctl {current_device}"])
+                #     if current_device in device and "SWAP" not in device:
+                #         device_path = current_device
+                #         break
+                # else:
+                #     raise ValueError(f"Отсутствуют доступные устройства: {available_devices}")
+                device_path = "/dev/nvme0n1"
                 vg_name = f"vg_{request.name}"
 
                 self.logger.info(

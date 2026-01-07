@@ -8,11 +8,21 @@ import libvirt
 from agent.client.cli import CLIControl
 from agent.client.constants import NETWORK_TYPE_DESCRIPTIONS
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.msg import (CommandMessagesEnum,
-                                                        NetworkMessage)
+from agent.client.hypervisor.libvirt.models.msg import (
+    CommandMessagesEnum,
+    NetworkMessage,
+)
 from agent.client.hypervisor.libvirt.models.network import (
-    DNSTXT, DNSForwarder, DNSHost, NetworkInfo, NetworkInterfacesInfo,
-    NetworkInterfacesList, NetworkParameters, NetworkTypeInfo, VmInfo)
+    DNSTXT,
+    DNSForwarder,
+    DNSHost,
+    NetworkInfo,
+    NetworkInterfacesInfo,
+    NetworkInterfacesList,
+    NetworkParameters,
+    NetworkTypeInfo,
+    VmInfo,
+)
 from agent.client.logger_config import DefaultLogger
 
 

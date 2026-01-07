@@ -4,10 +4,12 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import (NetworkBridge,
-                                                            NetworkDHCPRange,
-                                                            NetworkForward,
-                                                            NetworkParameters)
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkBridge,
+    NetworkDHCPRange,
+    NetworkForward,
+    NetworkParameters,
+)
 
 
 @pytest.mark.tags("VN‑08", "Удаление сети")

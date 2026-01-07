@@ -1,8 +1,13 @@
-from pydantic import (BaseModel, Field, IPvAnyAddress, IPvAnyNetwork,
-                      field_validator, model_validator)
+from pydantic import (
+    BaseModel,
+    Field,
+    IPvAnyAddress,
+    IPvAnyNetwork,
+    field_validator,
+    model_validator,
+)
 
-from agent.client.hypervisor.libvirt.models.enum import (NetworkModel,
-                                                         NetworkType)
+from agent.client.hypervisor.libvirt.models.enum import NetworkModel, NetworkType
 
 
 class DNSForwarder(BaseModel):

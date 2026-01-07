@@ -2,13 +2,15 @@
 # Для Ubuntu/Debian:
 sudo apt update
 sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst
+sudo apt install lvm2
 
 # Для CentOS/RHEL/ALT Linux:
 sudo yum install -y qemu-kvm libvirt libvirt-client virt-install
+sudo yum install lvm2
 
 # Для Fedora:
 sudo dnf install -y qemu-kvm libvirt libvirt-client virt-install
-
+sudo dnf install lvm2
 sudo systemctl start libvirtd
 sudo systemctl enable libvirtd
 

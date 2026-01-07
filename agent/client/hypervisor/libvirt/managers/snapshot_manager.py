@@ -6,17 +6,28 @@ import xml.etree.ElementTree as ET
 import libvirt
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.models.disk import (Disk, DiskType,
-                                                         SnapshotDiskInfo)
+from agent.client.hypervisor.libvirt.models.disk import Disk, DiskType, SnapshotDiskInfo
 from agent.client.hypervisor.libvirt.models.general import VMState
-from agent.client.hypervisor.libvirt.models.msg import (CommandMessagesEnum,
-                                                        SnapshotMessage)
+from agent.client.hypervisor.libvirt.models.msg import (
+    CommandMessagesEnum,
+    SnapshotMessage,
+)
 from agent.client.hypervisor.libvirt.models.snapshots import (
-    ClonedSnapshot, CreateMultipleSnapshots, CreateMultipleSnapshotsError,
-    CreateSnapshotChainError, CreateSnapshotChainSuccess, DeleteSnapshotInfo,
-    MultipleSnapshotsRequest, Snapshot, SnapshotCloneRequest,
-    SnapshotCreateRequest, SnapshotList, SnapshotRevertSuccess, SnapshotsChain,
-    SnapshotWithParent)
+    ClonedSnapshot,
+    CreateMultipleSnapshots,
+    CreateMultipleSnapshotsError,
+    CreateSnapshotChainError,
+    CreateSnapshotChainSuccess,
+    DeleteSnapshotInfo,
+    MultipleSnapshotsRequest,
+    Snapshot,
+    SnapshotCloneRequest,
+    SnapshotCreateRequest,
+    SnapshotList,
+    SnapshotRevertSuccess,
+    SnapshotsChain,
+    SnapshotWithParent,
+)
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 from agent.client.logger_config import DefaultLogger
 

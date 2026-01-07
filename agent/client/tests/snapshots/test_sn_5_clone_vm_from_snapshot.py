@@ -5,7 +5,9 @@ import pytest
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.snapshots import (
-    SnapshotCloneRequest, SnapshotCreateRequest)
+    SnapshotCloneRequest,
+    SnapshotCreateRequest,
+)
 from agent.client.tools import wait_while_not
 
 

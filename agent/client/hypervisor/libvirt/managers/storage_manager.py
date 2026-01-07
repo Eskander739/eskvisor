@@ -11,15 +11,23 @@ import libvirt
 
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
-from agent.client.hypervisor.libvirt.models.disk import (BusType, CacheMode,
-                                                         Disk, DiskAttach,
-                                                         DiskCreate,
-                                                         DiskDetach,
-                                                         DiskFormat, DiskQuery,
-                                                         DiskStatus, DiskType,
-                                                         DiskUpdate)
-from agent.client.hypervisor.libvirt.models.msg import (CommandMessagesEnum,
-                                                        StorageMessage)
+from agent.client.hypervisor.libvirt.models.disk import (
+    BusType,
+    CacheMode,
+    Disk,
+    DiskAttach,
+    DiskCreate,
+    DiskDetach,
+    DiskFormat,
+    DiskQuery,
+    DiskStatus,
+    DiskType,
+    DiskUpdate,
+)
+from agent.client.hypervisor.libvirt.models.msg import (
+    CommandMessagesEnum,
+    StorageMessage,
+)
 
 
 class StorageManager(LibvirtClient):

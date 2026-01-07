@@ -6,7 +6,9 @@ import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.resource_pool import (
-    ResourcePoolCreateRequest, StoragePoolType)
+    ResourcePoolCreateRequest,
+    StoragePoolType,
+)
 
 
 @pytest.mark.tags(
