@@ -1,7 +1,7 @@
 import json
 
 from agent.client.cli import CLIControl
-from agent.client.hypervisor.libvirt.models.volume.volume_group import VolumeGroup
+from agent.client.hypervisor.libvirt.models.volume.group_volume import VolumeGroup
 from agent.client.logger_config import DefaultLogger
 
 
