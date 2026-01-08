@@ -141,14 +141,6 @@ class ResourcePoolLimitRequest(BaseModel):
     )
 
 
-class VMPoolAssignmentRequest(BaseModel):
-    """Запрос на назначение/изъятие ВМ из пула"""
-
-    request_id: str
-    pool_name: str
-    vm_name: str
-
-
 class ResourcePoolState(BaseModel):
     name: str
     state: str
@@ -158,7 +150,7 @@ class ResourceMetrics(BaseModel):
     limit: int | None = None
     usage: int | None = None
     available: int | None = None
-    percent: int | None = None
+    percent: int | float | None = None
 
 
 class UsageInfo(BaseModel):
@@ -179,13 +171,7 @@ class ResourcePoolUsageInfo(BaseModel):
     reservations: dict[str, object] = Field(default_factory=dict)
     limits: dict[str, object] = Field(default_factory=dict)
     storage_info: dict[str, object]
-
-
-class ResourcePoolInfoRequest(BaseModel):
-    """Запрос на получение информации о пуле"""
-
-    request_id: str
-    name: str
+    cgroup_stats: dict[str, object]
 
 
 class ResourcePoolControlRequest(BaseModel):

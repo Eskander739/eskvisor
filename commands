@@ -17,7 +17,6 @@ sudo systemctl enable libvirtd
 # Проверьте статус (должен быть "active (running)")
 sudo systemctl status libvirtd
 
-
 #_________________________________Запуск анализатора кода и автоформатирование black______________________________
 
 Все команды ниже нужно запускать находясь в корне проекта
@@ -29,6 +28,18 @@ python3 -m isort ./
 # Создать пользователя
 sudo adduser eskvisor
 sudo EDITOR=nano visudo
+#_________________________________Настройка путей______________________________
+sudo EDITOR=nano visudo
+ALL ALL=(ALL) NOPASSWD: /bin/mkdir -p /sys/fs/cgroup/libvirt/*
+ALL ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/fs/cgroup/libvirt/*
+ALL ALL=(ALL) NOPASSWD: /bin/echo * > /sys/fs/cgroup/libvirt/*
+ALL ALL=(ALL) NOPASSWD: /bin/cat /sys/fs/cgroup/libvirt/*
+ALL ALL=(ALL) NOPASSWD: /usr/bin/bash -c echo\ * >\ /sys/fs/cgroup/libvirt/*
+ALL ALL=(ALL) NOPASSWD: /bin/rmdir /sys/fs/cgroup/libvirt/*
+
+sudo systemctl daemon-reload
+sudo systemctl enable setup-cgroup-libvirt.service
+sudo systemctl start setup-cgroup-libvirt.service
 # Дать права sudo (требует ввода пароля)
 sudo usermod -aG sudo eskvisor  # Для Ubuntu/Debian
 # ИЛИ

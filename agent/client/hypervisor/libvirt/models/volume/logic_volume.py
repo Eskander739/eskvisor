@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 
 class LogicVolume(BaseModel):
@@ -8,6 +8,7 @@ class LogicVolume(BaseModel):
     volume_group_name: str
     attributes: str  # Атрибуты логического тома
     volume_size: int  # Общий размер логического тома в байтах
+    available_volume_size: int | float  # Сколько доступно для использования
     logic_volume_pool: str  # Имя thin pool (для тонких LV), если пусто - обычный LV (не thin-provisioned)
     is_snapshot: str  # origin Исходный LV (для снапшотов), если пусто - не снапшот
     data_percent: str  # Процент использования данных
@@ -18,6 +19,18 @@ class LogicVolume(BaseModel):
         str  # Процент копирования(для зеркал, RAID), если пусто - не копируется
     )
     convert_logic_volume: str  # Тип конвертации, если пусто = не конвертируется
+
+    @computed_field
+    @property
+    def volume_size_gb(self) -> float:
+        """Доступное пространство в гигабайтах"""
+        return self.volume_size / (1024**3)
+
+    @computed_field
+    @property
+    def available_volume_size_gb(self) -> float:
+        """Доступное пространство в гигабайтах"""
+        return self.available_volume_size / (1024**3)
 
 
 class LogicalVolumeSizeType(Enum):

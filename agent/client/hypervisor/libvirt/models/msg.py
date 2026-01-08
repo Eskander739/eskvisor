@@ -50,6 +50,10 @@ class CommandMessagesEnum(Enum):
     vm_successfully_shutdowned = "VM successfully shutdown"
     vm_successfully_started = "VM successfully started"
     vm_successfully_found = "VM successfully found"
+    vm_successfully_add_to_cgroup = "VM successfully add to cgroup"
+    vm_error_add_to_cgroup = "VM error add to cgroup"
+    vm_error_remove_from_cgroup = "VM error remove from cgroup"
+    vm_successfully_removed_from_cgroup = "VM successfully removed from cgroup"
     vm_found_error = "VM found error"
     vm_successfully_stopped = "VM successfully stopped"
     vm_successfully_restarted = "VM successfully restarted"
@@ -132,8 +136,10 @@ class CommandMessagesEnum(Enum):
     rp_already_running = "Resource pool already running"
     rp_already_stopped = "Resource pool already stopped"
 
+    rp_usage_info_success = "Resource pool usage info retrieved"
     rp_info_success = "Resource pool info retrieved"
     rp_info_error = "Resource pool info error"
+    rp_usage_info_error = "Resource pool usage info error"
     rp_list_success = "Resource pools list retrieved"
     rp_list_error = "Resource pools list error"
 

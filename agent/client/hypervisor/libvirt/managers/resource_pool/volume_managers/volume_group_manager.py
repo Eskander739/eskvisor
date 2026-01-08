@@ -72,7 +72,13 @@ class VolumeGroupManager:
 
     def get_volume_by_name(self, volume_group_name: str) -> VolumeGroup | None:
         self.logger.info(f"Получение группы томов: {volume_group_name}")
-        cmd_args = ["vgs", volume_group_name, "--reportformat=json"]
+        cmd_args = [
+            "vgs",
+            volume_group_name,
+            "--reportformat=json",
+            "-o",
+            "+vg_extent_size",
+        ]
         result = self.cli.execute(cmd_args)
         if f'Volume group "{volume_group_name}" not found' in result:
             self.logger.info(f"Группа томов не найдена: {volume_group_name}")
@@ -91,7 +97,7 @@ class VolumeGroupManager:
         nosuffix: bool = False,
     ) -> list[VolumeGroup]:
         self.logger.info(f"Получение списка групп томов")
-        cmd_args = ["vgs", "--reportformat=json"]
+        cmd_args = ["vgs", "--reportformat=json", "-o", "+vg_extent_size"]
 
         if noheadings:
             cmd_args.append("--noheadings")
@@ -137,6 +143,7 @@ class VolumeGroupManager:
                     attributes=physical_volume.get("vg_attr"),
                     volume_size=physical_volume.get("vg_size"),
                     volume_free=physical_volume.get("vg_free"),
+                    extent_size=physical_volume.get("vg_extent_size"),
                 )
             )
 
@@ -154,5 +161,6 @@ if __name__ == "__main__":
         print("АТРИБУТЫ ГРУППЫ ТОМА: ", pv.attributes)
         print("РАЗМЕР ГРУППЫ ТОМА: ", pv.volume_size)
         print("СВОБОДНОЕ ПРОСТРАНСТВО ГРУППЫ ТОМА: ", pv.volume_free)
+        print("РАЗМЕР БЛОКА ГРУППЫ ТОМА: ", pv.extent_size)
     # manager.add_physical_volume_from_volume_group("/dev/nvme0n1p5", "my_vg")
     # print(manager.delete_physical_volume_from_volume_group("/dev/nvme0n1p5", "eska_vg"))

@@ -9,3 +9,4 @@ class VolumeGroup(BaseModel):
     attributes: str  # Атрибуты группы
     volume_size: str  # Общий размер группы томов
     volume_free: str  # Свободное место в группе томов
+    extent_size: str  # Размер блока данных

@@ -26,6 +26,7 @@ class LogicalVolumeManager:
         logic_volume_size: int | float,
         volume_group_name: str,
         logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
+        thin_pool: bool = True,  # для ресурса пулов(можно внутри такого logic volume создавать другие logic volume)
     ):
         # /dev/vg_eskvisor_01/RP-TEST-10562
         logic_volume_path = f"/dev/{volume_group_name}/{logic_volume_name}"
@@ -41,6 +42,8 @@ class LogicalVolumeManager:
             f"{str(logic_volume_size)}{logic_volume_size_type.value}",  # Размер создаваемого LV и тип размера создаваемого LV
             volume_group_name,  # Имя группы томов, в которой создаем LV
         ]
+        if thin_pool:
+            cmd_args.append("--thin")
         self.logger.info(f"Создание логического тома командой: {cmd_args}")
 
         result = self.cli.execute(cmd_args)
@@ -178,6 +181,15 @@ class LogicalVolumeManager:
         logic_volumes_list = []
 
         for logic_volume in result:
+            volume_size = self.convert_storage_size_to_bytes(
+                logic_volume.get("lv_size")
+            )
+            data_percent = logic_volume.get("data_percent")
+            used_volume_size = (
+                volume_size * float(data_percent.replace(",", ".")) / 100
+                if data_percent
+                else 0
+            )
             logic_volumes_list.append(
                 LogicVolume(
                     logic_volume_name=logic_volume.get("lv_name"),
@@ -186,9 +198,10 @@ class LogicalVolumeManager:
                     volume_size=self.convert_storage_size_to_bytes(
                         logic_volume.get("lv_size")
                     ),
+                    available_volume_size=volume_size - used_volume_size,
                     logic_volume_pool=logic_volume.get("pool_lv"),
                     is_snapshot=logic_volume.get("origin"),
-                    data_percent=logic_volume.get("data_percent"),
+                    data_percent=data_percent,
                     metadata_percent=logic_volume.get("metadata_percent"),
                     move_physical_volume=logic_volume.get("move_pv"),
                     mirror_logic=logic_volume.get("mirror_log"),
@@ -260,12 +273,22 @@ class LogicalVolumeManager:
 
 if __name__ == "__main__":
     manager = LogicalVolumeManager()
+    # manager.create_volume("ESKA", 1.5, "vg_eskvisor_01")
     for pv in manager.get_volume_list():
         print("-" * 50)
         print("ИМЯ ЛОГИЧЕСКОГО ТОМА: ", pv.logic_volume_name)
         print("ИМЯ ГРУППЫ ТОМА: ", pv.volume_group_name)
         print("АТРИБУТЫ ТОМА: ", pv.attributes)
-        print("РАЗМЕР ЛОГИЧЕСКОГО ТОМА: ", pv.volume_size)
+        print("РАЗМЕР ЛОГИЧЕСКОГО ТОМА В БАЙТАХ: ", pv.volume_size)
+        print("РАЗМЕР ЛОГИЧЕСКОГО ТОМА В ГБ: ", pv.volume_size_gb)
+        print(
+            "ДОСТУПНОЕ ПРОСТРАНСТВО ЛОГИЧЕСКОГО ТОМА В БАЙТАХ: ",
+            pv.available_volume_size,
+        )
+        print(
+            "ДОСТУПНОЕ ПРОСТРАНСТВО ЛОГИЧЕСКОГО ТОМА В ГБ: ",
+            pv.available_volume_size_gb,
+        )
         print("ЯВЛЯЕТСЯ ЛИ ТОМ СНАПШОТОМ: ", bool(pv.is_snapshot))
         print("ПРОЦЕНТ ИСПОЛЬЗОВАНИЯ ДАННЫХ: ", pv.data_percent)
         print("ПРОЦЕНТ ИСПОЛЬЗОВАНИЯ МЕТАДАННЫХ: ", pv.metadata_percent)

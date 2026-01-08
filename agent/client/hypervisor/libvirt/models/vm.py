@@ -34,7 +34,7 @@ class VMCreateRequest(BaseModel):
     noautoconsole: bool = True
 
     # Ресурсы
-    memory_mb: int = 1024
+    memory_mb: int = 256
     current_memory_mb: int | None = None
     vcpus: int = 2
     max_vcpus: int | None = 4

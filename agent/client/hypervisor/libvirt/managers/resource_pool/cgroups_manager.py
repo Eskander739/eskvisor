@@ -1,10 +1,16 @@
+import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     CpuLimitInfo,
     CGroupStats,
 )
 from agent.client.logger_config import DefaultLogger
+
+load_dotenv()
 
 
 class CGroupsManager:
@@ -16,7 +22,9 @@ class CGroupsManager:
     """
 
     def __init__(self):
-        self.cgroup_root = Path("/home/eska/cgroup")
+        self.connection_uri = os.environ.get("CONNECTION_URI")
+        self.cgroup_root = Path("/sys/fs/cgroup/libvirt")
+        self.cli = CLIControl()
         self.cgroup_version = self._detect_cgroup_version()
         self.logger = DefaultLogger()
 
@@ -53,7 +61,7 @@ class CGroupsManager:
                             subtree_control.write_text(f"+{controller}")
 
                     if self.logger:
-                        self.logger.debug(
+                        self.logger.info(
                             f"Создан cgroup v2 для пула {pool_name}: {cgroup_path}"
                         )
                     return True
@@ -64,7 +72,7 @@ class CGroupsManager:
                     subsystem_path.mkdir(parents=True, exist_ok=True)
 
                 if self.logger:
-                    self.logger.debug(f"Создан cgroup v1 для пула {pool_name}")
+                    self.logger.info(f"Создан cgroup v1 для пула {pool_name}")
                 return True
 
         except Exception as e:
@@ -128,7 +136,7 @@ class CGroupsManager:
                 cpu_max_file.write_text(f"{quota_us} {period_us}")
 
                 if self.logger:
-                    self.logger.debug(
+                    self.logger.info(
                         f"Установлен лимит CPU для пула {pool_name}: {cpu_cores} ядер"
                     )
                 return True
@@ -139,7 +147,7 @@ class CGroupsManager:
                 (cpu_path / "cpu.cfs_period_us").write_text(str(period_us))
 
                 if self.logger:
-                    self.logger.debug(
+                    self.logger.info(
                         f"Установлен лимит CPU для пула {pool_name}: {cpu_cores} ядер (v1)"
                     )
                 return True
@@ -175,7 +183,7 @@ class CGroupsManager:
                 (cpu_path / "cpu.shares").write_text(str(shares))
 
             if self.logger:
-                self.logger.debug(f"Установлен вес CPU для пула {pool_name}: {shares}")
+                self.logger.info(f"Установлен вес CPU для пула {pool_name}: {shares}")
             return True
 
         except Exception as e:
@@ -209,7 +217,7 @@ class CGroupsManager:
                 (memory_path / "memory.limit_in_bytes").write_text(str(memory_bytes))
 
             if self.logger:
-                self.logger.debug(
+                self.logger.info(
                     f"Установлен лимит памяти для пула {pool_name}: {memory_mb} MB"
                 )
             return True
@@ -247,7 +255,7 @@ class CGroupsManager:
                 )
 
             if self.logger:
-                self.logger.debug(
+                self.logger.info(
                     f"Установлена гарантированная память для пула {pool_name}: {memory_mb} MB"
                 )
             return True
@@ -256,75 +264,6 @@ class CGroupsManager:
             if self.logger:
                 self.logger.error(
                     f"Ошибка установки гарантированной памяти для пула {pool_name}: {e}"
-                )
-            return False
-
-    def add_vm_to_cgroup(self, pool_name: str, vm_pid: int) -> bool:
-        """
-        Добавляет процесс VM в cgroup пула
-
-        Args:
-            pool_name: Имя пула ресурсов
-            vm_pid: PID процесса VM
-
-        Returns:
-            bool: Успешность операции
-        """
-        try:
-            if self.cgroup_version == "v2":
-                cgroup_path = self._get_cgroup_path(pool_name)
-                procs_file = cgroup_path / "cgroup.procs"
-                procs_file.write_text(str(vm_pid))
-            else:
-                # Для CGroups v1 добавляем во все подсистемы
-                for subsystem in ["cpu", "cpuacct", "memory"]:
-                    subsystem_path = self.cgroup_root / subsystem / pool_name
-                    tasks_file = subsystem_path / "tasks"
-                    tasks_file.write_text(str(vm_pid))
-
-            if self.logger:
-                self.logger.debug(
-                    f"Добавлен процесс {vm_pid} в cgroup пула {pool_name}"
-                )
-            return True
-
-        except Exception as e:
-            if self.logger:
-                self.logger.error(
-                    f"Ошибка добавления процесса в cgroup пула {pool_name}: {e}"
-                )
-            return False
-
-    def remove_vm_from_cgroup(self, pool_name: str, vm_pid: int) -> bool:
-        """
-        Удаляет процесс VM из cgroup пула
-
-        Args:
-            pool_name: Имя пула ресурсов
-            vm_pid: PID процесса VM
-
-        Returns:
-            bool: Успешность операции
-        """
-        try:
-            # Перемещаем процесс в корневой cgroup
-            if self.cgroup_version == "v2":
-                root_procs = self.cgroup_root / "cgroup.procs"
-                root_procs.write_text(str(vm_pid))
-            else:
-                # Для CGroups v1
-                for subsystem in ["cpu", "cpuacct", "memory"]:
-                    root_tasks = self.cgroup_root / subsystem / "tasks"
-                    root_tasks.write_text(str(vm_pid))
-
-            if self.logger:
-                self.logger.debug(f"Удален процесс {vm_pid} из cgroup пула {pool_name}")
-            return True
-
-        except Exception as e:
-            if self.logger:
-                self.logger.error(
-                    f"Ошибка удаления процесса из cgroup пула {pool_name}: {e}"
                 )
             return False
 
@@ -570,58 +509,7 @@ class CGroupsManager:
     def _get_cgroup_path(self, pool_name: str) -> Path:
         """Возвращает путь к cgroup пула"""
         if self.cgroup_version == "v2":
-            return self.cgroup_root / "libvirt" / pool_name
+            return self.cgroup_root / pool_name
         else:
             # Для v1 возвращаем путь к одной из подсистем
             return self.cgroup_root / "cpu" / pool_name
-
-    def get_vm_pid(self, vm_name: str) -> int | None:
-        """
-        Получает PID процесса VM
-
-        Args:
-            vm_name: Имя виртуальной машины
-
-        Returns:
-            int | None: PID процесса или None если не найден
-        """
-        try:
-            # Пробуем найти PID через virsh domstats
-            import subprocess
-
-            result = subprocess.run(
-                ["virsh", "domstats", vm_name], capture_output=True, text=True
-            )
-
-            if result.returncode == 0:
-                for line in result.stdout.splitlines():
-                    if "balloon.maximum=" in line:
-                        # Извлекаем PID из вывода
-                        parts = line.split()
-                        for part in parts:
-                            if part.startswith("state.state="):
-                                state = int(part.split("=")[1])
-                                if state != 1:  # 1 = запущена
-                                    return None
-
-                    if "vcpu.0.pid=" in line:
-                        pid_str = line.split("=")[1].strip()
-                        if pid_str.isdigit():
-                            return int(pid_str)
-
-            # Альтернативный метод: ищем в процессах QEMU
-            import psutil
-
-            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-                try:
-                    cmdline = proc.info["cmdline"]
-                    if cmdline and vm_name in " ".join(cmdline):
-                        return proc.info["pid"]
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"Ошибка получения PID для VM {vm_name}: {e}")
-
-        return None
