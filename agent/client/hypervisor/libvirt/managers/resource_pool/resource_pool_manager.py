@@ -7,14 +7,12 @@ import xml.etree.ElementTree as ET
 from pathlib import PurePosixPath
 
 import libvirt
+import psutil
 from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
 from agent.client.constants import LVM_SAFE_FORBIDDEN
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.managers.resource_pool.cgroups_manager import (
-    CGroupsManager,
-)
 from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.logical_volume_manager import (
     LogicalVolumeManager,
 )
@@ -54,7 +52,7 @@ from agent.client.logger_config import DefaultLogger
 load_dotenv()
 
 
-class PoolManager(LibvirtClient, CGroupsManager):
+class PoolManager(LibvirtClient):
     """
     Управление пулом ресурсов
 
@@ -67,7 +65,6 @@ class PoolManager(LibvirtClient, CGroupsManager):
     def __init__(self):
         super().__init__()
         # Инициализируем CGroupsManager
-        CGroupsManager.__init__(self)
         self.logger = DefaultLogger("ResourcePoolManager")
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
         self.physical_volume_manager = PhysicalVolumeManager()
@@ -1012,8 +1009,12 @@ class PoolManager(LibvirtClient, CGroupsManager):
             RpMessage: Результат операции
         """
         try:
+            self.logger.info(
+                f"Запуск добавления ВМ '{vm_name}' в CGroup пула '{pool_name}'"
+            )
+
+            # Получаем VM по имени
             try:
-                # Находим виртуальную машину по имени
                 dom = self.conn.lookupByName(vm_name)
                 if not dom:
                     self.logger.error(f"Не найдена VM: {vm_name}")
@@ -1023,61 +1024,91 @@ class PoolManager(LibvirtClient, CGroupsManager):
                         code=CommandMessagesEnum.vm_found_error.name,
                         success=False,
                     )
-
-                # Получаем XML конфигурации домена
-                xml_desc = dom.XMLDesc(0)
-                self.logger.info(
-                    f"Добавляем ВМ '{vm_name}' в CGroup пул: '{pool_name}'"
+            except self.libvirtError as e:
+                self.logger.error(f"Ошибка при поиске VM '{vm_name}': {e}")
+                return RpMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.vm_found_error.value,
+                    code=CommandMessagesEnum.vm_found_error.name,
+                    success=False,
+                    note=str(e),
                 )
-                root = ET.fromstring(xml_desc)
 
-                # Находим или создаем элемент resource
-                resource_elem = root.find(".//resource")
-                if resource_elem is None:
+            # Получаем PID основного процесса ВМ (процесса QEMU)
+            vm_pid = self._get_vm_pid(dom)
+            if not vm_pid:
+                self.logger.error(f"Не удалось получить PID для VM: {vm_name}")
+                return RpMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.vm_error_add_to_cgroup.value,
+                    code=CommandMessagesEnum.vm_error_add_to_cgroup.name,
+                    success=False,
+                    note=f"Cannot get PID for VM '{vm_name}'",
+                )
 
-                    resource_elem = ET.SubElement(root, "resource")
+            self.logger.info(f"PID ВМ '{vm_name}': {vm_pid}")
 
-                # Находим или создаем элемент partition
-                partition_elem = resource_elem.find("partition")
-                if partition_elem is None:
-                    partition_elem = ET.SubElement(resource_elem, "partition")
+            # Добавляем процесс в cgroup
+            if self.add_process_to_cgroup(pool_name, vm_pid):
+                self.logger.info(
+                    f"ВМ '{vm_name}' (PID: {vm_pid}) добавлена в cgroup пула '{pool_name}'"
+                )
 
-                # Устанавливаем значение cgroup пути
-                cgroup_path = str(self._get_cgroup_path(pool_name))
-                partition_elem.text = cgroup_path
+                # Обновляем XML конфигурации домена для добавления cgroup информации
+                try:
+                    xml_desc = dom.XMLDesc(0)
+                    root = ET.fromstring(xml_desc)
 
-                # Обновляем XML домена
-                new_xml = ET.tostring(root, encoding="unicode")
-                self.conn.defineXML(new_xml)
+                    # Находим или создаем элемент resource
+                    resource_elem = root.find(".//resource")
+                    if resource_elem is None:
+                        # Добавляем элемент resource
+                        resource_elem = ET.SubElement(root, "resource")
 
-                # Перезапускаем домен для применения изменений
-                if dom.isActive():
-                    self.logger.info(
-                        f"Перезапускаем ВМ '{vm_name}' для применения изменений"
+                    # Находим или создаем элемент partition
+                    partition_elem = resource_elem.find("partition")
+                    if partition_elem is None:
+                        partition_elem = ET.SubElement(resource_elem, "partition")
+
+                    # Устанавливаем cgroup путь
+                    cgroup_path = str(self.get_cgroup_path(pool_name))
+                    partition_elem.text = cgroup_path
+
+                    # Обновляем XML домена
+                    new_xml = ET.tostring(root, encoding="unicode")
+
+                    # Применяем изменения только если домен неактивен
+                    # Если домен активен, изменения вступят в силу после перезапуска
+                    if not dom.isActive():
+                        self.conn.defineXML(new_xml)
+                        self.logger.info(
+                            f"XML конфигурация ВМ '{vm_name}' обновлена с cgroup информацией"
+                        )
+
+                except Exception as xml_error:
+                    self.logger.warning(
+                        f"Не удалось обновить XML ВМ '{vm_name}': {xml_error}"
                     )
-                    dom.destroy()
-                    dom.create()
+                    # Это не критичная ошибка, продолжаем
 
-                self.logger.info(
-                    f"Виртуальная машина {vm_name} добавлена в cgroup пула {pool_name}"
-                )
                 return RpMessage(
                     request_id=request_id,
                     message=CommandMessagesEnum.vm_successfully_add_to_cgroup.value,
                     code=CommandMessagesEnum.vm_successfully_add_to_cgroup.name,
                     success=True,
                 )
-
-            except libvirt.libvirtError as e:
-                self.logger.error(f"Ошибка libvirt при добавлении VM в cgroup: {e}")
+            else:
+                self.logger.error(f"Не удалось добавить ВМ '{vm_name}' в cgroup")
                 return RpMessage(
                     request_id=request_id,
                     message=CommandMessagesEnum.vm_error_add_to_cgroup.value,
                     code=CommandMessagesEnum.vm_error_add_to_cgroup.name,
                     success=False,
-                    note=str(e),
+                    note=f"Failed to add VM '{vm_name}' to cgroup",
                 )
+
         except Exception as e:
+            self.logger.error(f"Ошибка при добавлении ВМ '{vm_name}' в cgroup: {e}")
             return RpMessage(
                 request_id=request_id,
                 message=CommandMessagesEnum.vm_error_add_to_cgroup.value,
@@ -1101,10 +1132,12 @@ class PoolManager(LibvirtClient, CGroupsManager):
             RpMessage: Результат операции
         """
         try:
-            import libvirt
+            self.logger.info(
+                f"Запуск удаления ВМ '{vm_name}' из CGroup пула '{pool_name}'"
+            )
 
+            # Получаем VM по имени
             try:
-                # Находим виртуальную машину по имени
                 dom = self.conn.lookupByName(vm_name)
                 if not dom:
                     self.logger.error(f"Не найдена VM: {vm_name}")
@@ -1114,56 +1147,131 @@ class PoolManager(LibvirtClient, CGroupsManager):
                         code=CommandMessagesEnum.vm_found_error.name,
                         success=False,
                     )
+            except self.libvirtError as e:
+                self.logger.error(f"Ошибка при поиске VM '{vm_name}': {e}")
+                return RpMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.vm_found_error.value,
+                    code=CommandMessagesEnum.vm_found_error.name,
+                    success=False,
+                    note=str(e),
+                )
 
-                # Получаем XML конфигурации домена
+            # Получаем PID основного процесса ВМ (процесса QEMU)
+            vm_pid = self._get_vm_pid(dom)
+            if not vm_pid:
+                self.logger.warning(
+                    f"Не удалось получить PID для VM: {vm_name}. Продолжаем удаление из cgroup."
+                )
+                # Продолжаем, так как можем удалить из cgroup по другим критериям
+
+            # Для удаления из cgroup нам нужно переместить процесс в корневой cgroup
+            # Вместо прямого удаления, перемещаем процесс в корневой cgroup
+            if vm_pid:
+                try:
+                    # В cgroups v2 можно переместить процесс в корневую группу
+                    if self.cgroup_version == "v2":
+                        root_procs_file = self.cgroup_root / "cgroup.procs"
+                        root_procs_file.write_text(str(vm_pid))
+                    else:
+                        # Для v1 перемещаем в корневые cgroups каждой подсистемы
+                        subsystems = ["cpu", "cpuacct", "memory"]
+                        for subsystem in subsystems:
+                            subsystem_root = self.cgroup_root / subsystem
+                            tasks_file = subsystem_root / "tasks"
+                            tasks_file.write_text(str(vm_pid))
+
+                    self.logger.info(
+                        f"ВМ '{vm_name}' (PID: {vm_pid}) перемещена в корневой cgroup"
+                    )
+                except Exception as pid_error:
+                    self.logger.warning(
+                        f"Не удалось переместить процесс {vm_pid} в корневой cgroup: {pid_error}"
+                    )
+
+            # Удаляем информацию о cgroup из XML конфигурации домена
+            try:
                 xml_desc = dom.XMLDesc(0)
-
-                # Изменяем XML для удаления cgroup контроллера
-                import xml.etree.ElementTree as ET
-
                 root = ET.fromstring(xml_desc)
 
-                # Находим элемент resource/partition
+                # Находим элемент partition
                 partition_elem = root.find(".//resource/partition")
                 if partition_elem is not None:
                     # Удаляем элемент partition
                     resource_elem = partition_elem.getparent()
-                    resource_elem.remove(partition_elem)
+                    if resource_elem is not None:
+                        resource_elem.remove(partition_elem)
 
-                    # Если resource стал пустым, удаляем его тоже
-                    if len(resource_elem) == 0:
-                        domain_elem = resource_elem.getparent()
-                        domain_elem.remove(resource_elem)
+                        # Если resource стал пустым, удаляем его тоже
+                        if len(resource_elem) == 0:
+                            domain_elem = resource_elem.getparent()
+                            if domain_elem is not None:
+                                domain_elem.remove(resource_elem)
 
                 # Обновляем XML домена
                 new_xml = ET.tostring(root, encoding="unicode")
-                self.conn.defineXML(new_xml)
 
-                # Перезапускаем домен для применения изменений
-                if dom.isActive():
-                    dom.destroy()
-                    dom.create()
+                # Применяем изменения только если домен неактивен
+                if not dom.isActive():
+                    self.conn.defineXML(new_xml)
+                    self.logger.info(
+                        f"XML конфигурация ВМ '{vm_name}' обновлена (cgroup информация удалена)"
+                    )
 
-                self.logger.info(
-                    f"Виртуальная машина {vm_name} удалена из cgroup пула {pool_name}"
-                )
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_successfully_removed_from_cgroup.value,
-                    code=CommandMessagesEnum.vm_successfully_removed_from_cgroup.name,
-                    success=True,
+            except Exception as xml_error:
+                self.logger.warning(
+                    f"Не удалось обновить XML ВМ '{vm_name}': {xml_error}"
                 )
 
-            except libvirt.libvirtError as e:
-                self.logger.error(f"Ошибка libvirt при удалении VM из cgroup: {e}")
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_error_remove_from_cgroup.value,
-                    code=CommandMessagesEnum.vm_error_remove_from_cgroup.name,
-                    success=False,
-                    note=str(e),
+            # Проверяем, что процесс больше не в нашем cgroup
+            pool_processes = self.get_cgroup_processes(pool_name)
+            if vm_pid and vm_pid in pool_processes:
+                self.logger.warning(
+                    f"Процесс {vm_pid} все еще находится в cgroup пула '{pool_name}'"
                 )
+                # Пытаемся удалить другим способом
+                try:
+                    if self.cgroup_version == "v2":
+                        cgroup_path = self.cgroup_root / pool_name
+                        procs_file = cgroup_path / "cgroup.procs"
+                        if procs_file.exists():
+                            # Читаем текущие процессы, исключаем наш PID
+                            current_procs = procs_file.read_text().strip().split()
+                            filtered_procs = [
+                                str(pid) for pid in current_procs if int(pid) != vm_pid
+                            ]
+                            procs_file.write_text("\n".join(filtered_procs))
+                    else:
+                        # Для v1 удаляем из всех подсистем
+                        subsystems = ["cpu", "cpuacct", "memory"]
+                        for subsystem in subsystems:
+                            subsystem_path = self.cgroup_root / subsystem / pool_name
+                            tasks_file = subsystem_path / "tasks"
+                            if tasks_file.exists():
+                                current_tasks = tasks_file.read_text().strip().split()
+                                filtered_tasks = [
+                                    str(pid)
+                                    for pid in current_tasks
+                                    if int(pid) != vm_pid
+                                ]
+                                tasks_file.write_text("\n".join(filtered_tasks))
+                except Exception as e:
+                    self.logger.warning(
+                        f"Не удалось удалить процесс {vm_pid} из cgroup: {e}"
+                    )
+
+            self.logger.info(
+                f"ВМ '{vm_name}' успешно удалена из cgroup пула '{pool_name}'"
+            )
+            return RpMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.vm_successfully_removed_from_cgroup.value,
+                code=CommandMessagesEnum.vm_successfully_removed_from_cgroup.name,
+                success=True,
+            )
+
         except Exception as e:
+            self.logger.error(f"Ошибка при удалении ВМ '{vm_name}' из cgroup: {e}")
             return RpMessage(
                 request_id=request_id,
                 message=CommandMessagesEnum.vm_error_remove_from_cgroup.value,
@@ -1171,6 +1279,79 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 success=False,
                 note=str(e),
             )
+
+    def _get_vm_pid(self, domain) -> int | None:
+        """
+        Получает PID основного процесса ВМ (QEMU процесса)
+
+        Args:
+            domain: Объект домена libvirt
+
+        Returns:
+            int | None: PID процесса или None если не найден
+        """
+        try:
+            # Получаем ID домена
+            dom_id = domain.ID()
+            if dom_id == -1:  # Домен не запущен
+                return None
+
+            # Используем механизм libvirt для получения информации о процессах
+            # Способ 1: через virsh qemu-monitor-command
+            try:
+                # Получаем PID через virsh dompinfo (эта команда существует)
+                result = subprocess.run(
+                    ["virsh", "dompinfo", domain.name()], capture_output=True, text=True
+                )
+
+                if result.returncode == 0:
+                    for line in result.stdout.splitlines():
+                        if "Process ID" in line or "PID" in line:
+                            parts = line.split(":")
+                            if len(parts) > 1:
+                                pid_str = parts[1].strip()
+                                if pid_str.isdigit():
+                                    return int(pid_str)
+            except Exception:
+                pass
+
+            # Способ 2: через поиск в процессах системы
+            try:
+                for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+                    try:
+                        cmdline = proc.info["cmdline"]
+                        if cmdline and any(domain.name() in arg for arg in cmdline):
+                            if "qemu" in proc.info["name"].lower():
+                                return proc.info["pid"]
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+            except ImportError:
+                pass
+
+            # Способ 3: через /proc поиск
+            try:
+                import os
+
+                for pid_dir in os.listdir("/proc"):
+                    if pid_dir.isdigit():
+                        try:
+                            cmdline_file = f"/proc/{pid_dir}/cmdline"
+                            if os.path.exists(cmdline_file):
+                                with open(cmdline_file, "r") as f:
+                                    cmdline = f.read()
+                                    if domain.name() in cmdline and "qemu" in cmdline:
+                                        return int(pid_dir)
+                        except (IOError, PermissionError):
+                            continue
+            except Exception:
+                pass
+
+            self.logger.warning(f"Не удалось найти PID для домена '{domain.name()}'")
+            return None
+
+        except Exception as e:
+            self.logger.debug(f"Ошибка при получении PID для домена: {e}")
+            return None
 
     def remove_vm_from_pool(
         self, vm_name: str, request_id: str, resource_pool_name: str
@@ -1209,11 +1390,11 @@ class PoolManager(LibvirtClient, CGroupsManager):
                 vm_memory = vm_info[2]
 
                 # УДАЛЯЕМ ВМ ИЗ CGroups
-                vm_pid = self.get_vm_pid(vm_name)
+                vm_pid = self._get_vm_pid(domain)
                 if vm_pid:
                     # Удаляем процесс ВМ из cgroup пула
                     removed_from_cgroup = self.remove_vm_from_cgroup(
-                        resource_pool_name, vm_pid
+                        resource_pool_name, vm_name, request_id
                     )
                     if not removed_from_cgroup:
                         self.logger.warning(
@@ -1465,12 +1646,13 @@ class PoolManager(LibvirtClient, CGroupsManager):
                     )
 
                     # Удаляем ВМ из CGroups
-                    vm_pid = self.get_vm_pid(vm_name)
+                    domain = self.conn.lookupByName(vm_name)
+                    vm_pid = self._get_vm_pid(domain)
                     if vm_pid:
-                        self.remove_vm_from_cgroup(name, vm_pid)
+                        self.remove_vm_from_cgroup(name, vm_name, request_id)
 
             # Удаляем cgroup для CPU и RAM
-            self.delete_pool_cgroup(name)
+            # self.delete_pool_cgroup(name)
 
             if current_pool.type.value == StoragePoolType.LOGICAL.value:
                 self.logic_volume_manager.delete_logical_volume(

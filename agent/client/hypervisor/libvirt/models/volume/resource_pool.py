@@ -206,25 +206,6 @@ class ResourcePoolReservation(BaseModel):
     reservations: dict
 
 
-class CpuLimitInfo(BaseModel):
-    cpu_limit_cores: int | float
-    cpu_limit_period_us: int
-    cpu_limit_quota_us: int
-
-
-class CGroupStats(BaseModel):
-    cpu_usage: int | float = 0
-    cpu_usage_seconds: int | float = 0
-    cpu_limit_cores: int | float = 0
-    cpu_limit_period_us: int = 0
-    cpu_limit_quota_us: int = 0
-    cpu_shares: int = 0
-    memory_usage: int = 0
-    memory_limit: int = 0
-    memory_reservation: int = 0
-    process_count: int = 0
-
-
 class UsageResourcePool(BaseModel):
     cpu: int | float = 0
     memory: int | float = 0

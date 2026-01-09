@@ -218,3 +218,76 @@ LVM_SAFE_FORBIDDEN = [
     "(",
     ")",  # parentheses
 ]
+INVALID_LINUX_CHAR = [
+    # 1. АБСОЛЮТНО ЗАПРЕЩЕННЫЕ СИМВОЛЫ:
+    # Нулевой байт (символ конца строки в C)
+    "\0",  # NULL character
+    # Слэш (разделитель путей)
+    "/",  # Path separator
+    # 2. СИМВОЛЫ, КОТОРЫЕ ТРЕБУЮТ ЭКРАНИРОВАНИЯ (работают в кавычках):
+    # Пробельные символы (не запрещены, но проблематичны)
+    " ",  # Space
+    "\t",  # Tab
+    "\n",  # Newline
+    "\r",  # Carriage return
+    # 3. СИМВОЛЫ, ИСПОЛЬЗУЕМЫЕ SHELL (проблематичны без кавычек):
+    # Метасимволы shell
+    "|",  # Pipe
+    "&",  # Ampersand
+    ";",  # Semicolon
+    "(",  # Open parenthesis
+    ")",  # Close parenthesis
+    "<",  # Less than (input redirection)
+    ">",  # Greater than (output redirection)
+    "`",  # Backtick (command substitution)
+    # 4. СИМВОЛЫ ДЛЯ ПОДСТАНОВКИ И РАСШИРЕНИЯ:
+    "*",  # Asterisk (wildcard)
+    "?",  # Question mark (wildcard)
+    "[",  # Open bracket (character class)
+    "]",  # Close bracket (character class)
+    "{",  # Open brace (brace expansion)
+    "}",  # Close brace (brace expansion)
+    "~",  # Tilde (home directory expansion)
+    # 5. СИМВОЛЫ ДЛЯ ПЕРЕМЕННЫХ И КОМАНД:
+    "$",  # Dollar sign (variable expansion)
+    "!",  # Exclamation mark (history expansion)
+    "#",  # Hash (comment)
+    # 6. КАВЫЧКИ И ЭКРАНИРОВАНИЕ:
+    '"',  # Double quote
+    "'",  # Single quote
+    "\\",  # Backslash (escape character)
+    # 7. РЕДКИЕ ПРОБЛЕМНЫЕ СЛУЧАИ:
+    # Двоеточие (в некоторых файловых системах или контекстах)
+    ":",  # Colon (problematic in some filesystems)
+    # Непечатаемые управляющие символы ASCII (0x01-0x1F)
+    "\x01",  # SOH (Start of Heading)
+    "\x02",  # STX (Start of Text)
+    "\x03",  # ETX (End of Text) - также Ctrl+C
+    "\x04",  # EOT (End of Transmission) - также Ctrl+D
+    "\x05",  # ENQ (Enquiry)
+    "\x06",  # ACK (Acknowledge)
+    "\x07",  # BEL (Bell) - звуковой сигнал
+    "\x08",  # BS (Backspace)
+    "\x0b",  # VT (Vertical Tab)
+    "\x0c",  # FF (Form Feed)
+    "\x0e",  # SO (Shift Out)
+    "\x0f",  # SI (Shift In)
+    "\x10",  # DLE (Data Link Escape)
+    "\x11",  # DC1 (Device Control 1)
+    "\x12",  # DC2 (Device Control 2)
+    "\x13",  # DC3 (Device Control 3)
+    "\x14",  # DC4 (Device Control 4)
+    "\x15",  # NAK (Negative Acknowledge)
+    "\x16",  # SYN (Synchronous Idle)
+    "\x17",  # ETB (End of Transmission Block)
+    "\x18",  # CAN (Cancel)
+    "\x19",  # EM (End of Medium)
+    "\x1a",  # SUB (Substitute) - также Ctrl+Z
+    "\x1b",  # ESC (Escape)
+    "\x1c",  # FS (File Separator)
+    "\x1d",  # GS (Group Separator)
+    "\x1e",  # RS (Record Separator)
+    "\x1f",  # US (Unit Separator)
+    # DELETE character
+    "\x7f",  # DEL (Delete)
+]

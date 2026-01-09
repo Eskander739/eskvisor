@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 
 class NodeInfo(BaseModel):
@@ -10,3 +10,8 @@ class NodeInfo(BaseModel):
     sockets: int  # количество мест для установки процессора
     cores: int  # количество ядер
     threads: int  # количество потоков на ядро
+
+    @computed_field
+    @property
+    def memory_bytes(self) -> float:
+        return (self.memory * 1024) * 1024

@@ -1304,19 +1304,19 @@ class VmManager(LibvirtClient):
                 domain_ids = self.conn.listDomainsID()
                 for domain_id in domain_ids:
                     domain = self.conn.lookupByID(domain_id)
-                    vms.append(self._get_vm_info(domain))
+                    vms.append(self.get_vm_info(domain))
             else:
                 domains = self.conn.listAllDomains(0)
                 print("domains: ", domains)
                 for domain in domains:
-                    vms.append(self._get_vm_info(domain))
+                    vms.append(self.get_vm_info(domain))
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения списка ВМ, \nerr: {e}")
 
         return vms
 
-    def _get_vm_info(self, domain, display_logs: bool = True) -> VirtualMachine:
+    def get_vm_info(self, domain, display_logs: bool = True) -> VirtualMachine | None:
         """Получение информации о виртуальной машине"""
         try:
             info = domain.info()
@@ -1344,7 +1344,7 @@ class VmManager(LibvirtClient):
             virtual_machine = self.conn.lookupByName(name)
             if display_logs:
                 self.logger.info(f"Поиск ВМ {name}")
-            return self._get_vm_info(virtual_machine, display_logs).state.value
+            return self.get_vm_info(virtual_machine, display_logs).state.value
         except self.libvirtError:
             if display_logs:
                 self.logger.info(f"ВМ {name} не найдена")
@@ -1359,7 +1359,7 @@ class VmManager(LibvirtClient):
                 request_id=request_id,
                 message=CommandMessagesEnum.vm_successfully_found.value,
                 code=CommandMessagesEnum.vm_successfully_found.name,
-                vm_info=self._get_vm_info(virtual_machine),
+                vm_info=self.get_vm_info(virtual_machine),
                 success=True,
             )
         except self.libvirtError as e:
@@ -1937,5 +1937,7 @@ if __name__ == "__main__":
         print(f"Найдено ВМ: {len(vms)}")
 
         for vm in vms:
-            vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
-            print(f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs")
+            # vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
+            print(
+                f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}"
+            )

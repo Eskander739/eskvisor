@@ -159,3 +159,9 @@ class LibvirtClient:
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка получения информации о хосте: {e}")
             return None
+
+
+if __name__ == "__main__":
+    lib_client = LibvirtClient()
+    lib_client.connect()
+    print(lib_client.get_node_info())

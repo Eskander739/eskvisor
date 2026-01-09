@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
 
 from agent.client.hypervisor.libvirt.models.controller import VMController
 from agent.client.hypervisor.libvirt.models.volume.disk import BusType, DiskCreate
@@ -245,3 +245,8 @@ class VirtualMachine(BaseModel):
     memory: int  # в килобайтах
     max_memory: int  # в килобайтах
     cpu_time: int | None = None  # в наносекундах
+
+    @computed_field
+    @property
+    def memory_bytes(self) -> float:
+        return int(self.memory * 1024)
