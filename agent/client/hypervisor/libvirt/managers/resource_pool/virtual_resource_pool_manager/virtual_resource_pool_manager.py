@@ -23,6 +23,9 @@ load_dotenv()
 
 
 class VirtualResourcePoolManager:
+    """
+    Виртуальный менеджер ресурс пулов для контроля CPU и RAM лимитов
+    """
 
     def __init__(self):
         self.logger = DefaultLogger("VirtualResourcePoolManager")
