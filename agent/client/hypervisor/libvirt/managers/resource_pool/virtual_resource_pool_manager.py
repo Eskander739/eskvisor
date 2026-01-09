@@ -1,10 +1,10 @@
-import json
+import datetime
+import orjson
 import os
 import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from shapely.speedups import available
 
 from agent.client.cli import CLIControl
 from agent.client.constants import INVALID_LINUX_CHAR
@@ -139,8 +139,8 @@ class VirtualResourcePoolManager:
             "cpu_core_allocated": cpu_core_allocated,
             "cpu_core_available": cpu_core_available,
         }
-        with open(cpu_info, "w") as cpu_info_file:
-            cpu_info_file.write(json.dumps(cpu_info_data))
+        with open(cpu_info, "wb") as cpu_info_file:
+            cpu_info_file.write(orjson.dumps(cpu_info_data))
 
         if not cpu_info.is_file():
             self.logger.warning(f"Ошибка конфигурации CPU: '{str(cpu_info)}'")
@@ -179,8 +179,8 @@ class VirtualResourcePoolManager:
             "ram_allocated": ram_allocated,
             "ram_available": ram_available,
         }
-        with open(ram_info, "w") as ram_info_file:
-            ram_info_file.write(json.dumps(ram_info_data))
+        with open(ram_info, "wb") as ram_info_file:
+            ram_info_file.write(orjson.dumps(ram_info_data))
 
         if not ram_info.is_file():
             self.logger.warning(f"Ошибка конфигурации RAM: '{str(ram_info)}'")
@@ -214,12 +214,13 @@ class VirtualResourcePoolManager:
         vm_info = rp_main_path / "vm_info.json"
         self.logger.info(f"Создание конфигурации ВМ: '{str(vm_info)}'")
         if save_current_vms:
-            with open(vm_info, "r") as vm_info_file_read:
-                current_vms_uuid_list = json.load(vm_info_file_read)["vm_uuid_list"]
-            vm_uuid_list.extend(current_vms_uuid_list)
+            if vm_info.is_file():
+                with open(vm_info, "r") as vm_info_file_read:
+                    current_vms_uuid_list = orjson.loads(vm_info_file_read.read())["vm_uuid_list"]
+                vm_uuid_list.extend(current_vms_uuid_list)
         vm_info_data = {"vm_uuid_list": vm_uuid_list}
-        with open(vm_info, "w") as vm_info_file:
-            vm_info_file.write(json.dumps(vm_info_data))
+        with open(vm_info, "wb") as vm_info_file:
+            vm_info_file.write(orjson.dumps(vm_info_data))
 
         if not vm_info.is_file():
             self.logger.warning(f"Ошибка создания конфигурации ВМ: '{str(vm_info)}'")
@@ -250,7 +251,7 @@ class VirtualResourcePoolManager:
         )
         available_ram_on_node = self.node_info.memory_bytes - used_ram_by_resource_pools
         available_cpu_on_node = (
-            self.node_info.cpu_core_limit - used_cpu_by_resource_pools
+            self.node_info.cpus - used_cpu_by_resource_pools
         )
         if ram_limit > available_ram_on_node:
             self.logger.warning(
@@ -441,20 +442,20 @@ class VirtualResourcePoolManager:
         cpu_config = rp_main_path / "cpu_info.json"
 
         with open(ram_config, "r") as ram_info_file_read:
-            ram_info = json.load(ram_info_file_read)
+            ram_info = orjson.loads(ram_info_file_read.read())
 
-        with open(ram_config, "w") as ram_info_file:
+        with open(ram_config, "wb") as ram_info_file:
             ram_info["ram_allocated"] = ram_used
             ram_info["ram_available"] = ram_info["ram_limit"] - ram_used
-            ram_info_file.write(json.dumps(ram_info))
+            ram_info_file.write(orjson.dumps(ram_info))
 
         with open(cpu_config, "r") as cpu_info_file_read:
-            cpu_info = json.load(cpu_info_file_read)
+            cpu_info = orjson.loads(cpu_info_file_read.read())
 
-        with open(cpu_config, "w") as cpu_info_file:
+        with open(cpu_config, "wb") as cpu_info_file:
             cpu_info["cpu_core_allocated"] = cpu_core_used
             cpu_info["cpu_core_available"] = cpu_info["cpu_core_limit"] - cpu_core_used
-            cpu_info_file.write(json.dumps(cpu_info))
+            cpu_info_file.write(orjson.dumps(cpu_info))
 
     def get_virtual_resource_pool_by_name(self, name: str):
         rp_main_path = Path(self.virtual_rp_manager_path) / name
@@ -481,7 +482,7 @@ class VirtualResourcePoolManager:
                 success=False,
             )
         with open(cpu_config, "r") as cpu_info_file:
-            cpu_info = json.load(cpu_info_file)
+            cpu_info = orjson.loads(cpu_info_file.read())
 
         ram_config = rp_main_path / "ram_info.json"
         if not ram_config.exists():
@@ -495,12 +496,12 @@ class VirtualResourcePoolManager:
                 success=False,
             )
         with open(ram_config, "r") as ram_info_file:
-            ram_info = json.load(ram_info_file)
+            ram_info = orjson.loads(ram_info_file.read())
 
         vm_config = rp_main_path / "vm_info.json"
         if vm_config.exists():
             with open(vm_config, "r") as vm_info_file:
-                vm_uuid_list = json.load(vm_info_file).get("vm_uuid_list")
+                vm_uuid_list = orjson.loads(vm_info_file.read()).get("vm_uuid_list")
 
         rp_virtual = ResourcePoolVirtual(
             name=name,
@@ -532,13 +533,16 @@ class VirtualResourcePoolManager:
 if __name__ == "__main__":
     mng = VirtualResourcePoolManager()
     # TODO: Изучить системные вызовы чтобы добавить системные ограничения для нашего виртуального менеджера
-    # data = mng.create_resource_pool(create_rp=ResourcePoolVirtualCreate(name="MAIN_RP",
+    # TODO: Изучить вопрос чтения данных из памяти, а при внесении изменений - обновлять данные в файлах и памяти
+    a = (datetime.datetime.now())
+    # print(a)
+    # data = mng.create_virtual_resource_pool(create_rp=ResourcePoolVirtualCreate(name="MAIN_RP",
     #                                                              cpu_core_limit=5,
     #                                                              ram_limit=536_870_912,
     #                                                              vm_uuid_list=["6c7762be-7811-44c6-8404-1054a6b72be7"]))
     # print(data)
-    # mng.sync_resource_pool("MAIN_RP")
-    # rp_virtual = mng.get_virtual_resource_pool_by_name("MAIN_RP")
+    mng.sync_resource_pool("MAIN_RP")
+    rp_virtual = mng.get_virtual_resource_pool_by_name("MAIN_RP")
     for rp_virtual in mng.get_virtual_resource_pool_list():
         print("ИМЯ РЕСУРС ПУЛА: ", rp_virtual.name)
         print("cpu_core_limit: ", rp_virtual.cpu_core_limit)
@@ -548,3 +552,6 @@ if __name__ == "__main__":
         print("ram_allocated: ", rp_virtual.ram_allocated)
         print("ram_available: ", rp_virtual.ram_available)
         print("vm_uuid_list: ", rp_virtual.vm_uuid_list)
+    b = (datetime.datetime.now())
+    print(b)
+    print(b-a)
