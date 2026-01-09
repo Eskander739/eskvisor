@@ -64,8 +64,8 @@ class ResourcePoolCreateRequest(BaseModel):
     """Запрос на создание пула ресурсов"""
 
     name: str
-    cpu_limit: int | None = Field(None, description="Лимит CPU (в ядрах)")
-    memory_limit: int | None = Field(None, description="Лимит памяти (в МБ)")
+    cpu_limit: int = Field(description="Лимит CPU (в ядрах)")
+    memory_limit: int = Field(description="Лимит памяти (в МБ)")
     storage_limit: int | None = Field(None, description="Лимит хранилища (в ГБ)")
     storage_path: str | None = Field(None, description="Путь к хранилищу")
     storage_xml: str | None = Field(None, description="XML описание пула хранения")
@@ -78,6 +78,14 @@ class ResourcePoolCreateRequest(BaseModel):
         if self.storage_limit is None:
             return None
         return int(self.storage_limit * 1024 * 1024 * 1024)  # ГБ -> байты
+
+    @computed_field
+    @property
+    def memory_limit_bytes(self) -> int | None:
+        """Лимит RAM в байтах"""
+        if self.memory_limit is None:
+            return None
+        return int(self.memory_limit * 1024 * 1024)  # МБ -> байты
 
     class Config:
         use_enum_values = True  # Для сериализации Enum в их значения
@@ -154,9 +162,9 @@ class ResourceMetrics(BaseModel):
 
 
 class UsageInfo(BaseModel):
-    cpu: int
-    memory: int
-    storage: int
+    cpu: int = 0
+    memory: int = 0 # в мегабайтах
+    storage: int = 0
 
 
 class ResourcePoolUsageInfo(BaseModel):
@@ -248,7 +256,7 @@ class ResourcePool(BaseModel):
 
     # Лимиты ресурсов (в соответствующих единицах)
     cpu_limit: int | None = Field(None, description="Лимит CPU в ядрах")
-    memory_limit: float | None = Field(None, description="Лимит памяти в гигабайтах")
+    memory_limit: float | None = Field(None, description="Лимит памяти в байтах")
 
     vms: list[str] = Field(default_factory=list)
     reservations: dict | None = None

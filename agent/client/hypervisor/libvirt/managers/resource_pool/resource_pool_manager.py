@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 from agent.client.cli import CLIControl
 from agent.client.constants import LVM_SAFE_FORBIDDEN
 from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.hypervisor.libvirt.managers.resource_pool.virtual_resource_pool_manager.virtual_resource_pool_manager import (
+    VirtualResourcePoolManager,
+)
 from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.logical_volume_manager import (
     LogicalVolumeManager,
 )
@@ -22,6 +25,7 @@ from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.phys
 from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.volume_group_manager import (
     VolumeGroupManager,
 )
+from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum, RpMessage
 from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
@@ -47,6 +51,10 @@ from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     UsageInfo,
     UsageResourcePool,
 )
+from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import (
+    ResourcePoolVirtualCreate,
+    ResourcePoolVirtualEdit,
+)
 from agent.client.logger_config import DefaultLogger
 
 load_dotenv()
@@ -69,6 +77,8 @@ class PoolManager(LibvirtClient):
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
         self.physical_volume_manager = PhysicalVolumeManager()
         self.volume_group_manager = VolumeGroupManager()
+        self.vm_live_monitor_cls = VMLiveMonitor
+        self.virtual_resource_pool = VirtualResourcePoolManager()
         system_volume_group = self.volume_group_manager.get_volume_by_name(
             self.system_volume_group_name
         )
@@ -647,37 +657,30 @@ class PoolManager(LibvirtClient):
                     note="Failed to create storage pool in libvirt",
                 )
 
-            # СОЗДАЕМ CGroups ДЛЯ CPU И RAM
-            if request.cpu_limit or request.memory_limit:
-                # Создаем cgroup для пула
-                self.logger.warning(
-                    f"Запуск создания cgroup для пула {request.name} "
-                    f"с ресурсами cpu: {request.cpu_limit} and memory: {request.memory_limit}"
+            virtual_rp_model = ResourcePoolVirtualCreate(
+                name=request.name,
+                cpu_core_limit=request.cpu_limit,
+                ram_limit=request.memory_limit_bytes,
+            )
+            virtual_resource_pool_created = (
+                self.virtual_resource_pool.create_virtual_resource_pool(
+                    virtual_rp_model
                 )
-                cgroup_created = self.create_pool_cgroup(request.name)
+            )
 
-                if not cgroup_created:
-                    self.logger.warning(
-                        f"Не удалось создать cgroup для пула {request.name}"
-                    )
-                else:
-                    # Устанавливаем лимиты CPU через CGroups
-                    if request.cpu_limit:
-                        cpu_set = self.set_cpu_limit(request.name, request.cpu_limit)
-                        if cpu_set:
-                            self.logger.info(
-                                f"Установлен лимит CPU для пула {request.name}: {request.cpu_limit} ядер"
-                            )
-
-                    # Устанавливаем лимиты памяти через CGroups
-                    if request.memory_limit:
-                        memory_set = self.set_memory_limit(
-                            request.name, request.memory_limit
-                        )
-                        if memory_set:
-                            self.logger.info(
-                                f"Установлен лимит памяти для пула {request.name}: {request.memory_limit} MB"
-                            )
+            if (
+                virtual_resource_pool_created.message
+                != CommandMessagesEnum.virtual_rp_create_success.value
+            ):
+                self.logger.warning(
+                    f"Не удалось создать виртуальный пул ресурсов для пула {request.name}"
+                )
+                return RpMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.virtual_rp_create_error.value,
+                    code=CommandMessagesEnum.virtual_rp_create_error.name,
+                    success=False,
+                )
 
             # Получаем информацию о созданном пуле
             pool_info_msg = self.get_pool_info(request.name, request_id)
@@ -710,738 +713,6 @@ class PoolManager(LibvirtClient):
                 request_id=request_id,
                 message=CommandMessagesEnum.rp_create_error.value,
                 code=CommandMessagesEnum.rp_create_error.name,
-                success=False,
-                note=str(e),
-            )
-
-    def adjust_pool_resources(self, request: ResourcePoolAdjustRequest) -> RpMessage:
-        """
-        Добавление или удаление ресурсов из пула (RP-02, RP-03)
-
-        Args:
-            request: Запрос на изменение ресурсов
-
-        Returns:
-            RpMessage: Результат операции
-        """
-        try:
-            # Проверяем существование пула
-            existing_pools = self.list_storage_pools()
-            if request.name not in existing_pools:
-                return RpMessage(
-                    request_id=request.request_id,
-                    message=CommandMessagesEnum.rp_not_found.value,
-                    code=CommandMessagesEnum.rp_not_found.name,
-                    success=False,
-                    note=f"Pool '{request.name}' not found",
-                )
-
-            new_limit = None
-
-            if request.resource_type == ResourcePoolType.CPU:
-                # Получаем текущий лимит CPU из CGroups
-                cpu_limit_info = self.get_cpu_limit_info(request.name)
-                current_cpu = cpu_limit_info.cpu_limit_cores
-
-                if request.operation == "add":
-                    new_cpu = current_cpu + request.value
-                elif request.operation == "remove":
-                    new_cpu = max(0, current_cpu - request.value)
-                else:
-                    return RpMessage(
-                        request_id=request.request_id,
-                        message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                        code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                        success=False,
-                        note=f"Invalid operation: {request.operation}",
-                    )
-
-                # Применяем новый лимит через CGroups
-                if self.set_cpu_limit(request.name, new_cpu):
-                    new_limit = str(new_cpu)
-                    self.logger.info(
-                        f"Лимит CPU для пула {request.name} изменен на {new_cpu} ядер"
-                    )
-                else:
-                    return RpMessage(
-                        request_id=request.request_id,
-                        message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                        code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                        success=False,
-                        note="Failed to set CPU limit via CGroups",
-                    )
-
-            elif request.resource_type == ResourcePoolType.MEMORY:
-                # Получаем текущий лимит памяти из CGroups
-                cgroup_stats = self.get_cgroup_stats(request.name)
-                current_memory_mb = (
-                    cgroup_stats.memory_limit / (1024 * 1024)
-                    if cgroup_stats.memory_limit > 0
-                    else 0
-                )
-
-                if request.operation == "add":
-                    new_memory = current_memory_mb + request.value
-                elif request.operation == "remove":
-                    new_memory = max(0, current_memory_mb - request.value)
-                else:
-                    return RpMessage(
-                        request_id=request.request_id,
-                        message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                        code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                        success=False,
-                        note=f"Invalid operation: {request.operation}",
-                    )
-
-                # Применяем новый лимит через CGroups
-                if self.set_memory_limit(request.name, new_memory):
-                    new_limit = f"{new_memory} MB"
-                    self.logger.info(
-                        f"Лимит памяти для пула {request.name} изменен на {new_memory} MB"
-                    )
-                else:
-                    return RpMessage(
-                        request_id=request.request_id,
-                        message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                        code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                        success=False,
-                        note="Failed to set memory limit via CGroups",
-                    )
-
-            elif request.resource_type == ResourcePoolType.STORAGE:
-                # Для хранилища получаем информацию из XML
-                pool_info_msg = self.get_pool_info(request.name, request.request_id)
-                if not pool_info_msg.success or not pool_info_msg.rp_info:
-                    return RpMessage(
-                        request_id=request.request_id,
-                        message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                        code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                        success=False,
-                        note="Failed to get pool information",
-                    )
-
-                current_storage_gb = pool_info_msg.rp_info.capacity_gb
-
-                if request.operation == "add":
-                    new_storage_gb = current_storage_gb + request.value
-                elif request.operation == "remove":
-                    new_storage_gb = max(0, int(current_storage_gb - request.value))
-                else:
-                    return RpMessage(
-                        request_id=request.request_id,
-                        message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                        code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                        success=False,
-                        note=f"Invalid operation: {request.operation}",
-                    )
-
-                # Обновляем XML пула с новым capacity
-                xml_desc = self.get_pool_xml_by_name(request.name)
-                root = ET.fromstring(xml_desc)
-                capacity_elem = root.find(".//capacity")
-
-                if capacity_elem is None:
-                    capacity_elem = ET.SubElement(root, "capacity")
-
-                capacity_elem.text = str(int(new_storage_gb * 1024 * 1024 * 1024))
-                new_xml = ET.tostring(root, encoding="unicode")
-
-                if self.edit_storage_pool(request.name, new_xml):
-                    new_limit = f"{new_storage_gb:.2f} GB"
-                    self.logger.info(
-                        f"Лимит хранилища для пула {request.name} изменен на {new_storage_gb} GB"
-                    )
-                else:
-                    return RpMessage(
-                        request_id=request.request_id,
-                        message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                        code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                        success=False,
-                        note="Failed to update storage pool capacity",
-                    )
-
-            return RpMessage(
-                request_id=request.request_id,
-                message=CommandMessagesEnum.rp_resource_adjust_success.value,
-                code=CommandMessagesEnum.rp_resource_adjust_success.name,
-                success=True,
-                rp_info=AdjustResourcePool(
-                    name=request.name,
-                    resource_type=request.resource_type,
-                    operation=request.operation,
-                    value=request.value,
-                    new_limit=new_limit,
-                ),
-            )
-
-        except Exception as e:
-            self.logger.error(f"Ошибка изменения ресурсов пула '{request.name}': {e}")
-            return RpMessage(
-                request_id=request.request_id,
-                message=CommandMessagesEnum.rp_resource_adjust_error.value,
-                code=CommandMessagesEnum.rp_resource_adjust_error.name,
-                success=False,
-                note=str(e),
-            )
-
-    def add_vm_to_pool(
-        self, vm_name: str, resource_pool_name: str, request_id: str
-    ) -> RpMessage:
-        try:
-            self.logger.info(
-                f"Запуск процесса добавления ВМ '{vm_name}' в ресурс пул: '{resource_pool_name}'"
-            )
-            # Проверяем существование пула
-            existing_pool_info = self.get_pool_info(resource_pool_name, request_id)
-            if existing_pool_info.message == CommandMessagesEnum.rp_not_found.value:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_not_found.value,
-                    code=CommandMessagesEnum.rp_not_found.name,
-                    success=False,
-                    note=f"Pool '{resource_pool_name}' not found",
-                )
-
-            # Проверяем существование ВМ
-            try:
-                domain = self.conn.lookupByName(vm_name)
-                vm_info = domain.info()
-            except self.libvirtError:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_found_error.value,
-                    code=CommandMessagesEnum.vm_found_error.name,
-                    success=False,
-                    note=f"VM '{vm_name}' not found",
-                )
-
-            # Получаем текущие ВМ пула
-            pool_vms = self._get_pool_vms(resource_pool_name)
-
-            # Проверяем, не добавлена ли уже ВМ
-            if vm_name in pool_vms:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_vm_add_error.value,
-                    code=CommandMessagesEnum.rp_vm_add_error.name,
-                    success=False,
-                    note=f"VM '{vm_name}' already in pool",
-                )
-
-            # Получаем информацию о ресурсах ВМ CGroups
-            try:
-                self.logger.info(
-                    f"Запуск процесса добавления ВМ '{vm_name}' в CGroup пул: '{resource_pool_name}'"
-                )
-                vm_cpu = vm_info[3]  # Количество виртуальных CPU
-                vm_memory = vm_info[2]  # Память в KB
-
-                # Добавляем процесс ВМ в cgroup пула
-                added_to_cgroup = self.add_vm_to_cgroup(
-                    resource_pool_name, vm_name, request_id
-                )
-                if (
-                    added_to_cgroup.message
-                    != CommandMessagesEnum.vm_successfully_add_to_cgroup.value
-                ):
-                    self.logger.warning(
-                        f"Не удалось добавить ВМ {vm_name} в cgroup пула {resource_pool_name}"
-                    )
-                    return added_to_cgroup
-
-                # Обновляем список ВМ
-                pool_vms.append(vm_name)
-
-                # Получаем общее использование ресурсов
-                usage_info = self._get_resource_usage_for_pool(
-                    resource_pool_name, pool_vms
-                )
-
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_vm_add_success.value,
-                    code=CommandMessagesEnum.rp_vm_add_success.name,
-                    success=True,
-                    rp_info=AddVMInResourcePool(
-                        name=resource_pool_name,
-                        vm_name=vm_name,
-                        vm_cpu=vm_cpu,
-                        vm_memory=vm_memory,
-                        total_vms=len(pool_vms),
-                        resource_usage=usage_info,
-                    ),
-                )
-
-            except self.libvirtError as e:
-                self.logger.error(f"Ошибка получения информации о ВМ '{vm_name}': {e}")
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_vm_add_error.value,
-                    code=CommandMessagesEnum.rp_vm_add_error.name,
-                    success=False,
-                    note=str(e),
-                )
-
-        except Exception as e:
-            self.logger.error(
-                f"Ошибка добавления ВМ '{vm_name}' в пул '{resource_pool_name}': {e}"
-            )
-            return RpMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.rp_vm_add_error.value,
-                code=CommandMessagesEnum.rp_vm_add_error.name,
-                success=False,
-                note=str(e),
-            )
-
-    def add_vm_to_cgroup(
-        self, pool_name: str, vm_name: str, request_id: str
-    ) -> RpMessage:
-        """
-        Добавляет виртуальную машину в cgroup пула
-
-        Args:
-            pool_name: Имя пула ресурсов
-            vm_name: Имя виртуальной машины
-            request_id: ID запроса
-
-        Returns:
-            RpMessage: Результат операции
-        """
-        try:
-            self.logger.info(
-                f"Запуск добавления ВМ '{vm_name}' в CGroup пула '{pool_name}'"
-            )
-
-            # Получаем VM по имени
-            try:
-                dom = self.conn.lookupByName(vm_name)
-                if not dom:
-                    self.logger.error(f"Не найдена VM: {vm_name}")
-                    return RpMessage(
-                        request_id=request_id,
-                        message=CommandMessagesEnum.vm_found_error.value,
-                        code=CommandMessagesEnum.vm_found_error.name,
-                        success=False,
-                    )
-            except self.libvirtError as e:
-                self.logger.error(f"Ошибка при поиске VM '{vm_name}': {e}")
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_found_error.value,
-                    code=CommandMessagesEnum.vm_found_error.name,
-                    success=False,
-                    note=str(e),
-                )
-
-            # Получаем PID основного процесса ВМ (процесса QEMU)
-            vm_pid = self._get_vm_pid(dom)
-            if not vm_pid:
-                self.logger.error(f"Не удалось получить PID для VM: {vm_name}")
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_error_add_to_cgroup.value,
-                    code=CommandMessagesEnum.vm_error_add_to_cgroup.name,
-                    success=False,
-                    note=f"Cannot get PID for VM '{vm_name}'",
-                )
-
-            self.logger.info(f"PID ВМ '{vm_name}': {vm_pid}")
-
-            # Добавляем процесс в cgroup
-            if self.add_process_to_cgroup(pool_name, vm_pid):
-                self.logger.info(
-                    f"ВМ '{vm_name}' (PID: {vm_pid}) добавлена в cgroup пула '{pool_name}'"
-                )
-
-                # Обновляем XML конфигурации домена для добавления cgroup информации
-                try:
-                    xml_desc = dom.XMLDesc(0)
-                    root = ET.fromstring(xml_desc)
-
-                    # Находим или создаем элемент resource
-                    resource_elem = root.find(".//resource")
-                    if resource_elem is None:
-                        # Добавляем элемент resource
-                        resource_elem = ET.SubElement(root, "resource")
-
-                    # Находим или создаем элемент partition
-                    partition_elem = resource_elem.find("partition")
-                    if partition_elem is None:
-                        partition_elem = ET.SubElement(resource_elem, "partition")
-
-                    # Устанавливаем cgroup путь
-                    cgroup_path = str(self.get_cgroup_path(pool_name))
-                    partition_elem.text = cgroup_path
-
-                    # Обновляем XML домена
-                    new_xml = ET.tostring(root, encoding="unicode")
-
-                    # Применяем изменения только если домен неактивен
-                    # Если домен активен, изменения вступят в силу после перезапуска
-                    if not dom.isActive():
-                        self.conn.defineXML(new_xml)
-                        self.logger.info(
-                            f"XML конфигурация ВМ '{vm_name}' обновлена с cgroup информацией"
-                        )
-
-                except Exception as xml_error:
-                    self.logger.warning(
-                        f"Не удалось обновить XML ВМ '{vm_name}': {xml_error}"
-                    )
-                    # Это не критичная ошибка, продолжаем
-
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_successfully_add_to_cgroup.value,
-                    code=CommandMessagesEnum.vm_successfully_add_to_cgroup.name,
-                    success=True,
-                )
-            else:
-                self.logger.error(f"Не удалось добавить ВМ '{vm_name}' в cgroup")
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_error_add_to_cgroup.value,
-                    code=CommandMessagesEnum.vm_error_add_to_cgroup.name,
-                    success=False,
-                    note=f"Failed to add VM '{vm_name}' to cgroup",
-                )
-
-        except Exception as e:
-            self.logger.error(f"Ошибка при добавлении ВМ '{vm_name}' в cgroup: {e}")
-            return RpMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.vm_error_add_to_cgroup.value,
-                code=CommandMessagesEnum.vm_error_add_to_cgroup.name,
-                success=False,
-                note=str(e),
-            )
-
-    def remove_vm_from_cgroup(
-        self, pool_name: str, vm_name: str, request_id: str
-    ) -> RpMessage:
-        """
-        Удаляет виртуальную машину из cgroup пула
-
-        Args:
-            pool_name: Имя пула ресурсов
-            vm_name: Имя виртуальной машины
-            request_id: ID запроса
-
-        Returns:
-            RpMessage: Результат операции
-        """
-        try:
-            self.logger.info(
-                f"Запуск удаления ВМ '{vm_name}' из CGroup пула '{pool_name}'"
-            )
-
-            # Получаем VM по имени
-            try:
-                dom = self.conn.lookupByName(vm_name)
-                if not dom:
-                    self.logger.error(f"Не найдена VM: {vm_name}")
-                    return RpMessage(
-                        request_id=request_id,
-                        message=CommandMessagesEnum.vm_found_error.value,
-                        code=CommandMessagesEnum.vm_found_error.name,
-                        success=False,
-                    )
-            except self.libvirtError as e:
-                self.logger.error(f"Ошибка при поиске VM '{vm_name}': {e}")
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.vm_found_error.value,
-                    code=CommandMessagesEnum.vm_found_error.name,
-                    success=False,
-                    note=str(e),
-                )
-
-            # Получаем PID основного процесса ВМ (процесса QEMU)
-            vm_pid = self._get_vm_pid(dom)
-            if not vm_pid:
-                self.logger.warning(
-                    f"Не удалось получить PID для VM: {vm_name}. Продолжаем удаление из cgroup."
-                )
-                # Продолжаем, так как можем удалить из cgroup по другим критериям
-
-            # Для удаления из cgroup нам нужно переместить процесс в корневой cgroup
-            # Вместо прямого удаления, перемещаем процесс в корневой cgroup
-            if vm_pid:
-                try:
-                    # В cgroups v2 можно переместить процесс в корневую группу
-                    if self.cgroup_version == "v2":
-                        root_procs_file = self.cgroup_root / "cgroup.procs"
-                        root_procs_file.write_text(str(vm_pid))
-                    else:
-                        # Для v1 перемещаем в корневые cgroups каждой подсистемы
-                        subsystems = ["cpu", "cpuacct", "memory"]
-                        for subsystem in subsystems:
-                            subsystem_root = self.cgroup_root / subsystem
-                            tasks_file = subsystem_root / "tasks"
-                            tasks_file.write_text(str(vm_pid))
-
-                    self.logger.info(
-                        f"ВМ '{vm_name}' (PID: {vm_pid}) перемещена в корневой cgroup"
-                    )
-                except Exception as pid_error:
-                    self.logger.warning(
-                        f"Не удалось переместить процесс {vm_pid} в корневой cgroup: {pid_error}"
-                    )
-
-            # Удаляем информацию о cgroup из XML конфигурации домена
-            try:
-                xml_desc = dom.XMLDesc(0)
-                root = ET.fromstring(xml_desc)
-
-                # Находим элемент partition
-                partition_elem = root.find(".//resource/partition")
-                if partition_elem is not None:
-                    # Удаляем элемент partition
-                    resource_elem = partition_elem.getparent()
-                    if resource_elem is not None:
-                        resource_elem.remove(partition_elem)
-
-                        # Если resource стал пустым, удаляем его тоже
-                        if len(resource_elem) == 0:
-                            domain_elem = resource_elem.getparent()
-                            if domain_elem is not None:
-                                domain_elem.remove(resource_elem)
-
-                # Обновляем XML домена
-                new_xml = ET.tostring(root, encoding="unicode")
-
-                # Применяем изменения только если домен неактивен
-                if not dom.isActive():
-                    self.conn.defineXML(new_xml)
-                    self.logger.info(
-                        f"XML конфигурация ВМ '{vm_name}' обновлена (cgroup информация удалена)"
-                    )
-
-            except Exception as xml_error:
-                self.logger.warning(
-                    f"Не удалось обновить XML ВМ '{vm_name}': {xml_error}"
-                )
-
-            # Проверяем, что процесс больше не в нашем cgroup
-            pool_processes = self.get_cgroup_processes(pool_name)
-            if vm_pid and vm_pid in pool_processes:
-                self.logger.warning(
-                    f"Процесс {vm_pid} все еще находится в cgroup пула '{pool_name}'"
-                )
-                # Пытаемся удалить другим способом
-                try:
-                    if self.cgroup_version == "v2":
-                        cgroup_path = self.cgroup_root / pool_name
-                        procs_file = cgroup_path / "cgroup.procs"
-                        if procs_file.exists():
-                            # Читаем текущие процессы, исключаем наш PID
-                            current_procs = procs_file.read_text().strip().split()
-                            filtered_procs = [
-                                str(pid) for pid in current_procs if int(pid) != vm_pid
-                            ]
-                            procs_file.write_text("\n".join(filtered_procs))
-                    else:
-                        # Для v1 удаляем из всех подсистем
-                        subsystems = ["cpu", "cpuacct", "memory"]
-                        for subsystem in subsystems:
-                            subsystem_path = self.cgroup_root / subsystem / pool_name
-                            tasks_file = subsystem_path / "tasks"
-                            if tasks_file.exists():
-                                current_tasks = tasks_file.read_text().strip().split()
-                                filtered_tasks = [
-                                    str(pid)
-                                    for pid in current_tasks
-                                    if int(pid) != vm_pid
-                                ]
-                                tasks_file.write_text("\n".join(filtered_tasks))
-                except Exception as e:
-                    self.logger.warning(
-                        f"Не удалось удалить процесс {vm_pid} из cgroup: {e}"
-                    )
-
-            self.logger.info(
-                f"ВМ '{vm_name}' успешно удалена из cgroup пула '{pool_name}'"
-            )
-            return RpMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.vm_successfully_removed_from_cgroup.value,
-                code=CommandMessagesEnum.vm_successfully_removed_from_cgroup.name,
-                success=True,
-            )
-
-        except Exception as e:
-            self.logger.error(f"Ошибка при удалении ВМ '{vm_name}' из cgroup: {e}")
-            return RpMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.vm_error_remove_from_cgroup.value,
-                code=CommandMessagesEnum.vm_error_remove_from_cgroup.name,
-                success=False,
-                note=str(e),
-            )
-
-    def _get_vm_pid(self, domain) -> int | None:
-        """
-        Получает PID основного процесса ВМ (QEMU процесса)
-
-        Args:
-            domain: Объект домена libvirt
-
-        Returns:
-            int | None: PID процесса или None если не найден
-        """
-        try:
-            # Получаем ID домена
-            dom_id = domain.ID()
-            if dom_id == -1:  # Домен не запущен
-                return None
-
-            # Используем механизм libvirt для получения информации о процессах
-            # Способ 1: через virsh qemu-monitor-command
-            try:
-                # Получаем PID через virsh dompinfo (эта команда существует)
-                result = subprocess.run(
-                    ["virsh", "dompinfo", domain.name()], capture_output=True, text=True
-                )
-
-                if result.returncode == 0:
-                    for line in result.stdout.splitlines():
-                        if "Process ID" in line or "PID" in line:
-                            parts = line.split(":")
-                            if len(parts) > 1:
-                                pid_str = parts[1].strip()
-                                if pid_str.isdigit():
-                                    return int(pid_str)
-            except Exception:
-                pass
-
-            # Способ 2: через поиск в процессах системы
-            try:
-                for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-                    try:
-                        cmdline = proc.info["cmdline"]
-                        if cmdline and any(domain.name() in arg for arg in cmdline):
-                            if "qemu" in proc.info["name"].lower():
-                                return proc.info["pid"]
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        continue
-            except ImportError:
-                pass
-
-            # Способ 3: через /proc поиск
-            try:
-                import os
-
-                for pid_dir in os.listdir("/proc"):
-                    if pid_dir.isdigit():
-                        try:
-                            cmdline_file = f"/proc/{pid_dir}/cmdline"
-                            if os.path.exists(cmdline_file):
-                                with open(cmdline_file, "r") as f:
-                                    cmdline = f.read()
-                                    if domain.name() in cmdline and "qemu" in cmdline:
-                                        return int(pid_dir)
-                        except (IOError, PermissionError):
-                            continue
-            except Exception:
-                pass
-
-            self.logger.warning(f"Не удалось найти PID для домена '{domain.name()}'")
-            return None
-
-        except Exception as e:
-            self.logger.debug(f"Ошибка при получении PID для домена: {e}")
-            return None
-
-    def remove_vm_from_pool(
-        self, vm_name: str, request_id: str, resource_pool_name: str
-    ) -> RpMessage:
-        try:
-            # Проверяем существование пула
-            existing_pool_info = self.get_pool_info(resource_pool_name, request_id)
-            if existing_pool_info.message == CommandMessagesEnum.rp_not_found.value:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_not_found.value,
-                    code=CommandMessagesEnum.rp_not_found.name,
-                    success=False,
-                    note=f"Pool '{resource_pool_name}' not found",
-                )
-            current_pool = existing_pool_info.rp_info
-
-            # Получаем текущие ВМ пула
-            pool_vms = self._get_pool_vms(resource_pool_name)
-
-            # Проверяем, есть ли ВМ в пуле
-            if vm_name not in pool_vms:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_vm_remove_error.value,
-                    code=CommandMessagesEnum.rp_vm_remove_error.name,
-                    success=False,
-                    note=f"VM '{vm_name}' not found in pool",
-                )
-
-            # Получаем информацию о ресурсах ВМ для освобождения
-            try:
-                domain = self.conn.lookupByName(vm_name)
-                vm_info = domain.info()
-                vm_cpu = vm_info[3]
-                vm_memory = vm_info[2]
-
-                # УДАЛЯЕМ ВМ ИЗ CGroups
-                vm_pid = self._get_vm_pid(domain)
-                if vm_pid:
-                    # Удаляем процесс ВМ из cgroup пула
-                    removed_from_cgroup = self.remove_vm_from_cgroup(
-                        resource_pool_name, vm_name, request_id
-                    )
-                    if not removed_from_cgroup:
-                        self.logger.warning(
-                            f"Не удалось удалить ВМ {vm_name} из cgroup пула {resource_pool_name}"
-                        )
-
-                # Удаляем ВМ из списка
-                pool_vms.remove(vm_name)
-
-                # Получаем общее использование ресурсов после удаления
-                usage_info = self._get_resource_usage_for_pool(
-                    resource_pool_name, pool_vms
-                )
-
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_vm_remove_success.value,
-                    code=CommandMessagesEnum.rp_vm_remove_success.name,
-                    success=True,
-                    rp_info=RemoveVMInResourcePool(
-                        name=resource_pool_name,
-                        vm_name=vm_name,
-                        freed_cpu=vm_cpu,
-                        freed_memory=vm_memory,
-                        total_vms=len(pool_vms),
-                        resource_usage=usage_info,
-                    ),
-                )
-
-            except self.libvirtError as e:
-                self.logger.error(f"Ошибка получения информации о ВМ '{vm_name}': {e}")
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_vm_remove_error.value,
-                    code=CommandMessagesEnum.rp_vm_remove_error.name,
-                    success=False,
-                    note=str(e),
-                )
-
-        except Exception as e:
-            self.logger.error(
-                f"Ошибка удаления ВМ '{vm_name}' из пула '{resource_pool_name}': {e}"
-            )
-            return RpMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.rp_vm_remove_error.value,
-                code=CommandMessagesEnum.rp_vm_remove_error.name,
                 success=False,
                 note=str(e),
             )
@@ -1514,88 +785,6 @@ class PoolManager(LibvirtClient):
                 note=str(e),
             )
 
-    def set_pool_limit(self, request: ResourcePoolLimitRequest) -> RpMessage:
-        """
-        Установка лимита (limit) для пула (RP-07)
-
-        Args:
-            request: Запрос на установку лимита
-
-        Returns:
-            RpMessage: Результат операции
-        """
-        try:
-            # Проверяем существование пула
-            existing_pools = self.list_storage_pools()
-            if request.name not in existing_pools:
-                return RpMessage(
-                    request_id=request.request_id,
-                    message=CommandMessagesEnum.rp_not_found.value,
-                    code=CommandMessagesEnum.rp_not_found.name,
-                    success=False,
-                    note=f"Pool '{request.name}' not found",
-                )
-
-            limits: dict = {}
-            updates = {}
-
-            # УСТАНАВЛИВАЕМ ЛИМИТЫ CPU И RAM ЧЕРЕЗ CGroups
-            if request.cpu_limit is not None:
-                if self.set_cpu_limit(request.name, request.cpu_limit):
-                    limits["cpu"] = request.cpu_limit
-                    updates["cpu"] = request.cpu_limit
-                    self.logger.info(
-                        f"Установлен лимит CPU для пула {request.name}: {request.cpu_limit} ядер"
-                    )
-
-            if request.memory_limit is not None:
-                if self.set_memory_limit(request.name, request.memory_limit):
-                    limits["memory"] = request.memory_limit
-                    updates["memory"] = request.memory_limit
-                    self.logger.info(
-                        f"Установлен лимит памяти для пула {request.name}: {request.memory_limit} MB"
-                    )
-
-            # Для хранилища работаем через libvirt
-            if request.storage_limit is not None:
-                # Получаем текущий XML пула
-                xml_content = self.get_pool_xml_by_name(request.name)
-                root = ET.fromstring(xml_content)
-                capacity_elem = root.find(".//capacity")
-
-                if capacity_elem is None:
-                    capacity_elem = ET.SubElement(root, "capacity")
-
-                capacity_elem.text = str(
-                    int(request.storage_limit * 1024 * 1024 * 1024)
-                )
-                new_xml = ET.tostring(root, encoding="unicode")
-
-                # Применяем изменения
-                if self.edit_storage_pool(request.name, new_xml):
-                    limits["storage"] = request.storage_limit
-                    updates["storage"] = request.storage_limit
-
-            return RpMessage(
-                request_id=request.request_id,
-                message=CommandMessagesEnum.rp_set_limit_success.value,
-                code=CommandMessagesEnum.rp_set_limit_success.name,
-                success=True,
-                rp_info=ResourcePoolUpdates(
-                    name=request.name, limits=limits, updates=updates
-                ),
-            )
-
-        except Exception as e:
-            self.logger.error(f"Ошибка установки лимита для пула '{request.name}': {e}")
-            return RpMessage(
-                request_id=request.request_id,
-                message=CommandMessagesEnum.rp_set_limit_error.value,
-                code=CommandMessagesEnum.rp_set_limit_error.name,
-                success=False,
-                note=str(e),
-            )
-
     def delete_resource_pool(
         self, name: str, request_id: str, force: bool = False
     ) -> RpMessage:
@@ -1623,36 +812,9 @@ class PoolManager(LibvirtClient):
                 )
             current_pool = existing_pool_info.rp_info
 
-            # Проверяем, есть ли ВМ в пуле
-            pool_vms = self._get_pool_vms(name)
-
-            if not force and pool_vms:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_delete_not_empty_error.value,
-                    code=CommandMessagesEnum.rp_delete_not_empty_error.name,
-                    success=False,
-                    note=f"Pool '{name}' contains {len(pool_vms)} VMs. Use force=True to delete.",
-                )
-
-            # Если есть ВМ, логируем предупреждение (при форсированном удалении)
-            if pool_vms and force:
-                self.logger.warning(
-                    f"Forced deletion of pool '{name}' with {len(pool_vms)} VMs"
-                )
-                for vm_name in pool_vms:
-                    self.logger.info(
-                        f"VM '{vm_name}' will be disconnected from pool '{name}'"
-                    )
-
-                    # Удаляем ВМ из CGroups
-                    domain = self.conn.lookupByName(vm_name)
-                    vm_pid = self._get_vm_pid(domain)
-                    if vm_pid:
-                        self.remove_vm_from_cgroup(name, vm_name, request_id)
-
-            # Удаляем cgroup для CPU и RAM
-            # self.delete_pool_cgroup(name)
+            result = self.virtual_resource_pool.delete_virtual_resource_pool(name)
+            if result.message != CommandMessagesEnum.rp_virtual_delete_success.value:
+                return result
 
             if current_pool.type.value == StoragePoolType.LOGICAL.value:
                 self.logic_volume_manager.delete_logical_volume(
@@ -1701,9 +863,7 @@ class PoolManager(LibvirtClient):
                 message=CommandMessagesEnum.rp_delete_success.value,
                 code=CommandMessagesEnum.rp_delete_success.name,
                 success=True,
-                rp_info=DeleteResourcePool(
-                    name=name, force=force, vms_count=len(pool_vms)
-                ),
+                rp_info=DeleteResourcePool(name=name, force=force, vms_count=0),
             )
 
         except Exception as e:
@@ -1927,16 +1087,17 @@ class PoolManager(LibvirtClient):
                     updates["storage_xml_updated"] = False
                     updates["storage_xml_error"] = str(e)
 
-            # Обновляем лимиты CPU и RAM через CGroups
-            if request.cpu_limit is not None:
-                cpu_updated = self.set_cpu_limit(request.name, request.cpu_limit)
-                updates["cpu_limit_updated"] = cpu_updated
-
-            if request.memory_limit is not None:
-                memory_updated = self.set_memory_limit(
-                    request.name, request.memory_limit
+            edit_virtual_rp = self.virtual_resource_pool.edit_virtual_resource_pool(
+                ResourcePoolVirtualEdit(
+                    name=request.name,
+                    cpu_core_limit=request.cpu_core_limit,
+                    ram_limit=request.memory_limit,
                 )
-                updates["memory_limit_updated"] = memory_updated
+            )
+            if edit_virtual_rp is not True:
+                return edit_virtual_rp
+            updates["memory_limit_updated"] = request.memory_limit
+            updates["cpu_limit_updated"] = request.cpu_core_limit
 
             if request.storage_limit is not None:
                 updates["storage_limit_note"] = (
@@ -2137,9 +1298,22 @@ class PoolManager(LibvirtClient):
             except ValueError:
                 pass
 
-            # Получаем информацию из CGroups для CPU и RAM
-            cgroup_pool = self.get_cgroup_stats(pool_name)
-
+            # Получаем информацию CPU и RAM
+            virtual_resource_pool = (
+                self.virtual_resource_pool.get_virtual_resource_pool_by_name(pool_name)
+            )
+            usage_info = UsageInfo()
+            ram_usage = 0
+            cpu_count_usage = 0
+            if virtual_resource_pool.vm_uuid_list:
+                for current_vm in virtual_resource_pool.vm_uuid_list:
+                    ram_used, cpu_count, _ = self.vm_live_monitor_cls(
+                        current_vm
+                    ).used_ram_and_cpu()
+                    ram_usage += ram_used
+                    cpu_count_usage += cpu_count
+            usage_info.cpu = cpu_count_usage
+            usage_info.memory = ram_usage
             # Используем capacity из XML если он есть, иначе из info[1]
             if pool_type == StoragePoolType.LOGICAL:
                 capacity_bytes = self.logic_volume_manager.get_volume_by_name(
@@ -2172,9 +1346,14 @@ class PoolManager(LibvirtClient):
                     available_bytes=info[3],
                     autostart=pool.autostart(),
                     is_active=pool.isActive(),
-                    vms=[],
-                    cpu_limit=cgroup_pool.cpu_limit_cores,
-                    memory_limit=cgroup_pool.memory_limit,
+                    vms=(
+                        virtual_resource_pool.vm_uuid_list
+                        if virtual_resource_pool.vm_uuid_list
+                        else []
+                    ),
+                    cpu_limit=virtual_resource_pool.cpu_core_limit,
+                    memory_limit=virtual_resource_pool.ram_limit,
+                    usage=usage_info,
                 ),
             )
         except self.libvirtError as e:

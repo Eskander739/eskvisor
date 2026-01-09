@@ -72,7 +72,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(
             assert delete_rp_info.message in (
                 CommandMessagesEnum.rp_delete_success.value,
                 CommandMessagesEnum.rp_not_found.value,
-            )
+            ), delete_rp_info.note
             assert delete_rp_info.code in (
                 CommandMessagesEnum.rp_delete_success.name,
                 CommandMessagesEnum.rp_not_found.name,

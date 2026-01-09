@@ -1937,6 +1937,8 @@ if __name__ == "__main__":
         print(f"Найдено ВМ: {len(vms)}")
 
         for vm in vms:
+            # vm_manager.start_vm(vm.name, str(uuid.uuid4()))
+            # vm_manager.shutoff_vm(vm.name, str(uuid.uuid4()), force=True)
             # vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
             print(
                 f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}"

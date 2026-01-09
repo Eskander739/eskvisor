@@ -1,6 +1,4 @@
 import random
-import time
-import uuid
 
 import pytest
 
@@ -8,6 +6,9 @@ from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     ResourcePoolCreateRequest,
     StoragePoolType,
+)
+from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import (
+    ResourcePoolVirtualEdit,
 )
 
 
@@ -24,7 +25,8 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(
 
     Переместить существующую ВМ в пул. Убедиться, что ВМ учитывается в использовании ресурсов пула.
     """
-    vm_name, request_id = create_running_vm_session
+    vm_info, request_id = create_running_vm_session
+    vm_name = vm_info.name
     random_name = None
     rp_deleted = False
     try:
@@ -51,27 +53,48 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(
         if rp_template.pool_type == StoragePoolType.LOGICAL:
             assert int(get_rp_info.rp_info.capacity_gb) == rp_template.storage_limit
         # ____________________________________Добавление ВМ в ресурс пул______________
-        add_vm_to_resource_pool = resource_pool_session.add_vm_to_pool(
-            vm_name, random_name, request_id
+        add_vm_to_resource_pool = (
+            resource_pool_session.virtual_resource_pool.edit_virtual_resource_pool(
+                ResourcePoolVirtualEdit(name=random_name, vm_uuid_list=vm_info.uuid)
+            )
         )
         assert (
             add_vm_to_resource_pool.message
-            == CommandMessagesEnum.rp_vm_add_success.value
+            == CommandMessagesEnum.rp_virtual_edit_success.value
         ), add_vm_to_resource_pool.note
         assert (
-            add_vm_to_resource_pool.code == CommandMessagesEnum.rp_vm_add_success.name
+            add_vm_to_resource_pool.code == CommandMessagesEnum.rp_virtual_edit_success.name
         )
-        # ____________________________________Проверка текущего состояния ресурсов CGroups______________
-        pool_usage_info = resource_pool_session.get_pool_usage(random_name, request_id)
+        # ____________________________________Проверка текущего состояния ресурсов______________
+        pool_usage_info = resource_pool_session.get_pool_info(random_name, request_id)
         assert (
-            pool_usage_info.message == CommandMessagesEnum.rp_usage_info_success.value
+            pool_usage_info.message == CommandMessagesEnum.rp_info_success.value
         )
-        assert pool_usage_info.code == CommandMessagesEnum.rp_usage_info_success.name
-        cgroup_stats_info = pool_usage_info.rp_info
-        print(
-            "cgroup_stats_info: ", resource_pool_session.get_cgroup_stats(random_name)
+        assert pool_usage_info.code == CommandMessagesEnum.rp_info_success.name
+
+        usage_info = pool_usage_info.rp_info.usage
+        assert usage_info.memory < rp_template.memory_limit
+        assert usage_info.cpu == vm_info.vcpus
+        # ____________________________________Удаление ВМ из ресурс пула______________
+        add_vm_to_resource_pool = (
+            resource_pool_session.virtual_resource_pool.delete_vm_from_virtual_resource_pool(name=random_name, vm_uuid=vm_info.uuid)
         )
-        time.sleep(360)
+        assert (
+            add_vm_to_resource_pool.message
+            == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.value
+        ), add_vm_to_resource_pool.note
+        assert add_vm_to_resource_pool.code == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name
+        # ____________________________________Проверка текущего состояния ресурсов после удаления ВМ______________
+        pool_usage_info = resource_pool_session.get_pool_info(random_name, request_id)
+        assert (
+                pool_usage_info.message == CommandMessagesEnum.rp_info_success.value
+        )
+        assert pool_usage_info.code == CommandMessagesEnum.rp_info_success.name
+
+        usage_info = pool_usage_info.rp_info.usage
+        assert usage_info.memory == 0
+        assert usage_info.cpu == 0
+
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______
         if not rp_deleted:

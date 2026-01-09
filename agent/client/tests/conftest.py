@@ -75,14 +75,14 @@ def create_running_vm_session():
             name=random_name, disks=[DiskCreate()], autostart_vm=True
         )
         vm_config.name = random_name
-        vm_manager.create_vm(vm_config)
+        vm_info = vm_manager.create_vm(vm_config)
         assert wait_while_not(
             lambda: vm_manager.get_vm_state_by_name(vm_config.name)
             == VMState.RUNNING.value,
             timeout=120,
         )
 
-        yield random_name, request_id
+        yield vm_info.vm_info, request_id
         vm_manager.delete_vm_with_force(vm_config.name, request_id)
 
 

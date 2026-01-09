@@ -14,7 +14,8 @@ class ResourcePoolVirtualEdit(BaseModel):
     ram_limit: int | None = (
         None  # Какой объем RAM установить в качестве лимита(в байтах)
     )
-    vm_uuid_list: list[str] | None = None
+    vm_uuid_list: list[str] | str | None = None
+    save_current_vms: bool = True # Сохранять ли текущие ВМ ресурс пула
 
 
 class ResourcePoolVirtual(BaseModel):

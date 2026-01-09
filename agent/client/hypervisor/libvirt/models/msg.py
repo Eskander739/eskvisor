@@ -36,6 +36,8 @@ from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 
 class CommandMessagesEnum(Enum):
     vm_with_name_already_exists = "VM with name already exists"
+    vm_config_not_found = "VM config not found"
+    vm_successfully_deleted_from_virtual_resource_pool = "VM successfully deleted from virtual resource pool"
     vm_created_but_not_found_in_libvirt = "VM created but not found in libvirt"
     vm_successfully_created = "VM successfully created"
     vm_successfully_deleted = "VM successfully deleted"
@@ -102,6 +104,8 @@ class CommandMessagesEnum(Enum):
     rp_error = "Resource pool operation error"
 
     rp_create_success = "Resource pool successfully created"
+    virtual_rp_create_success = "Virtual resource pool successfully created"
+    virtual_rp_create_error = "Virtual resource pool create error"
     rp_ram_or_cpu_more_than_on_node = "Resource pool RAM/CPU more than on the node"
     rp_already_created = "Resource pool already"
     vm_list_is_correct = "VM List is correct"
@@ -115,7 +119,9 @@ class CommandMessagesEnum(Enum):
 
     rp_delete_success = "Resource pool successfully deleted"
     rp_virtual_delete_success = "Virtual resource pool successfully deleted"
+    rp_virtual_edit_success = "Virtual resource pool successfully edited"
     rp_virtual_delete_error = "Virtual resource pool delete error"
+    rp_virtual_not_found = "Virtual resource pool not found"
     rp_delete_error = "Resource pool delete error"
     rp_delete_not_empty_error = "Cannot delete non-empty resource pool"
     rp_not_found = "Resource pool not found"
