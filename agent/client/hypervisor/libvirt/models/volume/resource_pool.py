@@ -94,7 +94,6 @@ class ResourcePoolCreateRequest(BaseModel):
 class ResourcePoolEditRequest(BaseModel):
     """Запрос на редактирование пула ресурсов"""
 
-    request_id: str
     name: str
     cpu_limit: int | None = Field(None, description="Новый лимит CPU (в ядрах)")
     memory_limit: int | None = Field(None, description="Новый лимит памяти (в МБ)")
@@ -102,6 +101,14 @@ class ResourcePoolEditRequest(BaseModel):
     storage_xml: str | None = Field(
         None, description="Новое XML описание пула хранения"
     )
+
+    @computed_field
+    @property
+    def memory_limit_bytes(self) -> int | None:
+        """Лимит RAM в байтах"""
+        if self.memory_limit is None:
+            return None
+        return int(self.memory_limit * 1024 * 1024)  # МБ -> байты
 
     @computed_field
     @property
@@ -163,23 +170,8 @@ class ResourceMetrics(BaseModel):
 
 class UsageInfo(BaseModel):
     cpu: int = 0
-    memory: int = 0 # в мегабайтах
+    memory: int = 0  # в мегабайтах
     storage: int = 0
-
-
-class ResourcePoolUsageInfo(BaseModel):
-    pool_name: str
-    vms: list[dict[str, object]]
-    vms_count: int = Field(ge=0)
-
-    cpu: ResourceMetrics
-    memory: ResourceMetrics
-    storage: ResourceMetrics
-
-    reservations: dict[str, object] = Field(default_factory=dict)
-    limits: dict[str, object] = Field(default_factory=dict)
-    storage_info: dict[str, object]
-    cgroup_stats: dict[str, object]
 
 
 class ResourcePoolControlRequest(BaseModel):
@@ -200,7 +192,6 @@ class AdjustResourcePool(BaseModel):
 class DeleteResourcePool(BaseModel):
     name: str
     force: bool
-    vms_count: int
 
 
 class ResourcePoolUpdates(BaseModel):

@@ -1,6 +1,9 @@
+import os
 import random
+from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
@@ -11,18 +14,22 @@ from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import 
     ResourcePoolVirtualEdit,
 )
 
+load_dotenv()
+SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
 
-@pytest.mark.tags("RP‑04", "RP‑05", "Назначение ВМ пулу", "Изъятие ВМ из пула")
+
+@pytest.mark.tags(
+    "RP‑09",
+    "Попытка удаления пула с ВМ",
+)
 @pytest.mark.parametrize("storage_type", (StoragePoolType.DIR, StoragePoolType.LOGICAL))
-def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
+def test_rp_09_delete_resource_pool_with_vm(
     resource_pool_session, create_running_vm_session, storage_type
 ):
     """
-    RP‑04: Назначение ВМ пулу
-    RP‑05: Изъятие ВМ из пула
+    RP‑09: Попытка удаления пула с ВМ
 
-    Переместить существующую ВМ в пул. Убедиться, что ВМ учитывается в использовании ресурсов пула.
-    Убрать ВМ из пула. Проверить, что ресурсы пула освобождаются.
+    Попытаться удалить пул, содержащий ВМ. Система должна запросить подтверждение или запретить удаление.
     """
     vm_info, request_id = create_running_vm_session
     random_name = None
@@ -74,26 +81,38 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
         usage_info = pool_usage_info.rp_info.usage
         assert usage_info.memory < rp_template.memory_limit
         assert usage_info.cpu == vm_info.vcpus
-        # ____________________________________Удаление ВМ из ресурс пула______________
-        add_vm_to_resource_pool = resource_pool_session.virtual_resource_pool.delete_vm_from_virtual_resource_pool(
-            name=random_name, vm_uuid=vm_info.uuid
+        # ____________________________________Удаление ресурс пула с ВМ без force______________
+        delete_rp_info = resource_pool_session.delete_resource_pool(
+            random_name, request_id
         )
         assert (
-            add_vm_to_resource_pool.message
-            == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.value
-        ), add_vm_to_resource_pool.note
-        assert (
-            add_vm_to_resource_pool.code
-            == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name
+            delete_rp_info.message
+            == CommandMessagesEnum.rp_virtual_have_vm_need_use_force_for_delete.value
         )
-        # ____________________________________Проверка текущего состояния ресурсов после удаления ВМ______________
-        pool_usage_info = resource_pool_session.get_pool_info(random_name, request_id)
-        assert pool_usage_info.message == CommandMessagesEnum.rp_info_success.value
-        assert pool_usage_info.code == CommandMessagesEnum.rp_info_success.name
-
-        usage_info = pool_usage_info.rp_info.usage
-        assert usage_info.memory == 0
-        assert usage_info.cpu == 0
+        assert (
+            delete_rp_info.code
+            == CommandMessagesEnum.rp_virtual_have_vm_need_use_force_for_delete.name
+        )
+        assert delete_rp_info.success is False
+        # ____________________________________Удаление ресурс пула с ВМ с force______________
+        delete_rp_info = resource_pool_session.delete_resource_pool(
+            random_name, request_id, True
+        )
+        assert delete_rp_info.message == CommandMessagesEnum.rp_delete_success.value
+        assert delete_rp_info.code == CommandMessagesEnum.rp_delete_success.name
+        assert delete_rp_info.success is True
+        # ____________________________________Проверка отсутствия DIR/LOGICAL______________
+        if storage_type == StoragePoolType.LOGICAL:
+            logical_volume_info = (
+                resource_pool_session.logic_volume_manager.get_volume_by_name(
+                    random_name, SYSTEM_VOLUME_GROUP_NAME
+                )
+            )
+            assert logical_volume_info is None
+        else:
+            path_storage = Path(pool_usage_info.rp_info.storage_path)
+            assert not path_storage.is_dir()
+            assert not path_storage.exists()
 
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______

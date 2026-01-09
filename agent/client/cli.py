@@ -175,13 +175,6 @@ class CLIControl:
 
             return emulators[0]
 
-    def vm_ram_and_cpu_used(self, name: str):
-        self.logger.info(f"Чтение используемых ресурсов ВМ '{name}'")
-        cmd_args = []
-        result = self.execute(cmd_args)
-        print(result)
-        # self.logger.info(f"Используемые ресурсы ВМ '{name}' - RAM памяти: '{}', CPU ядер: '{}'")
-
     def execute(self, command, user="root", password="root"):
         # Формируем команду
         if isinstance(command, str):
@@ -205,6 +198,5 @@ class CLIControl:
 
 if __name__ == "__main__":
     cli = CLIControl()
-    print(cli.vm_ram_and_cpu_used())
     # print(cli.search_emulators())
     # print(cli.default_emulator)

@@ -21,7 +21,8 @@ def test_sn_05_clone_vm_from_snapshot(
 
     Создать новую ВМ на основе снапшота. Проверить, что клон идентичен исходной ВМ на момент снапшота.
     """
-    vm_name, request_id = create_running_vm_func
+    vm_info, request_id = create_running_vm_func
+    vm_name = vm_info.name
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name = "snapshot-" + vm_name
     new_vm_name = "CLONED_VM_" + vm_name

@@ -28,6 +28,3 @@ class MachineType(Enum):
     MICROVM = "microvm"  # Упрощенная ВМ
     XENPV = "xenpv"  # Xen паравиртуализация
     XENHVM = "xenhvm"  # Xen аппаратная виртуализация
-
-
-print(VMState.__dict__)

@@ -7,14 +7,13 @@ import xml.etree.ElementTree as ET
 from pathlib import PurePosixPath
 
 import libvirt
-import psutil
 from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
 from agent.client.constants import LVM_SAFE_FORBIDDEN
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.managers.resource_pool.virtual_resource_pool_manager.virtual_resource_pool_manager import (
-    VirtualResourcePoolManager,
+from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.balansir_mng import (
+    Balansir,
 )
 from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.logical_volume_manager import (
     LogicalVolumeManager,
@@ -30,23 +29,16 @@ from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum, RpMessage
 from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     POOL_STATE,
-    AddVMInResourcePool,
-    AdjustResourcePool,
     DeleteResourcePool,
-    RemoveVMInResourcePool,
     ResourcePool,
-    ResourcePoolAdjustRequest,
     ResourcePoolControlRequest,
     ResourcePoolCreateRequest,
     ResourcePoolEditRequest,
-    ResourcePoolLimitRequest,
     ResourcePoolList,
     ResourcePoolReservation,
     ResourcePoolReservationRequest,
     ResourcePoolState,
-    ResourcePoolType,
     ResourcePoolUpdates,
-    ResourcePoolUsageInfo,
     StoragePoolType,
     UsageInfo,
     UsageResourcePool,
@@ -75,10 +67,11 @@ class PoolManager(LibvirtClient):
         # Инициализируем CGroupsManager
         self.logger = DefaultLogger("ResourcePoolManager")
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
+        self.storage_type_dir_base_path = os.environ.get("STORAGE_TYPE_DIR_BASE_PATH")
         self.physical_volume_manager = PhysicalVolumeManager()
         self.volume_group_manager = VolumeGroupManager()
         self.vm_live_monitor_cls = VMLiveMonitor
-        self.virtual_resource_pool = VirtualResourcePoolManager()
+        self.virtual_resource_pool = Balansir()
         system_volume_group = self.volume_group_manager.get_volume_by_name(
             self.system_volume_group_name
         )
@@ -434,12 +427,14 @@ class PoolManager(LibvirtClient):
                 self.logger.info(f"Создание DIR пула с путем '{storage_path}'")
             else:
                 # Вариант 2: DIR пул с автоматическим путем
-                base_path = "/var/lib/libvirt/resource_pools"
-                if not os.path.exists(base_path):
-                    self.cli.execute(["mkdir", base_path])
-                    self.cli.execute(["chmod", "-R", "777", base_path])
+                if not os.path.exists(self.storage_type_dir_base_path):
+                    self.cli.execute(["mkdir", self.storage_type_dir_base_path])
+                    self.cli.execute(
+                        ["chmod", "-R", "777", self.storage_type_dir_base_path]
+                    )
                 storage_path = os.path.join(
-                    base_path, f"rp_{request.name}_{random.randint(100_000, 999_999)}"
+                    self.storage_type_dir_base_path,
+                    f"rp_{request.name}_{random.randint(100_000, 999_999)}",
                 )
                 os.makedirs(storage_path, exist_ok=True)
                 self.logger.info(
@@ -812,7 +807,9 @@ class PoolManager(LibvirtClient):
                 )
             current_pool = existing_pool_info.rp_info
 
-            result = self.virtual_resource_pool.delete_virtual_resource_pool(name)
+            result = self.virtual_resource_pool.delete_virtual_resource_pool(
+                name, force
+            )
             if result.message != CommandMessagesEnum.rp_virtual_delete_success.value:
                 return result
 
@@ -863,7 +860,7 @@ class PoolManager(LibvirtClient):
                 message=CommandMessagesEnum.rp_delete_success.value,
                 code=CommandMessagesEnum.rp_delete_success.name,
                 success=True,
-                rp_info=DeleteResourcePool(name=name, force=force, vms_count=0),
+                rp_info=DeleteResourcePool(name=name, force=force),
             )
 
         except Exception as e:
@@ -876,198 +873,15 @@ class PoolManager(LibvirtClient):
                 note=str(e),
             )
 
-    def get_pool_usage(self, resource_pool_name: str, request_id: str) -> RpMessage:
-        try:
-            # Проверяем существование пула
-            existing_pool_info = self.get_pool_info(resource_pool_name, request_id)
-            if existing_pool_info.message == CommandMessagesEnum.rp_not_found.value:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_not_found.value,
-                    code=CommandMessagesEnum.rp_not_found.name,
-                    success=False,
-                    note=f"Pool '{resource_pool_name}' not found",
-                )
-
-            # Получаем информацию о пуле из libvirt
-            pool_info_msg = self.get_pool_info(resource_pool_name, request_id)
-            if not pool_info_msg.success or not pool_info_msg.rp_info:
-                return RpMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.rp_info_error.value,
-                    code=CommandMessagesEnum.rp_info_error.name,
-                    success=False,
-                    note=f"Failed to get information for pool '{resource_pool_name}'",
-                )
-
-            pool_info = pool_info_msg.rp_info
-
-            # Извлекаем информацию из XML
-            xml_content = self.get_pool_xml_by_name(resource_pool_name)
-            xml_info = self._extract_pool_info_from_xml(xml_content)
-
-            # Получаем ВМ, связанные с пулом
-            pool_vms = self._get_pool_vms(resource_pool_name)
-
-            # Получаем использование ресурсов
-            usage_info = self._get_resource_usage_for_pool(resource_pool_name, pool_vms)
-            print("usage_info: ", usage_info)
-
-            # ПОЛУЧАЕМ СТАТИСТИКУ ИЗ CGroups
-            cgroup_stats = self.get_cgroup_stats(resource_pool_name)
-
-            # Получаем точную информацию о лимитах CPU из CGroups
-            cpu_limit_info = self.get_cpu_limit_info(resource_pool_name)
-            cpu_limit_cores = cpu_limit_info.cpu_limit_cores
-
-            # Получаем лимиты памяти из CGroups
-            memory_limit_mb = (
-                cgroup_stats.memory_limit / (1024 * 1024)
-                if cgroup_stats.memory_limit > 0
-                else None
-            )
-
-            if pool_info.type.value == StoragePoolType.DIR.value:
-                storage_capacity = pool_info.capacity_bytes
-                storage_capacity_gb = pool_info.capacity_gb
-                storage_usage = pool_info.allocation_bytes
-                storage_available = pool_info.available_bytes
-            elif pool_info.type.value == StoragePoolType.LOGICAL.value:
-                logic_volume_info = self.logic_volume_manager.get_volume_by_name(
-                    resource_pool_name, self.system_volume_group_name
-                )
-                storage_capacity = logic_volume_info.volume_size
-                storage_capacity_gb = logic_volume_info.volume_size_gb
-                storage_usage = (
-                    logic_volume_info.volume_size
-                    - logic_volume_info.available_volume_size
-                )
-                storage_available = logic_volume_info.available_volume_size
-            else:
-                raise ValueError(f"Неизвестный тип пула: {pool_info.type.value}")
-
-            # Рассчитываем проценты использования
-            cpu_percent = 0
-            cpu_usage_cores = usage_info.cpu  # Количество виртуальных CPU
-            if cpu_limit_cores > 0:
-                cpu_percent = min(100, int((cpu_usage_cores / cpu_limit_cores)) * 100)
-
-            memory_percent = 0
-            if memory_limit_mb and memory_limit_mb > 0:
-                memory_usage_mb = usage_info.memory / 1024  # Конвертируем KB в MB
-                memory_percent = min(
-                    100, int((memory_usage_mb / memory_limit_mb)) * 100
-                )
-
-            storage_percent = (
-                (storage_usage / storage_capacity * 100) if storage_capacity else 0
-            )
-
-            usage_data = {
-                "pool_name": resource_pool_name,
-                "vms": [{"name": vm} for vm in pool_vms],
-                "vms_count": len(pool_vms),
-                "cpu": {
-                    "limit": round(cpu_limit_cores, 2),
-                    "limit_period_us": cpu_limit_info.cpu_limit_period_us,
-                    "limit_quota_us": cpu_limit_info.cpu_limit_quota_us,
-                    "usage": cpu_usage_cores,
-                    "usage_seconds": round(cgroup_stats.cpu_usage_seconds, 2),
-                    "available": (
-                        round(cpu_limit_cores - cpu_usage_cores, 2)
-                        if cpu_limit_cores > 0
-                        else None
-                    ),
-                    "percent": round(cpu_percent, 2),
-                    "shares": cgroup_stats.cpu_shares,
-                },
-                "memory": {
-                    "limit": memory_limit_mb,
-                    "limit_bytes": cgroup_stats.memory_limit,
-                    "usage": usage_info.memory / 1024,  # Конвертируем KB в MB
-                    "usage_bytes": cgroup_stats.memory_usage,
-                    "available": (
-                        round(memory_limit_mb - (usage_info.memory / 1024), 2)
-                        if memory_limit_mb
-                        else None
-                    ),
-                    "percent": round(memory_percent, 2),
-                    "reservation_bytes": cgroup_stats.memory_reservation,
-                },
-                "storage": {
-                    "limit": storage_capacity,
-                    "usage": storage_usage,
-                    "available": storage_available,
-                    "percent": round(storage_percent, 2),
-                    "configured_limit_gb": storage_capacity_gb,
-                },
-                "reservations": {},
-                "limits": {
-                    "cpu": round(cpu_limit_cores, 2),
-                    "cpu_period_us": cpu_limit_info.cpu_limit_period_us,
-                    "cpu_quota_us": cpu_limit_info.cpu_limit_quota_us,
-                    "memory": memory_limit_mb,
-                    "storage": storage_capacity,
-                    "storage_gb": storage_capacity_gb,
-                },
-                "storage_info": {
-                    "type": xml_info.get("type"),
-                    "path": xml_info.get("path"),
-                    "vg_name": xml_info.get("vg_name"),
-                    "device_path": xml_info.get("device_path"),
-                    "state": (
-                        pool_info.state.value
-                        if hasattr(pool_info.state, "value")
-                        else str(pool_info.state)
-                    ),
-                    "autostart": pool_info.autostart,
-                    "is_active": pool_info.is_active,
-                },
-                "cgroup_stats": {
-                    "process_count": cgroup_stats.process_count,
-                    "cpu_shares": cgroup_stats.cpu_shares,
-                    "cpu_limit_cores": round(cpu_limit_cores, 2),
-                    "cpu_limit_period_us": cpu_limit_info.cpu_limit_period_us,
-                    "cpu_limit_quota_us": cpu_limit_info.cpu_limit_quota_us,
-                },
-            }
-
-            return RpMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.rp_usage_info_success.value,
-                code=CommandMessagesEnum.rp_usage_info_success.name,
-                success=True,
-                rp_info=ResourcePoolUsageInfo(**usage_data),
-            )
-
-        except Exception as e:
-            self.logger.error(
-                f"Ошибка получения информации об использовании пула '{resource_pool_name}': {e}"
-            )
-            return RpMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.rp_usage_info_error.value,
-                code=CommandMessagesEnum.rp_usage_info_error.name,
-                success=False,
-                note=str(e),
-            )
-
-    def edit_resource_pool(self, request: ResourcePoolEditRequest) -> RpMessage:
-        """
-        Редактирование пула ресурсов
-
-        Args:
-            request: Запрос на редактирование пула
-
-        Returns:
-            RpMessage: Результат операции
-        """
+    def edit_resource_pool(
+        self, request: ResourcePoolEditRequest, request_id: str
+    ) -> RpMessage:
         try:
             # Проверяем существование пула
             existing_pools = self.list_storage_pools()
             if request.name not in existing_pools:
                 return RpMessage(
-                    request_id=request.request_id,
+                    request_id=request_id,
                     message=CommandMessagesEnum.rp_not_found.value,
                     code=CommandMessagesEnum.rp_not_found.name,
                     success=False,
@@ -1090,14 +904,17 @@ class PoolManager(LibvirtClient):
             edit_virtual_rp = self.virtual_resource_pool.edit_virtual_resource_pool(
                 ResourcePoolVirtualEdit(
                     name=request.name,
-                    cpu_core_limit=request.cpu_core_limit,
-                    ram_limit=request.memory_limit,
+                    cpu_core_limit=request.cpu_limit,
+                    ram_limit=request.memory_limit_bytes,
                 )
             )
-            if edit_virtual_rp is not True:
+            if (
+                edit_virtual_rp.message
+                != CommandMessagesEnum.rp_virtual_edit_success.value
+            ):
                 return edit_virtual_rp
             updates["memory_limit_updated"] = request.memory_limit
-            updates["cpu_limit_updated"] = request.cpu_core_limit
+            updates["cpu_limit_updated"] = request.cpu_limit
 
             if request.storage_limit is not None:
                 updates["storage_limit_note"] = (
@@ -1105,7 +922,7 @@ class PoolManager(LibvirtClient):
                 )
 
             return RpMessage(
-                request_id=request.request_id,
+                request_id=request_id,
                 message=CommandMessagesEnum.rp_edit_success.value,
                 code=CommandMessagesEnum.rp_edit_success.name,
                 success=True,
@@ -1119,7 +936,7 @@ class PoolManager(LibvirtClient):
                 f"Ошибка редактирования пула ресурсов '{request.name}': {e}"
             )
             return RpMessage(
-                request_id=request.request_id,
+                request_id=request_id,
                 message=CommandMessagesEnum.rp_edit_error.value,
                 code=CommandMessagesEnum.rp_edit_error.name,
                 success=False,
@@ -1299,12 +1116,22 @@ class PoolManager(LibvirtClient):
                 pass
 
             # Получаем информацию CPU и RAM
-            virtual_resource_pool = (
+            virtual_resource_pool_info = (
                 self.virtual_resource_pool.get_virtual_resource_pool_by_name(pool_name)
             )
+            if (
+                virtual_resource_pool_info.message
+                != CommandMessagesEnum.rp_virtual_successfully_found.value
+            ):
+                return virtual_resource_pool_info
+            virtual_resource_pool = virtual_resource_pool_info.rp_info
             usage_info = UsageInfo()
             ram_usage = 0
             cpu_count_usage = 0
+            print(
+                "virtual_resource_pool.vm_uuid_list: ",
+                virtual_resource_pool.vm_uuid_list,
+            )
             if virtual_resource_pool.vm_uuid_list:
                 for current_vm in virtual_resource_pool.vm_uuid_list:
                     ram_used, cpu_count, _ = self.vm_live_monitor_cls(

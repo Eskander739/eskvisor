@@ -188,7 +188,6 @@ def test_vn_11_update_setting_dhcp_dns_gateway(
             network_name, request_id
         )
         network_details = get_updated_network_info.net_info
-        print("УФФФФ СУЧКА БЛЯ: ", network_details.gateway)
         assert network_details.ipv4_address == "192.168.200.0/24"
         # assert network_details.gateway == "192.168.200.1" # TODO: Доработать
         # проверку шлюза, сейчас он не ставится в сети

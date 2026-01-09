@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 from datetime import datetime
@@ -5,9 +6,17 @@ from collections import deque
 import signal
 import sys
 
+from dotenv import load_dotenv
+
+from agent.client.logger_config import DefaultLogger
+
+load_dotenv()
+
 
 class VMLiveMonitor:
     def __init__(self, vm_name: str, interval_seconds=2):
+        self.logger = DefaultLogger("VMLiveMonitor")
+        self.connection_uri = os.environ.get("CONNECTION_URI")
         self.vm_name = vm_name
         self.interval = interval_seconds
         self.running = True
@@ -45,7 +54,7 @@ class VMLiveMonitor:
     def get_vm_stats(self):
         """Получение статистики ВМ"""
         try:
-            cmd = ["virsh", "-c", "qemu:///system", "domstats", self.vm_name]
+            cmd = ["virsh", "-c", self.connection_uri, "domstats", self.vm_name]
             result = subprocess.run(
                 cmd, capture_output=True, text=True, check=True, timeout=5
             )
@@ -246,10 +255,19 @@ class VMLiveMonitor:
         }
 
     def used_ram_and_cpu(self):
+        self.logger.info(
+            "Получение статистики об используемом RAM, количестве ядер, нагрузке CPU"
+        )
         stats = self.get_vm_stats()
         cpu_percent = self.calculate_cpu_usage(stats)
         memory_usage = self.calculate_memory_usage(stats)
-        return memory_usage.get("rss_mb"), stats.get("vcpu.current"), cpu_percent
+        data = memory_usage.get("rss_mb"), stats.get("vcpu.current"), cpu_percent
+        self.logger.info(
+            f"Получена статистика об используемом RAM: '{data[0]}', "
+            f"количестве ядер: '{data[1]}', "
+            f"нагрузке CPU: '{data[2]}'"
+        )
+        return data
 
 
 def signal_handler(sig, frame):

@@ -421,21 +421,18 @@ class VmManager(LibvirtClient):
                     if disk.disk_type.value == DiskType.CDROM.value:
                         disk_params.append(f"--cdrom {disk.path}")
                     else:
-                        print("БЛЯЯЯЯ МЫ ТУТ")
                         disk_params.append(f"path={disk.path}")
                         disk_params.append(f"format={disk.format.value}")
                 else:
                     if disk.size_gb:
                         disk_params.append(f"size={disk.size_gb}")
                     if disk.format:
-                        print("БЛЯЯЯЯ МЫ ТУТ 222222222222")
                         disk_params.append(f"format={disk.format.value}")
                     disk_params.append(f"path={disk.path}")
             else:
                 if disk.size_gb:
                     disk_params.append(f"size={disk.size_gb}")
                 if disk.format:
-                    print("БЛЯЯЯЯ МЫ ТУТ 3333333333333333")
                     disk_params.append(f"format={disk.format.value}")
             if disk.bus_type:
                 disk_params.append(f"bus={disk.bus_type.value}")

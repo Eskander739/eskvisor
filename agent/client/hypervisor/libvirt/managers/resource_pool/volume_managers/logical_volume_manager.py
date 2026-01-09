@@ -126,7 +126,7 @@ class LogicalVolumeManager:
 
     def get_volume_by_name(
         self, logic_volume_name: str, volume_group_name: str
-    ) -> LogicVolume:
+    ) -> LogicVolume | None:
         self.logger.info(
             f"Получение логического тома {volume_group_name}/{logic_volume_name}"
         )
@@ -137,7 +137,12 @@ class LogicalVolumeManager:
         ]
 
         result = self.cli.execute(cmd_args)
-        return self._parse_dict_to_models(json.loads(result)).pop()
+        if "Failed to find logical volume" in result:
+            return None
+        volume = self._parse_dict_to_models(json.loads(result))
+        if volume:
+            return volume.pop()
+        return None
 
     def get_volume_list(
         self,

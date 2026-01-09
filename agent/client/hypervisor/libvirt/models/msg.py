@@ -17,7 +17,6 @@ from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     ResourcePoolReservation,
     ResourcePoolState,
     ResourcePoolUpdates,
-    ResourcePoolUsageInfo,
 )
 from agent.client.hypervisor.libvirt.models.snapshots import (
     ClonedSnapshot,
@@ -32,12 +31,17 @@ from agent.client.hypervisor.libvirt.models.snapshots import (
     SnapshotWithParent,
 )
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
+from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import (
+    ResourcePoolVirtual,
+)
 
 
 class CommandMessagesEnum(Enum):
     vm_with_name_already_exists = "VM with name already exists"
     vm_config_not_found = "VM config not found"
-    vm_successfully_deleted_from_virtual_resource_pool = "VM successfully deleted from virtual resource pool"
+    vm_successfully_deleted_from_virtual_resource_pool = (
+        "VM successfully deleted from virtual resource pool"
+    )
     vm_created_but_not_found_in_libvirt = "VM created but not found in libvirt"
     vm_successfully_created = "VM successfully created"
     vm_successfully_deleted = "VM successfully deleted"
@@ -113,6 +117,8 @@ class CommandMessagesEnum(Enum):
     rp_ram_configuration_not_found = "Resource pool RAM configuration not found"
     rp_cpu_configuration_error = "Resource pool CPU configuration error"
     rp_ram_configuration_error = "Resource pool RAM configuration error"
+    rp_cpu_configuration_error_allocated_more_than_on_new_limit = "Resource pool CPU configuration error - allocated CPU core more than on the new CPU core limit"
+    rp_ram_configuration_error_allocated_more_than_on_new_limit = "Resource pool RAM configuration error - allocated RAM more than on the new RAM limit"
     rp_create_error = "Resource pool create error"
     rp_already_exists = "Resource pool with this name already exists"
     vm_present_on_any_virtual_resource_pool = "VM present on any virtual resource pool"
@@ -120,6 +126,10 @@ class CommandMessagesEnum(Enum):
     rp_delete_success = "Resource pool successfully deleted"
     rp_virtual_delete_success = "Virtual resource pool successfully deleted"
     rp_virtual_edit_success = "Virtual resource pool successfully edited"
+    rp_virtual_successfully_found = "Virtual resource pool successfully found"
+    rp_virtual_have_vm_need_use_force_for_delete = (
+        "Virtual resource pool have VM, need use force for delete"
+    )
     rp_virtual_delete_error = "Virtual resource pool delete error"
     rp_virtual_not_found = "Virtual resource pool not found"
     rp_delete_error = "Resource pool delete error"
@@ -238,8 +248,8 @@ class RpMessage(DefaultMessage):
         | ResourcePoolReservation
         | ResourcePoolUpdates
         | DeleteResourcePool
-        | ResourcePoolUsageInfo
         | ResourcePoolState
+        | ResourcePoolVirtual
         | None
     ) = None
     note: str | None = None

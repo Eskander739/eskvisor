@@ -60,7 +60,6 @@ class DiskFormat(Enum):
 
 
 def disk_format_by_path(disk_path: str) -> DiskFormat:
-    print("УФФФФ БЛЯ: ", disk_path)
     if disk_path.endswith(".qcow2"):
         return DiskFormat.QCOW2
     elif disk_path.endswith(".raw") or disk_path.endswith(".img"):

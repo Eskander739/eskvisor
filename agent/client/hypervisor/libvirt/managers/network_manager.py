@@ -1376,7 +1376,6 @@ if __name__ == "__main__":
     # Пример использования
     with NetworkManager().with_default_user() as nm:
         print("=== Сводка по сетям ===")
-        # print("СЕТЬ ВИДНА ?: ", nm.is_network_visible("test-nat-network"))
         summary = nm.get_network_summary()
         print(f"Всего сетей: {summary['total']}")
         print(f"Активных: {summary['active']}, Неактивных: {summary['inactive']}")

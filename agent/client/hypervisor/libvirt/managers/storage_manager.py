@@ -584,7 +584,6 @@ class StorageManager(LibvirtClient):
 
             # Формируем XML в зависимости от типа устройства
             if device_type == "cdrom":
-                print("БЛЯЯЯЯЯ МЫ ТУТ")
                 disk_xml = f"""
                 <disk type='file' device='cdrom'>
                     <driver name='qemu' type='raw' cache='{cache_mode}'/>

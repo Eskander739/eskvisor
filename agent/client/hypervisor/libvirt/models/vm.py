@@ -250,3 +250,8 @@ class VirtualMachine(BaseModel):
     @property
     def memory_bytes(self) -> float:
         return int(self.memory * 1024)
+
+    @computed_field
+    @property
+    def max_memory_bytes(self) -> float:
+        return int(self.max_memory * 1024)
