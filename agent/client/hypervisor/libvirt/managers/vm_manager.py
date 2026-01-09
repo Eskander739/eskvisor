@@ -1322,7 +1322,7 @@ class VmManager(LibvirtClient):
             info = domain.info()
             state = VMState(info[0])
             if display_logs:
-                self.logger.info(f"ВМ {domain} найдена")
+                self.logger.info(f"ВМ {domain.name()} найдена")
             return VirtualMachine(
                 name=domain.name(),
                 state=state,

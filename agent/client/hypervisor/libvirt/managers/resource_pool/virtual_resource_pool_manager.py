@@ -23,11 +23,12 @@ class VirtualResourcePoolManager:
 
     def __init__(self):
         self.logger = DefaultLogger("VirtualResourcePoolManager")
+        self.logger.info(f"Инициализация виртуального менеджера ресурс пулов")
         self.virtual_rp_manager_path = os.environ.get("RP_VIRTUAL_MANAGER_PATH")
         self.cli = CLIControl()
         self.vm_manager = VmManager()
         self.vm_manager.connect()
-        self.node_info = self.vm_manager.get_node_info()
+        self.memory_virtual_resoruce_pool = {}
         if not os.path.exists(self.virtual_rp_manager_path):
             root_dir = f"/{self.virtual_rp_manager_path.split('/')[1]}"
             if not os.path.exists(root_dir):
@@ -54,8 +55,10 @@ class VirtualResourcePoolManager:
                 f"Основная директория '{self.virtual_rp_manager_path}' успешно создана"
             )
             self.cli.execute(["chmod", "-R", "777", self.virtual_rp_manager_path])
+        self.logger.info(f"Виртуальный менеджер ресурс пулов инициализирован")
 
     def validate_vm_list(self, create_rp: ResourcePoolVirtualCreate) -> RpMessage:
+        self.logger.info(f"Старт валидации списка ВМ")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if isinstance(create_rp.vm_uuid_list, list):
             for vm_uuid in create_rp.vm_uuid_list:
@@ -103,7 +106,7 @@ class VirtualResourcePoolManager:
                         code=CommandMessagesEnum.vm_found_error.name,
                         success=False,
                     )
-
+            self.logger.info(f"Список ВМ валиден")
             return RpMessage(
                 request_id=internal_request_id,
                 message=CommandMessagesEnum.vm_list_is_correct.value,
@@ -122,6 +125,7 @@ class VirtualResourcePoolManager:
         cpu_core_allocated: int = 0,
         cpu_core_available: int = 0,
     ) -> RpMessage | bool:
+        self.logger.info(f"Старт конфигурации CPU")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
@@ -162,6 +166,7 @@ class VirtualResourcePoolManager:
         ram_allocated: int = 0,
         ram_available: int = 0,
     ) -> RpMessage | bool:
+        self.logger.info(f"Старт конфигурации RAM")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
@@ -196,12 +201,25 @@ class VirtualResourcePoolManager:
 
         return True
 
+    def read_vm_on_any_virtual_resource_pools(self, vm_uuid: str):
+        """
+        Проверка наличия ВМ в других ресурс пулах
+        """
+
+        self.sync_resource_pools()
+        all_virtual_rp_list = self.get_virtual_resource_pool_list()
+        for virtual_rp in all_virtual_rp_list:
+            if vm_uuid in virtual_rp.vm_uuid_list:
+                return True
+        return False
+
     def configuration_vm(
         self,
         rp_main_path: Path,
         vm_uuid_list: str | list[str],
         save_current_vms: bool = True,
     ) -> RpMessage | bool:
+        self.logger.info(f"Старт конфигурации ВМ")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
@@ -212,7 +230,8 @@ class VirtualResourcePoolManager:
                 success=False,
             )
         vm_info = rp_main_path / "vm_info.json"
-        self.logger.info(f"Создание конфигурации ВМ: '{str(vm_info)}'")
+        self.logger.info(f"Конфигурация ВМ: '{str(vm_info)}'")
+        # TODO: Добавить проверку наличия ВМ в других ресурс пулах
         if save_current_vms:
             if vm_info.is_file():
                 with open(vm_info, "r") as vm_info_file_read:
@@ -223,7 +242,7 @@ class VirtualResourcePoolManager:
             vm_info_file.write(orjson.dumps(vm_info_data))
 
         if not vm_info.is_file():
-            self.logger.warning(f"Ошибка создания конфигурации ВМ: '{str(vm_info)}'")
+            self.logger.warning(f"Ошибка конфигурации ВМ: '{str(vm_info)}'")
             return RpMessage(
                 request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_create_error.value,
@@ -237,12 +256,15 @@ class VirtualResourcePoolManager:
 
     @property
     def used_ram_and_cpu_by_resource_pools(self) -> tuple[int, int]:
+        self.logger.info("Определение общего объема используемых ресурсов ресурс пулами")
         ram_allocated = 0
         cpu_allocated = 0
         for current_rp_virtual in self.get_virtual_resource_pool_list():
             ram_allocated += current_rp_virtual.ram_limit
             cpu_allocated += current_rp_virtual.cpu_core_limit
-
+        self.logger.info(f"Определен общий объем используемых ресурсов ресурс пулами - "
+                         f"CPU ядер: '{cpu_allocated}', "
+                         f"RAM памяти: '{ram_allocated}'")
         return ram_allocated, cpu_allocated
 
     def validate_max_ram_and_max_cpu(self, ram_limit: int, cpu_core_limit: int) -> bool:
@@ -303,6 +325,16 @@ class VirtualResourcePoolManager:
             )
 
         if create_rp.vm_uuid_list is not None:
+            for current_uuid in create_rp.vm_uuid_list:
+                vm_on_any_rp = self.read_vm_on_any_virtual_resource_pools(current_uuid)
+                if vm_on_any_rp:
+                    rp_main_path.rmdir()
+                    return RpMessage(
+                        request_id=internal_request_id,
+                        message=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.value,
+                        code=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.name,
+                        success=False,
+                    )
             validate_vm_list_info = self.validate_vm_list(create_rp)
             if (
                 validate_vm_list_info.message
@@ -406,6 +438,7 @@ class VirtualResourcePoolManager:
         return None
 
     def delete_virtual_resource_pool(self, name: str):
+        self.logger.info(f"Удаление ресурс пула: '{name}'")
         rp_main_path = Path(self.virtual_rp_manager_path) / name
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         rp_main_path.rmdir()
@@ -417,13 +450,29 @@ class VirtualResourcePoolManager:
                 code=CommandMessagesEnum.rp_virtual_delete_error.name,
                 success=False,
             )
-
+        self.logger.info(f"Ресурс пул '{name}' удален")
         return RpMessage(
             request_id=internal_request_id,
             message=CommandMessagesEnum.rp_virtual_delete_success.value,
             code=CommandMessagesEnum.rp_virtual_delete_success.name,
             success=True,
         )
+
+    def sync_resource_pools(self):
+        self.logger.info("Синхронизация ресурс пулов")
+        rp_main_path = Path(self.virtual_rp_manager_path)
+        all_rp_virtual_dirs = [
+            str(current_dir.name)
+            for current_dir in rp_main_path.iterdir()
+            if current_dir.is_dir()
+        ]
+        for current_virtual_rp_name in all_rp_virtual_dirs:
+            ram_config = rp_main_path / current_virtual_rp_name / "ram_info.json"
+            cpu_config = rp_main_path/ current_virtual_rp_name / "cpu_info.json"
+            if not cpu_config.is_file() or not ram_config.is_file():
+                continue
+            self.sync_resource_pool(current_virtual_rp_name)
+        self.logger.info("Синхронизация ресурс пулов выполнена")
 
     def sync_resource_pool(self, name: str):
         rp_virtual_info = self.get_virtual_resource_pool_by_name(name)
@@ -524,9 +573,13 @@ class VirtualResourcePoolManager:
             if current_dir.is_dir()
         ]
         all_rp_virtal = []
-        for rp_dir in all_rp_virtual_dirs:
-            all_rp_virtal.append(self.get_virtual_resource_pool_by_name(rp_dir))
-
+        for virtual_rp_name in all_rp_virtual_dirs:
+            ram_config = rp_main_path / virtual_rp_name / "ram_info.json"
+            cpu_config = rp_main_path/ virtual_rp_name / "cpu_info.json"
+            if not cpu_config.is_file() or not ram_config.is_file():
+                continue
+            all_rp_virtal.append(self.get_virtual_resource_pool_by_name(virtual_rp_name))
+        self.logger.info("Список ресурс пулов успешно получен")
         return all_rp_virtal
 
 
@@ -536,13 +589,14 @@ if __name__ == "__main__":
     # TODO: Изучить вопрос чтения данных из памяти, а при внесении изменений - обновлять данные в файлах и памяти
     a = (datetime.datetime.now())
     # print(a)
-    # data = mng.create_virtual_resource_pool(create_rp=ResourcePoolVirtualCreate(name="MAIN_RP",
-    #                                                              cpu_core_limit=5,
-    #                                                              ram_limit=536_870_912,
-    #                                                              vm_uuid_list=["6c7762be-7811-44c6-8404-1054a6b72be7"]))
-    # print(data)
-    mng.sync_resource_pool("MAIN_RP")
+    data = mng.create_virtual_resource_pool(create_rp=ResourcePoolVirtualCreate(name="MAIN_RP3",
+                                                                 cpu_core_limit=2,
+                                                                 ram_limit=536_870_912,
+                                                                 vm_uuid_list=["6c7762be-7811-44c6-8404-1054a6b72be7"]))
+    print(data)
+    mng.sync_resource_pools()
     rp_virtual = mng.get_virtual_resource_pool_by_name("MAIN_RP")
+    print(mng.get_virtual_resource_pool_list())
     for rp_virtual in mng.get_virtual_resource_pool_list():
         print("ИМЯ РЕСУРС ПУЛА: ", rp_virtual.name)
         print("cpu_core_limit: ", rp_virtual.cpu_core_limit)

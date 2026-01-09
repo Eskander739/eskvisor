@@ -111,6 +111,7 @@ class CommandMessagesEnum(Enum):
     rp_ram_configuration_error = "Resource pool RAM configuration error"
     rp_create_error = "Resource pool create error"
     rp_already_exists = "Resource pool with this name already exists"
+    vm_present_on_any_virtual_resource_pool = "VM present on any virtual resource pool"
 
     rp_delete_success = "Resource pool successfully deleted"
     rp_virtual_delete_success = "Virtual resource pool successfully deleted"
