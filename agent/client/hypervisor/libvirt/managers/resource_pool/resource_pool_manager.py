@@ -43,7 +43,7 @@ from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     UsageInfo,
     UsageResourcePool,
 )
-from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import (
+from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
     ResourcePoolVirtualEdit,
 )
@@ -1134,11 +1134,11 @@ class PoolManager(LibvirtClient):
             )
             if virtual_resource_pool.vm_uuid_list:
                 for current_vm in virtual_resource_pool.vm_uuid_list:
-                    ram_used, cpu_count, _ = self.vm_live_monitor_cls(
+                    cpu_and_memory_usage_info = self.vm_live_monitor_cls(
                         current_vm
                     ).used_ram_and_cpu()
-                    ram_usage += ram_used
-                    cpu_count_usage += cpu_count
+                    ram_usage += cpu_and_memory_usage_info.memory
+                    cpu_count_usage += cpu_and_memory_usage_info.cpu_core_count
             usage_info.cpu = cpu_count_usage
             usage_info.memory = ram_usage
             # Используем capacity из XML если он есть, иначе из info[1]

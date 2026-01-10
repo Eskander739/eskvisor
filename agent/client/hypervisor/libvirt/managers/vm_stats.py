@@ -8,6 +8,13 @@ import sys
 
 from dotenv import load_dotenv
 
+from agent.client.hypervisor.libvirt.models.vm_stats.stats import (
+    MemoryStat,
+    VMStats,
+    CpuStat,
+    MemoryUsageStat,
+    CpuAndRamUsage,
+)
 from agent.client.logger_config import DefaultLogger
 
 load_dotenv()
@@ -123,15 +130,16 @@ class VMLiveMonitor:
         usage_percent = (current_mb / maximum_mb) * 100 if maximum_mb > 0 else 0
         rss_percent = (rss_mb / current_mb) * 100 if current_mb > 0 else 0
 
-        return {
-            "current_mb": current_mb,
-            "maximum_mb": maximum_mb,
-            "rss_mb": rss_mb,
-            "usage_percent": usage_percent,
-            "rss_percent": rss_percent,
-            "available_mb": maximum_mb - current_mb,
-            "free_mb": current_mb - rss_mb,
-        }
+        memory_usage_info = MemoryUsageStat(
+            current_mb=current_mb,
+            maximum_mb=maximum_mb,
+            rss_mb=rss_mb,
+            usage_percent=usage_percent,
+            rss_percent=rss_percent,
+            available_mb=maximum_mb - current_mb,
+            free_mb=current_mb - rss_mb,
+        )
+        return memory_usage_info
 
     def monitor_loop(self):
         """Основной цикл мониторинга"""
@@ -164,7 +172,9 @@ class VMLiveMonitor:
                     }
                 )
 
-                self.memory_history.append({"timestamp": timestamp, **memory_usage})
+                self.memory_history.append(
+                    {"timestamp": timestamp, **memory_usage.model_dump()}
+                )
 
                 # Вывод текущих значений
                 if not header_printed:
@@ -176,9 +186,9 @@ class VMLiveMonitor:
 
                 current_time = timestamp.strftime("%H:%M:%S")
                 cpu_str = f"{cpu_percent:.1f}%"
-                ram_used_str = f"{memory_usage['current_mb']:.1f}MB"
-                ram_rss_str = f"{memory_usage['rss_mb']:.1f}MB"
-                ram_percent_str = f"{memory_usage['usage_percent']:.1f}%"
+                ram_used_str = f"{memory_usage.current_mb:.1f}MB"
+                ram_rss_str = f"{memory_usage.rss_mb:.1f}MB"
+                ram_percent_str = f"{memory_usage.usage_percent:.1f}%"
                 vcpu_str = (
                     f"{stats.get('vcpu.current', 0)}/{stats.get('vcpu.maximum', 0)}"
                 )
@@ -216,58 +226,63 @@ class VMLiveMonitor:
             entry["usage_percent"] for entry in self.memory_history
         ]
 
-        return {
-            "cpu": {
-                "avg": sum(cpu_values) / len(cpu_values) if cpu_values else 0,
-                "min": min(cpu_values) if cpu_values else 0,
-                "max": max(cpu_values) if cpu_values else 0,
-                "current": cpu_values[-1] if cpu_values else 0,
-                "vcpu_avg": (
+        stat_info = VMStats(
+            cpu=CpuStat(
+                avg=cpu_values[0],
+                min=cpu_values[0],
+                max=cpu_values[0],
+                current=cpu_values[-1] if cpu_values else 0,
+                vcpu_avg=(
                     sum(vcpu_current_values) / len(vcpu_current_values)
                     if vcpu_current_values
                     else 0
                 ),
-            },
-            "memory": {
-                "current_mb_avg": (
+            ),
+            memory=MemoryStat(
+                current_mb_avg=(
                     sum(memory_current_values) / len(memory_current_values)
                     if memory_current_values
                     else 0
                 ),
-                "current_mb_max": (
+                current_mb_max=(
                     max(memory_current_values) if memory_current_values else 0
                 ),
-                "rss_mb_avg": (
+                rss_mb_avg=(
                     sum(memory_rss_values) / len(memory_rss_values)
                     if memory_rss_values
                     else 0
                 ),
-                "usage_percent_avg": (
+                usage_percent_avg=(
                     sum(memory_percent_values) / len(memory_percent_values)
                     if memory_percent_values
                     else 0
                 ),
-                "current": memory_current_values[-1] if memory_current_values else 0,
-                "rss": memory_rss_values[-1] if memory_rss_values else 0,
-                "percent": memory_percent_values[-1] if memory_percent_values else 0,
-            },
-            "samples": len(self.cpu_history),
-        }
+                current=memory_current_values[-1] if memory_current_values else 0,
+                rss=memory_rss_values[-1] if memory_rss_values else 0,
+                percent=memory_percent_values[-1] if memory_percent_values else 0,
+            ),
+            samples=len(self.cpu_history),
+        )
+        return stat_info
 
-    def used_ram_and_cpu(self):
+    def used_ram_and_cpu(self) -> CpuAndRamUsage | None:
         self.logger.info(
             "Получение статистики об используемом RAM, количестве ядер, нагрузке CPU"
         )
         stats = self.get_vm_stats()
+        if stats is None:
+            return None
         cpu_percent = self.calculate_cpu_usage(stats)
         memory_usage = self.calculate_memory_usage(stats)
-        data = memory_usage.get("rss_mb"), stats.get("vcpu.current"), cpu_percent
+        data = memory_usage.rss_mb, stats.get("vcpu.current"), cpu_percent
         self.logger.info(
             f"Получена статистика об используемом RAM: '{data[0]}', "
             f"количестве ядер: '{data[1]}', "
             f"нагрузке CPU: '{data[2]}'"
         )
-        return data
+        return CpuAndRamUsage(
+            memory=data[0], cpu_core_count=data[1], cpu_usage_percent=data[2]
+        )
 
 
 def signal_handler(sig, frame):
@@ -283,10 +298,10 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
     # Запуск мониторинга
-    monitor = VMLiveMonitor(vm_name, interval)
-    #
-    stats = monitor.get_vm_stats()
-    print(monitor.used_ram_and_cpu())
+    monitor = VMLiveMonitor("VM-TEST-31174", interval)
+    for _ in range(10):
+        data = monitor.used_ram_and_cpu()
+        time.sleep(2)
     # cpu_percent = monitor.calculate_cpu_usage(stats)
     # memory_usage = monitor.calculate_memory_usage(stats)
     # print(cpu_percent)

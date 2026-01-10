@@ -31,7 +31,7 @@ from agent.client.hypervisor.libvirt.models.snapshots import (
     SnapshotWithParent,
 )
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
-from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import (
+from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtual,
 )
 
@@ -117,8 +117,17 @@ class CommandMessagesEnum(Enum):
     rp_ram_configuration_not_found = "Resource pool RAM configuration not found"
     rp_cpu_configuration_error = "Resource pool CPU configuration error"
     rp_ram_configuration_error = "Resource pool RAM configuration error"
-    rp_cpu_configuration_error_allocated_more_than_on_new_limit = "Resource pool CPU configuration error - allocated CPU core more than on the new CPU core limit"
-    rp_ram_configuration_error_allocated_more_than_on_new_limit = "Resource pool RAM configuration error - allocated RAM more than on the new RAM limit"
+    vm_can_not_reserve_resource_when_vm_not_in_virtual_rp = (
+        "VM can't reserve resource when VM not in virtual resource pool"
+    )
+    vm_can_not_reserve_more_cpu_than_available_on_the_virtual_rp = (
+        "VM can't reserve more CPU than available on the virtual resource pool"
+    )
+    vm_can_not_reserve_more_ram_than_available_on_the_virtual_rp = (
+        "VM can't reserve more RAM than available on the virtual resource pool"
+    )
+    rp_cpu_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool CPU configuration error - allocated CPU core more than on the new CPU core limit"
+    rp_ram_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool RAM configuration error - allocated RAM more than on the new RAM limit"
     rp_create_error = "Resource pool create error"
     rp_already_exists = "Resource pool with this name already exists"
     vm_present_on_any_virtual_resource_pool = "VM present on any virtual resource pool"

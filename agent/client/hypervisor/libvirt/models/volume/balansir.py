@@ -1,11 +1,18 @@
 from pydantic import BaseModel, computed_field
 
 
+class ResourceReservationVM(BaseModel):
+    cpu_core_count: int  # Сколько ядер установить в качестве резерва
+    ram: int  # Какой объем RAM установить в качестве резерва(в байтах)
+    vm_uuid: str
+
+
 class ResourcePoolVirtualCreate(BaseModel):
     name: str
     cpu_core_limit: int  # Сколько ядер установить в качестве лимита
     ram_limit: int  # Какой объем RAM установить в качестве лимита(в байтах)
     vm_uuid_list: list[str] | None = None
+    vm_reservation_list: list[ResourceReservationVM] | None = None
 
 
 class ResourcePoolVirtualEdit(BaseModel):
@@ -16,6 +23,7 @@ class ResourcePoolVirtualEdit(BaseModel):
     )
     vm_uuid_list: list[str] | str | None = None
     save_current_vms: bool = True  # Сохранять ли текущие ВМ ресурс пула
+    vm_reservation_list: list[ResourceReservationVM] | None = None
 
 
 class ResourcePoolVirtual(BaseModel):
@@ -27,6 +35,7 @@ class ResourcePoolVirtual(BaseModel):
     ram_allocated: int  # Какой объем RAM уже используется(в байтах)
     ram_available: int  # Какой объем RAM свободен для использования(в байтах)
     vm_uuid_list: list[str] | None = None  # Количество ВМ в ресурс пуле
+    vm_reservation_list: list[ResourceReservationVM] | None = None
 
     @computed_field
     @property

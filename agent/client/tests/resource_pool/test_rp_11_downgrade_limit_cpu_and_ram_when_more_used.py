@@ -10,7 +10,7 @@ from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     StoragePoolType,
     ResourcePoolEditRequest,
 )
-from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import (
+from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualEdit,
 )
 

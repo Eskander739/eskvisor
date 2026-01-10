@@ -12,10 +12,11 @@ from agent.client.cli import CLIControl
 from agent.client.constants import INVALID_LINUX_CHAR
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
 from agent.client.hypervisor.libvirt.models.msg import RpMessage, CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.volume.resource_pool_virtual import (
+from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
     ResourcePoolVirtual,
     ResourcePoolVirtualEdit,
+    ResourceReservationVM,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -25,6 +26,11 @@ load_dotenv()
 class Balansir:
     """
     Балансиръ - виртуальный менеджер ресурс пулов для контроля CPU и RAM лимитов
+
+    Мониторинг ресурсов - не даем текущим ВМ превышать лимит по ресурсам + резервы
+
+    При попытке ВМ взять ресурсов больше чем доступно в ресурс пуле ->
+    проверяем есть ли ресурсы в резерве, если есть - берем не превышая лимиты УЖЕ резерва
     """
 
     def __init__(self):
@@ -42,7 +48,6 @@ class Balansir:
                 cmd_args = ["mkdir", root_dir]
                 self.logger.info(f"Создание корневой директории: '{root_dir}'")
                 result = self.cli.execute(cmd_args)
-                print("os.path.exists(root_dir): ", os.path.exists(root_dir))
                 if not os.path.exists(root_dir):
                     err_text = f"Ошибка создания корневой директории: '{root_dir}', команда: '{cmd_args}', результат: '{result}'"
                     self.logger.warning(err_text)
@@ -127,6 +132,53 @@ class Balansir:
             raise ValueError(
                 f"Некорректный тип данных: '{type(create_rp.vm_uuid_list)}'"
             )
+
+    def validate_resource_reservation(
+        self,
+        name: str | Path,
+        vm_reservation_list: list[ResourceReservationVM],
+        vm_uuid_list: list[str],
+    ):
+        internal_request_id = str(uuid.uuid4())
+        current_virtual_resource_pool = self.get_virtual_resource_pool_by_name(name)
+        virtual_rp_info = current_virtual_resource_pool.rp_info
+        for current_resource_reservation_vm in vm_reservation_list:
+            if not isinstance(current_resource_reservation_vm, ResourceReservationVM):
+                raise ValueError(
+                    f"Неизвестный тип данных: '{type(current_resource_reservation_vm)}'"
+                )
+            if not current_resource_reservation_vm.vm_uuid_list in vm_uuid_list:
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.vm_can_not_reserve_resource_when_vm_not_in_virtual_rp.value,
+                    code=CommandMessagesEnum.vm_can_not_reserve_resource_when_vm_not_in_virtual_rp.name,
+                    success=False,
+                )
+            if (
+                current_resource_reservation_vm.cpu_core_count
+                > virtual_rp_info.cpu_core_limit
+            ):
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.vm_can_not_reserve_more_cpu_than_available_on_the_virtual_rp.value,
+                    code=CommandMessagesEnum.vm_can_not_reserve_more_cpu_than_available_on_the_virtual_rp.name,
+                    success=False,
+                    note=f"VM: {current_resource_reservation_vm.vm_uuid}, "
+                    f"CPU COUNT RESERVE: {current_resource_reservation_vm.cpu_core_count},"
+                    f"AVAILABLE CPU COUNT: {virtual_rp_info.cpu_core_limit}",
+                )
+            if current_resource_reservation_vm.ram > virtual_rp_info.ram_limit:
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.vm_can_not_reserve_more_ram_than_available_on_the_virtual_rp.value,
+                    code=CommandMessagesEnum.vm_can_not_reserve_more_ram_than_available_on_the_virtual_rp.name,
+                    success=False,
+                    note=f"VM: {current_resource_reservation_vm.vm_uuid}, "
+                    f"RAM RESERVE: {current_resource_reservation_vm.ram},"
+                    f"AVAILABLE RAM: {virtual_rp_info.ram_limit}",
+                )
+        else:
+            return True
 
     def configuration_cpu(
         self,
@@ -260,6 +312,7 @@ class Balansir:
         rp_main_path: Path,
         vm_uuid_list: str | list[str],
         save_current_vms: bool = True,
+        vm_reservation_list: list[ResourceReservationVM] | None = None,
     ) -> RpMessage | bool:
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
@@ -297,7 +350,23 @@ class Balansir:
                         code=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.name,
                         success=False,
                     )
+
+            if vm_reservation_list is not None:
+                if not isinstance(vm_reservation_list, list):
+                    raise ValueError(
+                        f"Неизвестный тип данных: '{type(vm_reservation_list)}'"
+                    )
+
+                validate_vm_reservation_list = self.validate_resource_reservation(
+                    rp_main_path, vm_reservation_list, vm_uuid_list
+                )
+                if validate_vm_reservation_list is not True:
+                    return validate_vm_reservation_list
             vm_info_data = {"vm_uuid_list": vm_uuid_list}
+            if vm_reservation_list is not None:
+                vm_info_data["vm_reservation_list"] = [
+                    rr_vm.model_dump() for rr_vm in vm_reservation_list
+                ]
             with open(vm_info, "wb") as vm_info_file:
                 vm_info_file.write(orjson.dumps(vm_info_data))
 
@@ -530,7 +599,10 @@ class Balansir:
             for current_uuid in edit_rp.vm_uuid_list:
                 self.validate_uuid(current_uuid)
             self.configuration_vm(
-                rp_main_path, edit_rp.vm_uuid_list, edit_rp.save_current_vms
+                rp_main_path,
+                edit_rp.vm_uuid_list,
+                edit_rp.save_current_vms,
+                edit_rp.vm_reservation_list,
             )
             self.logger.info(
                 f"ВМ конфигурация ресурс пула '{edit_rp.cpu_core_limit}' успешно изменена"
@@ -649,7 +721,11 @@ class Balansir:
 
         with open(ram_config, "wb") as ram_info_file:
             ram_info["ram_allocated"] = ram_used
-            ram_info["ram_available"] = ram_info["ram_limit"] - ram_used
+            current_ram_available = ram_info["ram_limit"] - ram_used
+            if rp_virtual_info.vm_reservation_list is not None:
+                for current_rr_vm in rp_virtual_info.vm_reservation_list:
+                    current_ram_available = current_ram_available - current_rr_vm.ram
+            ram_info["ram_available"] = current_ram_available
             ram_info_file.write(orjson.dumps(ram_info))
 
         with open(cpu_config, "r") as cpu_info_file_read:
@@ -657,13 +733,25 @@ class Balansir:
 
         with open(cpu_config, "wb") as cpu_info_file:
             cpu_info["cpu_core_allocated"] = cpu_core_used
-            cpu_info["cpu_core_available"] = cpu_info["cpu_core_limit"] - cpu_core_used
+            current_cpu_core_available = cpu_info["cpu_core_limit"] - cpu_core_used
+            if rp_virtual_info.vm_reservation_list is not None:
+                for current_rr_vm in rp_virtual_info.vm_reservation_list:
+                    current_cpu_core_available = (
+                        current_cpu_core_available - current_rr_vm.cpu_core_count
+                    )
+            cpu_info["cpu_core_available"] = current_cpu_core_available
             cpu_info_file.write(orjson.dumps(cpu_info))
         self.logger.info(f"Синхронизация ресурс пула '{name}' завершена")
 
-    def get_virtual_resource_pool_by_name(self, name: str) -> RpMessage:
-        rp_main_path = Path(self.virtual_rp_manager_path) / name
+    def get_virtual_resource_pool_by_name(self, name: str | Path) -> RpMessage:
+        if isinstance(name, str):
+            rp_main_path = Path(self.virtual_rp_manager_path) / name
+        elif isinstance(name, Path):
+            rp_main_path = name
+        else:
+            raise ValueError(f"Неизвестный тип данных: '{type(name)}'")
         vm_uuid_list = None
+        vm_reservation_list = []
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
@@ -705,8 +793,19 @@ class Balansir:
         vm_config = rp_main_path / "vm_info.json"
         if vm_config.exists():
             with open(vm_config, "r") as vm_info_file:
-                vm_uuid_list = orjson.loads(vm_info_file.read()).get("vm_uuid_list")
+                file_data = orjson.loads(vm_info_file.read())
+                vm_uuid_list = file_data.get("vm_uuid_list")
+                vm_reservation_list_data = file_data.get("vm_reservation_list")
 
+        if vm_reservation_list_data:
+            for current_rr_vm in vm_reservation_list_data:
+                vm_reservation_list.append(
+                    ResourceReservationVM(
+                        cpu_core_count=current_rr_vm.get("cpu_core_count"),
+                        ram=current_rr_vm.get("ram"),
+                        vm_uuid=current_rr_vm.get("vm_uuid"),
+                    )
+                )
         rp_virtual = ResourcePoolVirtual(
             name=name,
             cpu_core_limit=cpu_info.get("cpu_core_limit"),
@@ -716,6 +815,7 @@ class Balansir:
             ram_allocated=ram_info.get("ram_allocated"),
             ram_available=ram_info.get("ram_available"),
             vm_uuid_list=vm_uuid_list,
+            vm_reservation_list=vm_reservation_list if vm_reservation_list else None,
         )
         return RpMessage(
             request_id=internal_request_id,
