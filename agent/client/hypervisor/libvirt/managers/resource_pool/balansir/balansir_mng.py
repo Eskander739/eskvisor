@@ -1,5 +1,6 @@
 import datetime
 import shutil
+import time
 
 import orjson
 import os
@@ -141,8 +142,17 @@ class Balansir:
     ):
         internal_request_id = str(uuid.uuid4())
         current_virtual_resource_pool = self.get_virtual_resource_pool_by_name(name)
+        virtual_machines = {}
+        for current_uuid in vm_uuid_list:
+            domain = self.vm_manager.conn.lookupByUUIDString(current_uuid)
+            try:
+                current_vm = self.vm_manager.get_vm_info(domain)
+                virtual_machines[current_uuid] = current_vm
+            except Exception:
+                pass
         virtual_rp_info = current_virtual_resource_pool.rp_info
         for current_resource_reservation_vm in vm_reservation_list:
+            current_vm = virtual_machines[current_resource_reservation_vm.vm_uuid]
             if not isinstance(current_resource_reservation_vm, ResourceReservationVM):
                 raise ValueError(
                     f"Неизвестный тип данных: '{type(current_resource_reservation_vm)}'"
@@ -176,6 +186,27 @@ class Balansir:
                     note=f"VM: {current_resource_reservation_vm.vm_uuid}, "
                     f"RAM RESERVE: {current_resource_reservation_vm.ram},"
                     f"AVAILABLE RAM: {virtual_rp_info.ram_limit}",
+                )
+
+            if current_vm.memory_bytes > current_resource_reservation_vm.ram:
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.vm_can_not_reserve_less_ram_than_use.value,
+                    code=CommandMessagesEnum.vm_can_not_reserve_less_ram_than_use.name,
+                    success=False,
+                    note=f"VM: {current_resource_reservation_vm.vm_uuid}, "
+                    f"RAM RESERVE: {current_resource_reservation_vm.ram},"
+                    f"CURRENT USE RAM: {current_vm.memory_bytes}",
+                )
+            if current_vm.vcpus > current_resource_reservation_vm.cpu_core_count:
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.vm_can_not_reserve_less_cpu_than_use.value,
+                    code=CommandMessagesEnum.vm_can_not_reserve_less_cpu_than_use.name,
+                    success=False,
+                    note=f"VM: {current_resource_reservation_vm.vm_uuid}, "
+                    f"CPU RESERVE: {current_resource_reservation_vm.ram},"
+                    f"CURRENT USE CPU: {current_vm.vcpus}",
                 )
         else:
             return True
@@ -705,8 +736,8 @@ class Balansir:
         ram_used = 0
         if rp_virtual_info.vm_uuid_list:
             for current_uuid in rp_virtual_info.vm_uuid_list:
-                domain = self.vm_manager.conn.lookupByUUIDString(current_uuid)
                 try:
+                    domain = self.vm_manager.conn.lookupByUUIDString(current_uuid)
                     current_vm = self.vm_manager.get_vm_info(domain)
                     cpu_core_used += current_vm.vcpus
                     ram_used += current_vm.max_memory_bytes
@@ -752,6 +783,7 @@ class Balansir:
             raise ValueError(f"Неизвестный тип данных: '{type(name)}'")
         vm_uuid_list = None
         vm_reservation_list = []
+        vm_reservation_list_data = None
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
@@ -806,6 +838,7 @@ class Balansir:
                         vm_uuid=current_rr_vm.get("vm_uuid"),
                     )
                 )
+
         rp_virtual = ResourcePoolVirtual(
             name=name,
             cpu_core_limit=cpu_info.get("cpu_core_limit"),
@@ -857,24 +890,31 @@ if __name__ == "__main__":
     #         name="MAIN_RP3",
     #         cpu_core_limit=2,
     #         ram_limit=536_870_912,
-    #         vm_uuid_list=["6c7762be-7811-44c6-8404-1054a6b72be7"],
+    #         vm_uuid_list=["94df5b49-2da4-44d6-8fe1-9f910b775402"],
     #     )
     # )
     # print(data)
-    mng.sync_resource_pools()
-    print(mng.delete_virtual_resource_pool("RP-TEST-12033"))
-    rp_virtual = mng.get_virtual_resource_pool_by_name("MAIN_RP")
-    rp_virtual = rp_virtual.rp_info
-    print(mng.get_virtual_resource_pool_list())
-    for rp_virtual in mng.get_virtual_resource_pool_list():
-        print("ИМЯ РЕСУРС ПУЛА: ", rp_virtual.name)
-        print("cpu_core_limit: ", rp_virtual.cpu_core_limit)
-        print("cpu_core_allocated: ", rp_virtual.cpu_core_allocated)
-        print("cpu_core_available: ", rp_virtual.cpu_core_available)
-        print("ram_limit: ", rp_virtual.ram_limit)
-        print("ram_allocated: ", rp_virtual.ram_allocated)
-        print("ram_available: ", rp_virtual.ram_available)
-        print("vm_uuid_list: ", rp_virtual.vm_uuid_list)
+    # mng.sync_resource_pools()
+    # # print(mng.delete_virtual_resource_pool("RP-TEST-12033"))
+    # rp_virtual = mng.get_virtual_resource_pool_by_name("MAIN_RP")
+    # rp_virtual = rp_virtual.rp_info
+    # print(mng.get_virtual_resource_pool_list())
+    #
+    # for rp_virtual in mng.get_virtual_resource_pool_list():
+    #     print("ИМЯ РЕСУРС ПУЛА: ", rp_virtual.name)
+    #     print("cpu_core_limit: ", rp_virtual.cpu_core_limit)
+    #     print("cpu_core_allocated: ", rp_virtual.cpu_core_allocated)
+    #     print("cpu_core_available: ", rp_virtual.cpu_core_available)
+    #     print("ram_limit: ", rp_virtual.ram_limit)
+    #     print("ram_allocated: ", rp_virtual.ram_allocated)
+    #     print("ram_available: ", rp_virtual.ram_available)
+    #     print("vm_uuid_list: ", rp_virtual.vm_uuid_list)
+    #     print("СТАТИСТИКА ИСПОЛЬЗОВАНИЯ CPU: ", rp_virtual.usage_info.cpu_percent)
+
+    for _ in range(10):
+        rp_virtual = mng.get_virtual_resource_pool_by_name("MAIN_RP3")
+        rp_virtual = rp_virtual.rp_info
+        print("СТАТИСТИКА ИСПОЛЬЗОВАНИЯ CPU: ", rp_virtual.usage_info.cpu_percent)
     b = datetime.datetime.now()
     print(b)
     print(b - a)

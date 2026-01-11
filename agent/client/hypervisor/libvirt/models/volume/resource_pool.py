@@ -251,7 +251,6 @@ class ResourcePool(BaseModel):
 
     vms: list[str] = Field(default_factory=list)
     reservations: dict | None = None
-    usage: UsageInfo | None = None
 
     # ========== ВЫЧИСЛЯЕМЫЕ ПОЛЯ для удобства ==========
 

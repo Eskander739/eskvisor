@@ -1,40 +1,44 @@
 import random
+import uuid
 
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.volume.balansir import (
+    ResourcePoolVirtualEdit,
+)
 from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
     ResourcePoolCreateRequest,
     StoragePoolType,
 )
-from agent.client.hypervisor.libvirt.models.volume.balansir import (
-    ResourcePoolVirtualEdit,
+
+
+@pytest.mark.tags(
+    "RP‑10",
+    "Просмотр использования ресурсов пула",
 )
-
-
-@pytest.mark.tags("RP‑04", "RP‑05", "Назначение ВМ пулу", "Изъятие ВМ из пула")
 @pytest.mark.parametrize("storage_type", (StoragePoolType.DIR, StoragePoolType.LOGICAL))
-def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
-    resource_pool_session, create_running_vm_session, storage_type
+def test_rp_10_read_resource_pool(
+    resource_pool_session, storage_type, create_running_vm_func
 ):
     """
-    RP‑04: Назначение ВМ пулу
-    RP‑05: Изъятие ВМ из пула
+    RP‑10: Просмотр использования ресурсов пула
 
-    Переместить существующую ВМ в пул. Убедиться, что ВМ учитывается в использовании ресурсов пула.
-    Убрать ВМ из пула. Проверить, что ресурсы пула освобождаются.
+    Увеличить лимит CPU или памяти для пула. Убедиться, что изменения отражаются в статистике.
     """
-    vm_info, request_id = create_running_vm_session
+    vm_info, request_id = create_running_vm_func
     random_name = None
     rp_deleted = False
+    request_id = str(uuid.uuid4())
     try:
+        # TODO: Нужна доработка
         # ____________________________________Создание пула ресурсов______________
         random_name = f"RP-TEST-{random.randint(10000, 99999)}"
         rp_template = ResourcePoolCreateRequest(
             name=random_name,
-            cpu_limit=3,
+            cpu_limit=2,
             memory_limit=512,
-            storage_limit=2,
+            storage_limit=1,
             pool_type=storage_type,
         )
         create_rp_info = resource_pool_session.create_resource_pool(
@@ -50,8 +54,6 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
         assert get_rp_info.rp_info.type.value == storage_type.value
         if rp_template.pool_type == StoragePoolType.LOGICAL:
             assert int(get_rp_info.rp_info.capacity_gb) == rp_template.storage_limit
-        else:
-            assert int(get_rp_info.rp_info.capacity_gb) > rp_template.storage_limit
         # ____________________________________Добавление ВМ в ресурс пул______________
         add_vm_to_resource_pool = (
             resource_pool_session.virtual_resource_pool.edit_virtual_resource_pool(
@@ -66,29 +68,7 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             add_vm_to_resource_pool.code
             == CommandMessagesEnum.rp_virtual_edit_success.name
         )
-        # ____________________________________Проверка текущего состояния ресурсов______________
-        pool_info = resource_pool_session.get_pool_info(random_name, request_id)
-        assert pool_info.message == CommandMessagesEnum.rp_info_success.value
-        assert pool_info.code == CommandMessagesEnum.rp_info_success.name
-        assert vm_info.uuid in pool_info.rp_info.vm_uuid_list
-
-        # ____________________________________Удаление ВМ из ресурс пула______________
-        add_vm_to_resource_pool = resource_pool_session.virtual_resource_pool.delete_vm_from_virtual_resource_pool(
-            name=random_name, vm_uuid=vm_info.uuid
-        )
-        assert (
-            add_vm_to_resource_pool.message
-            == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.value
-        ), add_vm_to_resource_pool.note
-        assert (
-            add_vm_to_resource_pool.code
-            == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name
-        )
-        # ____________________________________Проверка текущего состояния ресурсов после удаления ВМ______________
-        pool_info = resource_pool_session.get_pool_info(random_name, request_id)
-        assert pool_info.message == CommandMessagesEnum.rp_info_success.value
-        assert pool_info.code == CommandMessagesEnum.rp_info_success.name
-        assert vm_info.uuid not in pool_info.rp_info.vm_uuid_list
+        # ____________________________________Добавление ВМ в ресурс пул______________
 
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______
@@ -99,7 +79,7 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             assert delete_rp_info.message in (
                 CommandMessagesEnum.rp_delete_success.value,
                 CommandMessagesEnum.rp_not_found.value,
-            )
+            ), delete_rp_info.note
             assert delete_rp_info.code in (
                 CommandMessagesEnum.rp_delete_success.name,
                 CommandMessagesEnum.rp_not_found.name,

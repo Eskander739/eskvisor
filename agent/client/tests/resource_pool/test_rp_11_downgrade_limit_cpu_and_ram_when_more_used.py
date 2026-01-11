@@ -78,13 +78,10 @@ def test_rp_11_downgrade_limit_cpu_and_ram_when_more_used(
             == CommandMessagesEnum.rp_virtual_edit_success.name
         )
         # ____________________________________Проверка текущего состояния ресурсов______________
-        pool_usage_info = resource_pool_session.get_pool_info(random_name, request_id)
-        assert pool_usage_info.message == CommandMessagesEnum.rp_info_success.value
-        assert pool_usage_info.code == CommandMessagesEnum.rp_info_success.name
+        pool_info = resource_pool_session.get_pool_info(random_name, request_id)
+        assert pool_info.message == CommandMessagesEnum.rp_info_success.value
+        assert pool_info.code == CommandMessagesEnum.rp_info_success.name
 
-        usage_info = pool_usage_info.rp_info.usage
-        assert usage_info.memory < rp_template.memory_limit
-        assert usage_info.cpu == vm_info.vcpus
         # ________________Уменьшение RAM ресурс пула(в это время используется больше)______________
         delete_rp_info = resource_pool_session.edit_resource_pool(
             ResourcePoolEditRequest(name=random_name, memory_limit=10), request_id

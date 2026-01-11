@@ -123,9 +123,12 @@ class CommandMessagesEnum(Enum):
     vm_can_not_reserve_more_cpu_than_available_on_the_virtual_rp = (
         "VM can't reserve more CPU than available on the virtual resource pool"
     )
+
     vm_can_not_reserve_more_ram_than_available_on_the_virtual_rp = (
         "VM can't reserve more RAM than available on the virtual resource pool"
     )
+    vm_can_not_reserve_less_ram_than_use = "VM can't reserve less RAM than use"
+    vm_can_not_reserve_less_cpu_than_use = "VM can't reserve less CPU than use"
     rp_cpu_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool CPU configuration error - allocated CPU core more than on the new CPU core limit"
     rp_ram_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool RAM configuration error - allocated RAM more than on the new RAM limit"
     rp_create_error = "Resource pool create error"

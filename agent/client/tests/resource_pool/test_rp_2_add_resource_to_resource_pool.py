@@ -1,0 +1,81 @@
+import random
+import uuid
+
+import pytest
+
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
+from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
+    ResourcePoolCreateRequest,
+    StoragePoolType,
+    ResourcePoolEditRequest,
+)
+
+
+@pytest.mark.tags(
+    "RP‑02",
+    "Удаление пула (пустой)",
+)
+@pytest.mark.parametrize("storage_type", (StoragePoolType.DIR, StoragePoolType.LOGICAL))
+def test_rp_02_add_resource_to_resource_pool(resource_pool_session, storage_type):
+    """
+    RP‑02: Добавление ресурсов в пул
+
+    Увеличить лимит CPU или памяти для пула. Убедиться, что изменения отражаются в статистике.
+    """
+    random_name = None
+    rp_deleted = False
+    request_id = str(uuid.uuid4())
+    try:
+        # ____________________________________Создание пула ресурсов______________
+        random_name = f"RP-TEST-{random.randint(10000, 99999)}"
+        rp_template = ResourcePoolCreateRequest(
+            name=random_name,
+            cpu_limit=2,
+            memory_limit=512,
+            storage_limit=1,
+            pool_type=storage_type,
+        )
+        edit_rp_template = ResourcePoolEditRequest(
+            name=random_name, memory_limit=1024, cpu_limit=3
+        )
+        create_rp_info = resource_pool_session.create_resource_pool(
+            rp_template, request_id
+        )
+        assert create_rp_info.message == CommandMessagesEnum.rp_create_success.value
+        assert create_rp_info.code == CommandMessagesEnum.rp_create_success.name
+        assert create_rp_info.rp_info is not None
+        get_rp_info = resource_pool_session.get_pool_info(random_name, request_id)
+        assert get_rp_info.rp_info.name == random_name
+        assert get_rp_info.rp_info.cpu_limit == rp_template.cpu_limit
+        assert get_rp_info.rp_info.memory_limit_gb == rp_template.memory_limit / 1024
+        assert get_rp_info.rp_info.type.value == storage_type.value
+        if rp_template.pool_type == StoragePoolType.LOGICAL:
+            assert int(get_rp_info.rp_info.capacity_gb) == rp_template.storage_limit
+        # ____________________________________Добавление ресурсов в пул______________
+        add_resource_info = resource_pool_session.edit_resource_pool(
+            edit_rp_template, request_id
+        )
+        assert add_resource_info.message == CommandMessagesEnum.rp_edit_success.value
+        assert add_resource_info.code == CommandMessagesEnum.rp_edit_success.name
+        # ____________________________________Проверка наличия новых ресурсов______________
+        pool_info = resource_pool_session.get_pool_info(random_name, request_id)
+        assert pool_info.message == CommandMessagesEnum.rp_info_success.value
+        assert pool_info.code == CommandMessagesEnum.rp_info_success.name
+
+        rp_info = pool_info.rp_info
+        assert rp_info.memory_limit == edit_rp_template.memory_limit_bytes
+        assert rp_info.cpu_limit == edit_rp_template.cpu_limit
+    finally:
+        # ______________________________Удаление пула ресурсов(постусловие)_______
+        if not rp_deleted:
+            delete_rp_info = resource_pool_session.delete_resource_pool(
+                random_name, request_id
+            )
+            assert delete_rp_info.message in (
+                CommandMessagesEnum.rp_delete_success.value,
+                CommandMessagesEnum.rp_not_found.value,
+            ), delete_rp_info.note
+            assert delete_rp_info.code in (
+                CommandMessagesEnum.rp_delete_success.name,
+                CommandMessagesEnum.rp_not_found.name,
+            )

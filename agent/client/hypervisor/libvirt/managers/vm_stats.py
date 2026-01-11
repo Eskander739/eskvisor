@@ -24,7 +24,7 @@ class VMLiveMonitor:
     def __init__(self, vm_name: str, interval_seconds=2):
         self.logger = DefaultLogger("VMLiveMonitor")
         self.connection_uri = os.environ.get("CONNECTION_URI")
-        self.vm_name = vm_name
+        self.vm_name = vm_name  # можно передавать и UUID ВМ
         self.interval = interval_seconds
         self.running = True
         self.history_size = 60  # Храним 60 последних измерений
@@ -185,9 +185,9 @@ class VMLiveMonitor:
                     header_printed = True
 
                 current_time = timestamp.strftime("%H:%M:%S")
-                cpu_str = f"{cpu_percent:.1f}%"
+                cpu_str = f"{cpu_percent:.3f}%"
                 ram_used_str = f"{memory_usage.current_mb:.1f}MB"
-                ram_rss_str = f"{memory_usage.rss_mb:.1f}MB"
+                ram_rss_str = f"{memory_usage.rss_mb:.3f}MB"
                 ram_percent_str = f"{memory_usage.usage_percent:.1f}%"
                 vcpu_str = (
                     f"{stats.get('vcpu.current', 0)}/{stats.get('vcpu.maximum', 0)}"
@@ -212,31 +212,26 @@ class VMLiveMonitor:
 
     def get_statistics(self):
         """Получение агрегированной статистики"""
-        if not self.cpu_history or not self.memory_history:
-            return {}
+        if not self.cpu_history:
+            return None
 
-        # Статистика по CPU
+        # Правильный расчет статистик
         cpu_values = [entry["cpu_percent"] for entry in self.cpu_history]
-        vcpu_current_values = [entry["vcpu_current"] for entry in self.cpu_history]
+        vcpu_values = [entry["vcpu_current"] for entry in self.cpu_history]
 
-        # Статистика по памяти
         memory_current_values = [entry["current_mb"] for entry in self.memory_history]
         memory_rss_values = [entry["rss_mb"] for entry in self.memory_history]
         memory_percent_values = [
             entry["usage_percent"] for entry in self.memory_history
         ]
 
-        stat_info = VMStats(
+        return VMStats(
             cpu=CpuStat(
-                avg=cpu_values[0],
-                min=cpu_values[0],
-                max=cpu_values[0],
+                avg=sum(cpu_values) / len(cpu_values) if cpu_values else 0,
+                min=min(cpu_values) if cpu_values else 0,
+                max=max(cpu_values) if cpu_values else 0,
                 current=cpu_values[-1] if cpu_values else 0,
-                vcpu_avg=(
-                    sum(vcpu_current_values) / len(vcpu_current_values)
-                    if vcpu_current_values
-                    else 0
-                ),
+                vcpu_avg=sum(vcpu_values) / len(vcpu_values) if vcpu_values else 0,
             ),
             memory=MemoryStat(
                 current_mb_avg=(
@@ -263,26 +258,64 @@ class VMLiveMonitor:
             ),
             samples=len(self.cpu_history),
         )
-        return stat_info
 
     def used_ram_and_cpu(self) -> CpuAndRamUsage | None:
+        """Получение текущего использования CPU и RAM"""
         self.logger.info(
             "Получение статистики об используемом RAM, количестве ядер, нагрузке CPU"
         )
-        stats = self.get_vm_stats()
-        if stats is None:
+
+        # Первое измерение для установки базовых значений
+        stats1 = self.get_vm_stats()
+        if not stats1:
+            self.logger.warning(
+                f"Не удалось получить статистику для ВМ: {self.vm_name}"
+            )
             return None
-        cpu_percent = self.calculate_cpu_usage(stats)
-        memory_usage = self.calculate_memory_usage(stats)
-        data = memory_usage.rss_mb, stats.get("vcpu.current"), cpu_percent
+
+        # Ждем для расчета CPU %
+        time.sleep(self.interval)  # Используем заданный интервал
+
+        # Второе измерение
+        stats2 = self.get_vm_stats()
+        if not stats2:
+            self.logger.warning("Не удалось получить второе измерение")
+            return None
+
+        # Расчет CPU % между двумя измерениями
+        cpu_percent = self._calculate_cpu_usage_between(stats1, stats2)
+
+        # Расчет памяти по последнему измерению
+        memory_usage = self.calculate_memory_usage(stats2)
+
+        data = CpuAndRamUsage(
+            memory=memory_usage.rss_mb,
+            cpu_core_count=stats2.get("vcpu.current", 1),
+            cpu_usage_percent=cpu_percent,
+        )
+
         self.logger.info(
-            f"Получена статистика об используемом RAM: '{data[0]}', "
-            f"количестве ядер: '{data[1]}', "
-            f"нагрузке CPU: '{data[2]}'"
+            f"Статистика: RAM={data.memory:.3f}MB, "
+            f"CPU Cores={data.cpu_core_count}, "
+            f"CPU Usage={data.cpu_usage_percent:.3f}%"
         )
-        return CpuAndRamUsage(
-            memory=data[0], cpu_core_count=data[1], cpu_usage_percent=data[2]
-        )
+        return data
+
+    def _calculate_cpu_usage_between(self, stats1, stats2):
+        """Расчет CPU % между двумя измерениями"""
+        if "cpu.time" not in stats1 or "cpu.time" not in stats2:
+            return 0
+
+        time_diff_ns = stats2["cpu.time"] - stats1["cpu.time"]
+        vcpu_count = stats2.get("vcpu.current", 1)
+
+        # Предполагаем, что между вызовами прошло self.interval секунд
+        max_possible_ns = vcpu_count * self.interval * 1e9
+
+        if max_possible_ns <= 0:
+            return 0
+
+        return min((time_diff_ns / max_possible_ns) * 100, 100.0)
 
 
 def signal_handler(sig, frame):
@@ -298,10 +331,10 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
     # Запуск мониторинга
-    monitor = VMLiveMonitor("VM-TEST-31174", interval)
-    for _ in range(10):
-        data = monitor.used_ram_and_cpu()
-        time.sleep(2)
+    monitor = VMLiveMonitor("94df5b49-2da4-44d6-8fe1-9f910b775402", interval)
+    # for _ in range(10):
+    #     data = monitor.used_ram_and_cpu()
+    monitor.monitor_loop()
     # cpu_percent = monitor.calculate_cpu_usage(stats)
     # memory_usage = monitor.calculate_memory_usage(stats)
     # print(cpu_percent)

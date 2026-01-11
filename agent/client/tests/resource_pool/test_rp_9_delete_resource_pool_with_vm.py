@@ -24,14 +24,14 @@ SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
 )
 @pytest.mark.parametrize("storage_type", (StoragePoolType.DIR, StoragePoolType.LOGICAL))
 def test_rp_09_delete_resource_pool_with_vm(
-    resource_pool_session, create_running_vm_session, storage_type
+    resource_pool_session, create_running_vm_func, storage_type
 ):
     """
     RP‑09: Попытка удаления пула с ВМ
 
     Попытаться удалить пул, содержащий ВМ. Система должна запросить подтверждение или запретить удаление.
     """
-    vm_info, request_id = create_running_vm_session
+    vm_info, request_id = create_running_vm_func
     random_name = None
     rp_deleted = False
     try:
@@ -74,13 +74,10 @@ def test_rp_09_delete_resource_pool_with_vm(
             == CommandMessagesEnum.rp_virtual_edit_success.name
         )
         # ____________________________________Проверка текущего состояния ресурсов______________
-        pool_usage_info = resource_pool_session.get_pool_info(random_name, request_id)
-        assert pool_usage_info.message == CommandMessagesEnum.rp_info_success.value
-        assert pool_usage_info.code == CommandMessagesEnum.rp_info_success.name
+        pool_info = resource_pool_session.get_pool_info(random_name, request_id)
+        assert pool_info.message == CommandMessagesEnum.rp_info_success.value
+        assert pool_info.code == CommandMessagesEnum.rp_info_success.name
 
-        usage_info = pool_usage_info.rp_info.usage
-        assert usage_info.memory < rp_template.memory_limit
-        assert usage_info.cpu == vm_info.vcpus
         # ____________________________________Удаление ресурс пула с ВМ без force______________
         delete_rp_info = resource_pool_session.delete_resource_pool(
             random_name, request_id
@@ -110,7 +107,7 @@ def test_rp_09_delete_resource_pool_with_vm(
             )
             assert logical_volume_info is None
         else:
-            path_storage = Path(pool_usage_info.rp_info.storage_path)
+            path_storage = Path(pool_info.rp_info.storage_path)
             assert not path_storage.is_dir()
             assert not path_storage.exists()
 

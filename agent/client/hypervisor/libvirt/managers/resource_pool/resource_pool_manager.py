@@ -1125,22 +1125,6 @@ class PoolManager(LibvirtClient):
             ):
                 return virtual_resource_pool_info
             virtual_resource_pool = virtual_resource_pool_info.rp_info
-            usage_info = UsageInfo()
-            ram_usage = 0
-            cpu_count_usage = 0
-            print(
-                "virtual_resource_pool.vm_uuid_list: ",
-                virtual_resource_pool.vm_uuid_list,
-            )
-            if virtual_resource_pool.vm_uuid_list:
-                for current_vm in virtual_resource_pool.vm_uuid_list:
-                    cpu_and_memory_usage_info = self.vm_live_monitor_cls(
-                        current_vm
-                    ).used_ram_and_cpu()
-                    ram_usage += cpu_and_memory_usage_info.memory
-                    cpu_count_usage += cpu_and_memory_usage_info.cpu_core_count
-            usage_info.cpu = cpu_count_usage
-            usage_info.memory = ram_usage
             # Используем capacity из XML если он есть, иначе из info[1]
             if pool_type == StoragePoolType.LOGICAL:
                 capacity_bytes = self.logic_volume_manager.get_volume_by_name(
@@ -1180,7 +1164,7 @@ class PoolManager(LibvirtClient):
                     ),
                     cpu_limit=virtual_resource_pool.cpu_core_limit,
                     memory_limit=virtual_resource_pool.ram_limit,
-                    usage=usage_info,
+                    usage=virtual_resource_pool.usage_info,
                 ),
             )
         except self.libvirtError as e:

@@ -48,15 +48,14 @@ def test_vm_01_create_vm(vm_session, vm_state):
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________
         if random_name is not None:
-            pass
-            # delete_vm_info = vm_session.delete_vm_with_force(
-            #     name=random_name, request_id=request_id
-            # )
-            # assert (
-            #     delete_vm_info.message
-            #     == CommandMessagesEnum.vm_successfully_deleted.value
-            # )
-            # assert (
-            #     delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
-            # )
-            # assert delete_vm_info.success is True
+            delete_vm_info = vm_session.delete_vm_with_force(
+                name=random_name, request_id=request_id
+            )
+            assert (
+                delete_vm_info.message
+                == CommandMessagesEnum.vm_successfully_deleted.value
+            )
+            assert (
+                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+            )
+            assert delete_vm_info.success is True
