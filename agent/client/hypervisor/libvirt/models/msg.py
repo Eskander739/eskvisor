@@ -7,17 +7,7 @@ from agent.client.hypervisor.libvirt.models.network import (
     NetworkInfo,
     NetworkInterfacesInfo,
 )
-from agent.client.hypervisor.libvirt.models.volume.resource_pool import (
-    AddVMInResourcePool,
-    AdjustResourcePool,
-    DeleteResourcePool,
-    RemoveVMInResourcePool,
-    ResourcePool,
-    ResourcePoolList,
-    ResourcePoolReservation,
-    ResourcePoolState,
-    ResourcePoolUpdates,
-)
+
 from agent.client.hypervisor.libvirt.models.snapshots import (
     ClonedSnapshot,
     CreateMultipleSnapshots,
@@ -83,7 +73,6 @@ class CommandMessagesEnum(Enum):
     disk_founded_by_target_dev = "Disk founded by target_dev"
     vm_edit_success = "VM successfully edited"
     vm_edit_error = "VM edit error"
-    vm_edit_xml_error = "VM edit XML error"
     vm_edit_unexpected_error = "VM edit unexpected error"
     virtual_network_successfully_created = "Virtual network successfully created"
     virtual_network_create_error = "Virtual network create error"
@@ -104,18 +93,22 @@ class CommandMessagesEnum(Enum):
     virtual_network_restart_error = "Virtual network restart error"
 
     # Ресурс пулы
-    rp_success = "Resource pool operation successful"
-    rp_error = "Resource pool operation error"
 
-    rp_create_success = "Resource pool successfully created"
     virtual_rp_create_success = "Virtual resource pool successfully created"
-    virtual_rp_create_error = "Virtual resource pool create error"
+    virtual_rp_create_logic_volume_error = (
+        "Virtual resource pool create logic volume error"
+    )
     rp_ram_or_cpu_more_than_on_node = "Resource pool RAM/CPU more than on the node"
     rp_already_created = "Resource pool already"
     vm_list_is_correct = "VM List is correct"
     rp_cpu_configuration_not_found = "Resource pool CPU configuration not found"
     rp_ram_configuration_not_found = "Resource pool RAM configuration not found"
-    rp_cpu_configuration_error = "Resource pool CPU configuration error"
+    rp_cpu_configuration_file_not_found = (
+        "Resource pool CPU configuration file not found"
+    )
+    rp_storage_configuration_file_not_found = (
+        "Resource pool STORAGE configuration file not found"
+    )
     rp_ram_configuration_error = "Resource pool RAM configuration error"
     vm_can_not_reserve_resource_when_vm_not_in_virtual_rp = (
         "VM can't reserve resource when VM not in virtual resource pool"
@@ -129,13 +122,12 @@ class CommandMessagesEnum(Enum):
     )
     vm_can_not_reserve_less_ram_than_use = "VM can't reserve less RAM than use"
     vm_can_not_reserve_less_cpu_than_use = "VM can't reserve less CPU than use"
+    rp_storage_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool STORAGE configuration error - allocated STORAGE more than on the new STORAGE limit"
     rp_cpu_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool CPU configuration error - allocated CPU core more than on the new CPU core limit"
     rp_ram_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool RAM configuration error - allocated RAM more than on the new RAM limit"
     rp_create_error = "Resource pool create error"
-    rp_already_exists = "Resource pool with this name already exists"
     vm_present_on_any_virtual_resource_pool = "VM present on any virtual resource pool"
 
-    rp_delete_success = "Resource pool successfully deleted"
     rp_virtual_delete_success = "Virtual resource pool successfully deleted"
     rp_virtual_edit_success = "Virtual resource pool successfully edited"
     rp_virtual_successfully_found = "Virtual resource pool successfully found"
@@ -144,42 +136,10 @@ class CommandMessagesEnum(Enum):
     )
     rp_virtual_delete_error = "Virtual resource pool delete error"
     rp_virtual_not_found = "Virtual resource pool not found"
-    rp_delete_error = "Resource pool delete error"
-    rp_delete_not_empty_error = "Cannot delete non-empty resource pool"
     rp_not_found = "Resource pool not found"
-
-    rp_edit_success = "Resource pool successfully edited"
-    rp_edit_error = "Resource pool edit error"
-
-    rp_resource_adjust_success = "Resource pool resource adjust success"
-    rp_resource_adjust_error = "Resource pool resource adjust error"
-    rp_insufficient_resources = "Insufficient resources in pool"
-    rp_resource_in_use = "Resource cannot be reduced below current usage"
-
-    rp_set_reservation_success = "Resource pool reservation set success"
-    rp_set_reservation_error = "Resource pool reservation set error"
-    rp_set_limit_success = "Resource pool limit set success"
-    rp_set_limit_error = "Resource pool limit set error"
-
-    rp_vm_add_success = "VM successfully added to resource pool"
-    rp_vm_add_error = "VM add to resource pool error"
-    rp_vm_remove_success = "VM successfully removed from resource pool"
-    rp_vm_remove_error = "VM remove from resource pool error"
-    rp_vm_not_found = "VM not found"
-
-    rp_start_success = "Resource pool successfully started"
-    rp_start_error = "Resource pool start error"
-    rp_stop_success = "Resource pool successfully stopped"
-    rp_stop_error = "Resource pool stop error"
-    rp_already_running = "Resource pool already running"
-    rp_already_stopped = "Resource pool already stopped"
-
-    rp_usage_info_success = "Resource pool usage info retrieved"
-    rp_info_success = "Resource pool info retrieved"
-    rp_info_error = "Resource pool info error"
-    rp_usage_info_error = "Resource pool usage info error"
-    rp_list_success = "Resource pools list retrieved"
-    rp_list_error = "Resource pools list error"
+    forbidden_set_available_and_allocated_data = (
+        "Forbidden set available and allocated data when creating virtual resource pool"
+    )
 
     # Снапшоты
     snapshot_successfully_created = "Snapshot successfully created"
@@ -197,6 +157,10 @@ class CommandMessagesEnum(Enum):
     snapshot_clone_success = "Snapshot clone success"
     snapshot_clone_error = "Snapshot clone error"
     snapshot_insufficient_space = "Insufficient space for snapshot"
+
+    # Logic Volume
+    edit_logic_volume_error = "Edit logic volume error"
+    delete_logic_volume_error = "Delete logic volume error"
 
 
 class DefaultMessage(BaseModel):
@@ -251,19 +215,7 @@ class RpMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
 
     success: bool
-    rp_info: (
-        ResourcePoolList
-        | ResourcePool
-        | AdjustResourcePool
-        | AddVMInResourcePool
-        | RemoveVMInResourcePool
-        | ResourcePoolReservation
-        | ResourcePoolUpdates
-        | DeleteResourcePool
-        | ResourcePoolState
-        | ResourcePoolVirtual
-        | None
-    ) = None
+    rp_info: ResourcePoolVirtual | None = None
     note: str | None = None
 
 

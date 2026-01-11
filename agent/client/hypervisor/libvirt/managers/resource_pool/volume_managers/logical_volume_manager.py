@@ -121,8 +121,32 @@ class LogicalVolumeManager:
         result = self.cli.execute(cmd_args)
         return result
 
-    def edit_volume(self):
-        raise NotImplementedError
+    def edit_volume(
+        self,
+        logic_volume_name: str,
+        volume_group_name: str,
+        logic_volume_size: int | float,
+        logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
+        thin_pool: bool = True,
+    ):
+        current_lv = self.get_volume_by_name(logic_volume_name, volume_group_name)
+        if current_lv is None:
+            return False
+        self.logger.info(
+            f"Расширение размера логического тома {logic_volume_name} на {logic_volume_size} {logic_volume_size_type.name}"
+        )
+        cmd_args = [
+            "lvextend",
+            "-L",
+            f"+{str(logic_volume_size)}{logic_volume_size_type.value}",  # Размер создаваемого LV и тип размера создаваемого LV,
+        ]
+        if thin_pool:
+            meta_size = max(logic_volume_size * 0.01, 512 * 1024 * 64)
+            cmd_args.append("--poolmetadatasize")
+            cmd_args.append(f"+{meta_size}B")
+        cmd_args.append(f"{volume_group_name}/{logic_volume_name}")
+        result = self.cli.execute(cmd_args)
+        return result
 
     def get_volume_by_name(
         self, logic_volume_name: str, volume_group_name: str
@@ -279,6 +303,7 @@ class LogicalVolumeManager:
 if __name__ == "__main__":
     manager = LogicalVolumeManager()
     # manager.create_volume("ESKA", 1.5, "vg_eskvisor_01")
+    manager.delete_all_volume("vg_eskvisor_01")
     for pv in manager.get_volume_list():
         print("-" * 50)
         print("ИМЯ ЛОГИЧЕСКОГО ТОМА: ", pv.logic_volume_name)

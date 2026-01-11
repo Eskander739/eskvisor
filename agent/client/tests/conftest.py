@@ -6,8 +6,8 @@ import uuid
 import pytest
 
 from agent.client.hypervisor.libvirt.managers.network_manager import NetworkManager
-from agent.client.hypervisor.libvirt.managers.resource_pool.resource_pool_manager import (
-    PoolManager,
+from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.balansir_mng import (
+    Balansir,
 )
 from agent.client.hypervisor.libvirt.managers.snapshot_manager import SnapshotManager
 from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
@@ -156,7 +156,7 @@ def virsh_console_session():
 
 @pytest.fixture(scope="session")
 def resource_pool_session():
-    with PoolManager() as rp_manager:
+    with Balansir() as rp_manager:
         yield rp_manager
 
 

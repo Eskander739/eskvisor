@@ -639,7 +639,15 @@ class StorageManager(LibvirtClient):
                 note=str(e),
             )
 
-    def get_disks_by_vm(self, vm_name: str, request_id) -> list[Disk]:
+    def get_storage_used(self, vm_name: str, request_id: str) -> int:
+        used_storage = 0
+        all_disks = self.get_disks_by_vm(vm_name, request_id)
+        for current_disk in all_disks:
+            used_storage += current_disk.allocation_bytes
+
+        return used_storage
+
+    def get_disks_by_vm(self, vm_name: str, request_id: str) -> list[Disk]:
         """
         Получить все диски, подключенные к указанной ВМ
         """

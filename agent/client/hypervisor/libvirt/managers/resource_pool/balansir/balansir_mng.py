@@ -1,16 +1,28 @@
 import datetime
+import random
 import shutil
-import time
+import xml.etree.ElementTree as ET
 
 import orjson
 import os
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
 from agent.client.constants import INVALID_LINUX_CHAR
+from agent.client.hypervisor.libvirt.client import LibvirtClient
+from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.logical_volume_manager import (
+    LogicalVolumeManager,
+)
+from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.physical_volume_manager import (
+    PhysicalVolumeManager,
+)
+from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.volume_group_manager import (
+    VolumeGroupManager,
+)
+from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
 from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
 from agent.client.hypervisor.libvirt.models.msg import RpMessage, CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
@@ -19,12 +31,16 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualEdit,
     ResourceReservationVM,
 )
+from agent.client.hypervisor.libvirt.models.volume.logic_volume import (
+    LogicalVolumeSizeType,
+)
+from agent.client.hypervisor.libvirt.models.general import StoragePoolType
 from agent.client.logger_config import DefaultLogger
 
 load_dotenv()
 
 
-class Balansir:
+class Balansir(LibvirtClient):
     """
     Балансиръ - виртуальный менеджер ресурс пулов для контроля CPU и RAM лимитов
 
@@ -35,8 +51,27 @@ class Balansir:
     """
 
     def __init__(self):
+        super().__init__()
         self.logger = DefaultLogger("Балансиръ")
         self.logger.info(f"Инициализация виртуального менеджера ресурс пулов")
+        self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
+        self.storage_type_dir_base_path = os.environ.get("STORAGE_TYPE_DIR_BASE_PATH")
+        self.storage_manager = StorageManager()
+        self.storage_manager.connect()
+        self.physical_volume_manager = PhysicalVolumeManager()
+        self.volume_group_manager = VolumeGroupManager()
+        system_volume_group = self.volume_group_manager.get_volume_by_name(
+            self.system_volume_group_name
+        )
+        if system_volume_group is None:
+            valid_physical_volumes = (
+                self.physical_volume_manager.valid_physical_volumes()
+            )
+            self.volume_group_manager.create_volume_group(
+                pv_names=valid_physical_volumes,
+                volume_group_name=self.system_volume_group_name,
+            )
+        self.logic_volume_manager = LogicalVolumeManager()
         self.virtual_rp_manager_path = os.environ.get("RP_VIRTUAL_MANAGER_PATH")
         self.cli = CLIControl()
         self.vm_manager = VmManager()
@@ -221,6 +256,14 @@ class Balansir:
     ) -> RpMessage | bool:
         self.logger.info(f"Старт конфигурации CPU")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
+        if create_config:
+            if cpu_core_allocated or cpu_core_available:
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.forbidden_set_available_and_allocated_data.value,
+                    code=CommandMessagesEnum.forbidden_set_available_and_allocated_data.name,
+                    success=False,
+                )
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
             return RpMessage(
@@ -239,8 +282,8 @@ class Balansir:
                 )
                 return RpMessage(
                     request_id=internal_request_id,
-                    message=CommandMessagesEnum.rp_cpu_configuration_error.value,
-                    code=CommandMessagesEnum.rp_cpu_configuration_error.name,
+                    message=CommandMessagesEnum.rp_cpu_configuration_file_not_found.value,
+                    code=CommandMessagesEnum.rp_cpu_configuration_file_not_found.name,
                     success=False,
                 )
             with open(cpu_info, "rb") as cpu_info_file_read:
@@ -266,6 +309,104 @@ class Balansir:
 
         return True
 
+    def configuration_storage(
+        self,
+        rp_main_path: Path,
+        volume_size_type: LogicalVolumeSizeType,
+        storage_limit: int | float = 0,
+        storage_allocated: int = 0,
+        storage_available: int = 0,
+        create_config: bool = False,
+        storage_type: StoragePoolType = StoragePoolType.LOGICAL,
+    ) -> RpMessage | bool:
+        self.logger.info(f"Старт конфигурации STORAGE")
+        internal_request_id = f"internal_{str(uuid.uuid4())}"
+        storage_info_data = {}
+        if create_config:
+            if storage_allocated or storage_available:
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.forbidden_set_available_and_allocated_data.value,
+                    code=CommandMessagesEnum.forbidden_set_available_and_allocated_data.name,
+                    success=False,
+                )
+        if not rp_main_path.exists():
+            self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
+            return RpMessage(
+                request_id=internal_request_id,
+                message=CommandMessagesEnum.rp_not_found.value,
+                code=CommandMessagesEnum.rp_not_found.name,
+                success=False,
+            )
+
+        storage_info = rp_main_path / "storage_info.json"
+        self.logger.info(f"Изменение конфигурации CPU: '{str(storage_info)}'")
+        if not create_config:  # Для редактирования
+            if not storage_info.is_file():
+                self.logger.warning(
+                    f"Ошибка конфигурации STORAGE: '{str(storage_info)}' файл отсутствует"
+                )
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.rp_storage_configuration_file_not_found.value,
+                    code=CommandMessagesEnum.rp_storage_configuration_file_not_found.name,
+                    success=False,
+                )
+            with open(storage_info, "rb") as storage_info_file_read:
+                storage_data = orjson.loads(storage_info_file_read.read())
+
+            if storage_data.get("storage_allocated"):
+                if storage_data.get("storage_allocated") > storage_limit:
+                    return RpMessage(
+                        request_id=internal_request_id,
+                        message=CommandMessagesEnum.rp_storage_configuration_error_allocated_more_than_on_new_limit.value,
+                        code=CommandMessagesEnum.rp_storage_configuration_error_allocated_more_than_on_new_limit.name,
+                        success=False,
+                    )
+            if storage_type == StoragePoolType.LOGICAL:
+                storage_info_data["storage_type"] = storage_data.get("storage_type")
+                storage_info_data["group_volume"] = storage_data.get("group_volume")
+                storage_info_data["logical_volume"] = storage_data.get("logical_volume")
+            else:
+                raise ValueError("Отсутствует поддержка других типов")
+        if create_config:
+            if storage_type == StoragePoolType.LOGICAL:
+                result_create_lv = self.logic_volume_manager.create_volume(
+                    logic_volume_name=rp_main_path.name,
+                    logic_volume_size=storage_limit,
+                    volume_group_name=self.system_volume_group_name,
+                    logic_volume_size_type=volume_size_type,
+                )
+                if (
+                    f'Logical volume "{rp_main_path.name}" created'
+                    not in result_create_lv
+                ):
+                    self.logger.error(
+                        f"Не удалось создать LVM пул {rp_main_path.name} в VG {self.system_volume_group_name}: {result_create_lv}"
+                    )
+                    return RpMessage(
+                        request_id=internal_request_id,
+                        message=CommandMessagesEnum.virtual_rp_create_logic_volume_error.value,
+                        code=CommandMessagesEnum.virtual_rp_create_logic_volume_error.name,
+                        success=False,
+                    )
+                storage_info_data["storage_type"] = storage_type.value
+                storage_info_data["group_volume"] = self.system_volume_group_name
+                storage_info_data["logical_volume"] = rp_main_path.name
+            else:
+                raise ValueError("Отсутствует поддержка других типов")
+        storage_info_data["storage_limit"] = storage_limit
+        storage_info_data["storage_allocated"] = storage_allocated
+        storage_info_data["storage_available"] = storage_available
+        with open(storage_info, "wb") as storage_info_file:
+            storage_info_file.write(orjson.dumps(storage_info_data))
+
+        self.logger.info(
+            f"Конфигурация STORAGE '{str(storage_info)}' успешно применена"
+        )
+
+        return True
+
     def configuration_ram(
         self,
         rp_main_path: Path,
@@ -276,6 +417,14 @@ class Balansir:
     ) -> RpMessage | bool:
         self.logger.info(f"Старт конфигурации RAM")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
+        if create_config:
+            if ram_allocated or ram_available:
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.forbidden_set_available_and_allocated_data.value,
+                    code=CommandMessagesEnum.forbidden_set_available_and_allocated_data.name,
+                    success=False,
+                )
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{rp_main_path}' не найден")
             return RpMessage(
@@ -568,15 +717,25 @@ class Balansir:
                 f"ВМ конфигурация ресурс пула '{create_rp.cpu_core_limit}' успешно установлена"
             )
 
+        create_storage_config = self.configuration_storage(
+            rp_main_path,
+            create_rp.volume_size_type,
+            create_rp.storage_limit,
+            storage_type=create_rp.storage_type,
+            create_config=True,
+        )
+        if create_storage_config is not True:
+            rp_main_path.rmdir()
+            return create_storage_config
+        self.logger.info(f"STORAGE конфигурация ресурс пула успешно установлена")
+
         create_cpu_config = self.configuration_cpu(
             rp_main_path, create_rp.cpu_core_limit, create_config=True
         )
         if create_cpu_config is not True:
             rp_main_path.rmdir()
             return create_cpu_config
-        self.logger.info(
-            f"CPU конфигурация ресурс пула '{create_rp.cpu_core_limit}' успешно установлена"
-        )
+        self.logger.info(f"CPU конфигурация ресурс пула успешно установлена")
 
         create_ram_config = self.configuration_ram(
             rp_main_path, create_rp.ram_limit, create_config=True
@@ -584,9 +743,7 @@ class Balansir:
         if create_ram_config is not True:
             rp_main_path.rmdir()
             return create_ram_config
-        self.logger.info(
-            f"RAM конфигурация ресурс пула '{create_rp.cpu_core_limit}' успешно установлена"
-        )
+        self.logger.info(f"RAM конфигурация ресурс пула успешно установлена")
 
         self.logger.warning(f"Виртуальный ресурс пул '{create_rp.name}' успешно создан")
 
@@ -637,6 +794,38 @@ class Balansir:
             )
             self.logger.info(
                 f"ВМ конфигурация ресурс пула '{edit_rp.cpu_core_limit}' успешно изменена"
+            )
+
+        if edit_rp.storage_limit is not None:
+            self.logger.info(
+                f"Изменение STORAGE конфигурации ресурс пула: '{edit_rp.storage_limit}'"
+            )
+            edit_logic_volume = self.logic_volume_manager.edit_volume(
+                rp_main_path.name,
+                self.system_volume_group_name,
+                edit_rp.storage_limit,
+                edit_rp.volume_size_type,
+            )
+            if (
+                f"Logical volume {self.system_volume_group_name}/{edit_rp.name} successfully resized"
+                not in edit_logic_volume
+            ):
+                return RpMessage(
+                    request_id=internal_request_id,
+                    message=CommandMessagesEnum.edit_logic_volume_error.value,
+                    code=CommandMessagesEnum.edit_logic_volume_error.name,
+                    success=True,
+                )
+            create_cpu_config = self.configuration_storage(
+                rp_main_path,
+                edit_rp.volume_size_type,
+                edit_rp.storage_limit,
+                storage_type=edit_rp.storage_type,
+            )
+            if create_cpu_config is not True:
+                return create_cpu_config
+            self.logger.info(
+                f"STORAGE конфигурация ресурс пула '{edit_rp.storage_limit}' успешно изменена"
             )
 
         if edit_rp.cpu_core_limit is not None:
@@ -695,6 +884,20 @@ class Balansir:
                 code=CommandMessagesEnum.rp_virtual_have_vm_need_use_force_for_delete.name,
                 success=False,
             )
+
+        self.logic_volume_manager.delete_logical_volume(
+            name, self.system_volume_group_name
+        )
+        current_logic_volume = self.logic_volume_manager.get_volume_by_name(
+            name, self.system_volume_group_name
+        )
+        if current_logic_volume is not None:
+            return RpMessage(
+                request_id=internal_request_id,
+                message=CommandMessagesEnum.delete_logic_volume_error.value,
+                code=CommandMessagesEnum.delete_logic_volume_error.name,
+                success=False,
+            )
         shutil.rmtree(rp_main_path)
         if rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{name}' не удален")
@@ -730,22 +933,43 @@ class Balansir:
 
     def sync_resource_pool(self, name: str):
         self.logger.info(f"Синхронизация ресурс пула '{name}'")
+        internal_request_id = f"internal_{str(uuid.uuid4())}"
         rp_virtual_info = self.get_virtual_resource_pool_by_name(name)
         rp_virtual_info = rp_virtual_info.rp_info
         cpu_core_used = 0
         ram_used = 0
+        storage_used = 0
         if rp_virtual_info.vm_uuid_list:
             for current_uuid in rp_virtual_info.vm_uuid_list:
                 try:
                     domain = self.vm_manager.conn.lookupByUUIDString(current_uuid)
                     current_vm = self.vm_manager.get_vm_info(domain)
+
                     cpu_core_used += current_vm.vcpus
                     ram_used += current_vm.max_memory_bytes
+                    storage_used += self.storage_manager.get_storage_used(
+                        current_vm.name, internal_request_id
+                    )
                 except Exception:
                     pass
         rp_main_path = Path(self.virtual_rp_manager_path) / name
+        storage_config = rp_main_path / "storage_info.json"
         ram_config = rp_main_path / "ram_info.json"
         cpu_config = rp_main_path / "cpu_info.json"
+
+        with open(storage_config, "r") as storage_info_file_read:
+            storage_info = orjson.loads(storage_info_file_read.read())
+
+        with open(storage_config, "wb") as storage_info_file:
+            storage_info["storage_allocated"] = storage_used
+            current_storage_available = storage_info["storage_limit"] - storage_used
+            if rp_virtual_info.vm_reservation_list is not None:
+                for current_rr_vm in rp_virtual_info.vm_reservation_list:
+                    current_storage_available = (
+                        current_storage_available - current_rr_vm.storage
+                    )
+            storage_info["storage_available"] = current_storage_available
+            storage_info_file.write(orjson.dumps(storage_info))
 
         with open(ram_config, "r") as ram_info_file_read:
             ram_info = orjson.loads(ram_info_file_read.read())
@@ -793,6 +1017,20 @@ class Balansir:
                 code=CommandMessagesEnum.rp_not_found.name,
                 success=False,
             )
+
+        storage_config = rp_main_path / "storage_info.json"
+        if not storage_config.exists():
+            self.logger.warning(
+                f"STORAGE конфигурация ресурс пула '{rp_main_path}' не найдена"
+            )
+            return RpMessage(
+                request_id=internal_request_id,
+                message=CommandMessagesEnum.rp_storage_configuration_file_not_found.value,
+                code=CommandMessagesEnum.rp_storage_configuration_file_not_found.name,
+                success=False,
+            )
+        with open(storage_config, "r") as storage_info_file:
+            storage_info = orjson.loads(storage_info_file.read())
 
         cpu_config = rp_main_path / "cpu_info.json"
         if not cpu_config.exists():
@@ -849,6 +1087,12 @@ class Balansir:
             ram_available=ram_info.get("ram_available"),
             vm_uuid_list=vm_uuid_list,
             vm_reservation_list=vm_reservation_list if vm_reservation_list else None,
+            storage_type=storage_info.get("storage_type"),
+            storage_limit=storage_info.get("storage_limit"),
+            storage_allocated=storage_info.get("storage_allocated"),
+            storage_available=storage_info.get("storage_available"),
+            group_volume=storage_info.get("group_volume"),
+            logical_volume=storage_info.get("logical_volume"),
         )
         return RpMessage(
             request_id=internal_request_id,
@@ -868,9 +1112,15 @@ class Balansir:
         ]
         all_rp_virtal = []
         for virtual_rp_name in all_rp_virtual_dirs:
+            storage_config = rp_main_path / virtual_rp_name / "storage_info.json"
             ram_config = rp_main_path / virtual_rp_name / "ram_info.json"
             cpu_config = rp_main_path / virtual_rp_name / "cpu_info.json"
-            if not cpu_config.is_file() or not ram_config.is_file():
+            print("storage_config.is_file(): ", storage_config.is_file())
+            if (
+                not cpu_config.is_file()
+                or not ram_config.is_file()
+                or not storage_config.is_file()
+            ):
                 continue
             all_rp_virtal.append(
                 self.get_virtual_resource_pool_by_name(virtual_rp_name).rp_info
