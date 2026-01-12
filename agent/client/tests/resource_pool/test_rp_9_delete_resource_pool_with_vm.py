@@ -115,7 +115,7 @@ def test_rp_09_delete_resource_pool_with_vm(
         )
         assert delete_rp_info.code == CommandMessagesEnum.rp_virtual_delete_success.name
         assert delete_rp_info.success is True
-        # ____________________________________Проверка отсутствия DIR/LOGICAL______________
+        # ____________________________________Проверка отсутствия LOGICAL______________
         logical_volume_info = (
             resource_pool_session.logic_volume_manager.get_volume_by_name(
                 random_name, SYSTEM_VOLUME_GROUP_NAME
