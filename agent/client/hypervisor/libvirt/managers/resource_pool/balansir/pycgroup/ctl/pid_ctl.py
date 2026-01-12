@@ -16,8 +16,13 @@ class PidController:
             return None
         return result.split("\n")[0]
 
+    def get_pids_from_pool(self, cgroup_pool: Path):
+        cgroup_pool = cgroup_pool / "cgroup.procs"
+        result = self.cli.execute(["cat", f"{cgroup_pool}"])
+        return result
+
     def add_pid_to_pool(self, cgroup_pool: Path, pid: int):
-        cgroup_pool = str(cgroup_pool / "cgroup.procs")
+        cgroup_pool = cgroup_pool / "cgroup.procs"
         self.cli.execute(["sh", "-c", f"echo {pid} > {cgroup_pool}"])
         result = self.cli.execute(["cat", f"{cgroup_pool}"])
         return result
@@ -26,6 +31,13 @@ class PidController:
         cgroup_pool = cgroup_pool / "cgroup.procs"
         parent_cgroup_pool = cgroup_pool.parent.parent / "cgroup.procs"
         self.cli.execute(["sh", "-c", f"echo {pid} > {parent_cgroup_pool}"])
+        result = self.cli.execute(["cat", f"{cgroup_pool}"])
+        return result
+
+    def delete_all_pid_from_pool(self, cgroup_pool: Path, pid: int):
+        cgroup_pool = cgroup_pool / "cgroup.procs"
+        parent_cgroup_pool = cgroup_pool.parent.parent / "cgroup.procs"
+        self.cli.execute(["sh", "-c", f"cat {cgroup_pool} > {parent_cgroup_pool}"])
         result = self.cli.execute(["cat", f"{cgroup_pool}"])
         return result
 

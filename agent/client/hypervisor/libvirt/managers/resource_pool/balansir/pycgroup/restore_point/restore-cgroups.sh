@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Конфигурация
 BACKUP_ROOT="/eskvisor/backups/cgroups"
-BACKUP_DIR="${1:-$BACKUP_ROOT/latest}"
+BACKUP_DIR="${1:-$BACKUP_ROOT}"
 LOG_FILE="/var/log/eskvisor-cgroup-restore.log"
 
 # Цвета для вывода
@@ -53,7 +53,7 @@ log "=== Начало восстановления cgroup конфигураци
 if [[ ! -d "$BACKUP_DIR" ]]; then
     log_error "Директория бэкапа $BACKUP_DIR не найдена"
     echo "Доступные бэкапы:"
-    find "$BACKUP_ROOT" -maxdepth 1 -type d -name "2*" | sort -r
+    find "$BACKUP_ROOT" -maxdepth 1 -type d -name "resource_pool*" | sort -r
     exit 1
 fi
 
@@ -185,11 +185,10 @@ TEMP_FAILED="/tmp/failed_pools.$$"
 touch "$TEMP_RESTORED" "$TEMP_FAILED"
 
 # Основной цикл восстановления
-# Используем массив для хранения найденных директорий
-backup_pool_dirs=()
-while IFS= read -r -d $'\0' dir; do
-    backup_pool_dirs+=("$dir")
-done < <(find "$BACKUP_DIR" -maxdepth 1 -type d -name 'resource_pool*' -print0)
+log_info "Поиск пулов для восстановления в $BACKUP_DIR"
+
+# Находим все директории resource_pool* в BACKUP_DIR
+backup_pool_dirs=($(find "$BACKUP_DIR" -maxdepth 1 -type d -name 'resource_pool*'))
 
 log_info "Найдено пулов для восстановления: ${#backup_pool_dirs[@]}"
 
@@ -216,22 +215,20 @@ for backup_pool_dir in "${backup_pool_dirs[@]}"; do
     fi
 
     # Восстанавливаем вложенные cgroup (если есть)
-    if [[ -d "$backup_pool_dir" ]]; then
-        log_info "Поиск вложенных cgroup в $pool_name..."
-        find "$backup_pool_dir" -type d | while read -r backup_sub_dir; do
-            [[ "$backup_sub_dir" == "$backup_pool_dir" ]] && continue
+    log_info "Поиск вложенных cgroup в $pool_name..."
+    find "$backup_pool_dir" -type d | while read -r backup_sub_dir; do
+        [[ "$backup_sub_dir" == "$backup_pool_dir" ]] && continue
 
-            sub_path="${backup_sub_dir#$backup_pool_dir/}"
-            target_sub_path="$target_pool_path/$sub_path"
+        sub_path="${backup_sub_dir#$backup_pool_dir/}"
+        target_sub_path="$target_pool_path/$sub_path"
 
-            log_info "  Восстановление вложенной: $sub_path"
+        log_info "  Восстановление вложенной: $sub_path"
 
-            # Создаем вложенную cgroup
-            if create_cgroup "$target_sub_path"; then
-                restore_configs "$backup_sub_dir" "$target_sub_path"
-            fi
-        done
-    fi
+        # Создаем вложенную cgroup
+        if create_cgroup "$target_sub_path"; then
+            restore_configs "$backup_sub_dir" "$target_sub_path"
+        fi
+    done
 
     echo ""
 done
@@ -268,13 +265,12 @@ for pool_path in "${restored_pools[@]}"; do
         echo "  Проверка конфигурационных файлов:"
 
         # Проверяем различные возможные файлы конфигурации
-        local config_found=false
+        config_found=false
 
         for config_file in "cpu.max" "cpu.weight" "memory.max" "memory.high" "io.max" "pids.max"; do
             if [[ -f "$pool_path/$config_file" ]]; then
-                local value
-                value=$(cat "$pool_path/$config_file" 2>/dev/null || echo "не удалось прочитать")
-                echo "    • $config_file: $value"
+                value_data=$(cat "$pool_path/$config_file" 2>/dev/null || echo "не удалось прочитать")
+                echo "    • $config_file: $value_data"
                 config_found=true
             fi
         done

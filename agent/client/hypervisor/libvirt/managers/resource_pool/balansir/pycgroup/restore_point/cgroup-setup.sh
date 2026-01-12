@@ -28,6 +28,7 @@ echo "Настройка systemd сервисов..."
 cp eskvisor-cgroup.service /etc/systemd/system/
 cp eskvisor-cgroup-timer.timer /etc/systemd/system/
 
+echo "Состояние systemd eskvisor сервисов: $(ls -d /etc/systemd/system/eskvisor*)"
 # 5. Включаем автозагрузку
 echo "Включение автозагрузки..."
 systemctl daemon-reload
@@ -50,5 +51,5 @@ echo "  journalctl -u eskvisor-cgroup.service     # просмотр логов"
 echo ""
 echo "Ручное управление бэкапами:"
 echo "  /usr/local/bin/eskvisor-save-cgroups.sh        # сохранить сейчас"
-echo "  /usr/local/bin/eskvisor-restore-cgroups.sh     # восстановить последний"
-echo "  /usr/local/bin/eskvisor-restore-cgroups.sh /eskvisor/backups/cgroups/YYYYMMDD_HHMMSS  # восстановить конкретный"
+echo "  /usr/local/bin/eskvisor-restore-cgroups.sh     # восстановить все"
+echo "  /usr/local/bin/eskvisor-restore-cgroups.sh /eskvisor/backups/cgroups/resource_pool  # восстановить конкретный"
