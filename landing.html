@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>eskvisor - промышленная платформа виртуализации с HA+</title>
+    <title>eskvisor - промышленная платформа виртуализации</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -469,7 +469,6 @@
             color: var(--white);
         }
 
-        /* HA+ секция */
         .ha-section {
             background: linear-gradient(180deg, var(--darker) 0%, var(--black) 100%);
             position: relative;
@@ -758,7 +757,7 @@
                 <a href="#" class="logo">esk<span>visor</span></a>
                 <ul class="nav-links">
                     <li><a href="#features">Функционал</a></li>
-                    <li><a href="#ha-plus">HA+</a></li>
+                    <li><a href="#ha-plus">Балансиръ</a></li>
                     <li><a href="#configurator">Конфигуратор</a></li>
                     <li><a href="#contacts">Контакты</a></li>
                     <li><a href="#request" class="btn">Оставить заявку</a></li>
@@ -777,30 +776,30 @@
                 <div>
                     <div class="hero-badge">
                         <i class="fas fa-bolt"></i>
-                        <span>HA+ АКТИВИРОВАН</span>
+                        <span>Балансиръ АКТИВИРОВАН</span>
                     </div>
                     
                     <h1>Промышленная платформа виртуализации <span>с беспрецедентной отказоустойчивостью</span></h1>
                     
-                    <p style="font-size: 1.25rem;">eskvisor — enterprise-решение для управления виртуальной инфраструктурой. Автоматическое восстановление за 60 секунд, снапшоты каждые 5 минут, гарантия 99.99% доступности.</p>
+                    <p style="font-size: 1.25rem;">eskvisor — enterprise-решение для управления виртуальной инфраструктурой. Полный контроль имеющихся ресурсов на уровне ядра Linux, гарантия 99.99% доступности.</p>
                     
                     <div style="display: flex; gap: 1rem; margin-top: 2.5rem; flex-wrap: wrap;">
                         <a href="#request" class="btn">
                             <i class="fas fa-rocket"></i> Начать бесплатно
                         </a>
                         <a href="#ha-plus" class="btn btn-outline">
-                            <i class="fas fa-play-circle"></i> Демо HA+
+                            <i class="fas fa-play-circle"></i> Демо Балансиръ
                         </a>
                     </div>
                     
                     <div style="margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 1.5rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <i class="fas fa-check-circle" style="color: var(--red);"></i>
-                            <span>Автовосстановление за 60 сек</span>
+                            <span>Сокращение расходов на 25-40%</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <i class="fas fa-check-circle" style="color: var(--red);"></i>
-                            <span>Снапшоты каждые 5 минут</span>
+                            <span>Повышенная отказоустойчивость</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <i class="fas fa-check-circle" style="color: var(--red);"></i>
@@ -813,12 +812,12 @@
                     <div class="dashboard-preview">
                         <div class="dashboard-header">
                             <div>
-                                <h4 style="color: var(--white); margin: 0;">Панель управления HA+ кластером</h4>
+                                <h4 style="color: var(--white); margin: 0;">Панель управления Балансиръ</h4>
                                 <small style="color: #a3a3a3;">Все системы активны</small>
                             </div>
                             <div class="dashboard-status">
                                 <div class="status-dot"></div>
-                                <span style="color: var(--red); font-weight: 600;">HA+ Активен</span>
+                                <span style="color: var(--red); font-weight: 600;">Балансиръ Активен</span>
                             </div>
                         </div>
                         <div class="dashboard-metrics">
@@ -858,8 +857,8 @@
                     <div class="feature-icon">
                         <i class="fas fa-shield-alt"></i>
                     </div>
-                    <h3>HA+ Отказоустойчивость</h3>
-                    <p>Технология SnapSave: автоматические снапшоты каждые 5 минут, восстановление за 60 секунд при любых сбоях.</p>
+                    <h3>Контроль ресурсов на уровне ядра Linux</h3>
+                    <p>Технология Балансиръ: Наш модуль сочетает в себе высокоуровневый бизнес контроль логики в сочетании с контролем ресурсов на уровне ядра Linux, что гарантирует 100% ограничение ресурсов</p>
                 </div>
                 
                 <div class="feature-card fade-in">
@@ -905,39 +904,44 @@
         </div>
     </section>
 
-    <!-- HA+ секция -->
     <section id="ha-plus" class="ha-section">
         <div class="container">
             <div class="text-center">
-                <h2>HA+ Технология SnapSave</h2>
-                <p>Беспрецедентная отказоустойчивость для бизнес-критичных систем</p>
+                <h2>Технология Балансиръ</h2>
+                <p>Беспрецедентный контроль ресурсов для бизнес-критичных систем</p>
             </div>
             
-            <div class="ha-features">
-                <div class="ha-card fade-in">
-                    <div class="ha-icon">
-                        <i class="fas fa-history"></i>
-                    </div>
-                    <h3>Снапшоты каждые 5 минут</h3>
-                    <p>Автоматическое создание снапшотов всех ВМ без остановки работы. В истории хранится до 2 последних снапшотов для каждой машины.</p>
-                </div>
-                
-                <div class="ha-card fade-in">
-                    <div class="ha-icon">
-                        <i class="fas fa-redo"></i>
-                    </div>
-                    <h3>Автоматическое восстановление</h3>
-                    <p>При падении ВМ или сбое кластера система автоматически восстанавливает все виртуальные машины из последних снапшотов за 60 секунд.</p>
-                </div>
-                
-                <div class="ha-card fade-in">
-                    <div class="ha-icon">
-                        <i class="fas fa-undo"></i>
-                    </div>
-                    <h3>Откат сборки продукта</h3>
-                    <p>При ошибке во время обновления eskvisor система автоматически возвращается к предыдущей стабильной версии с детальным отчетом.</p>
-                </div>
-            </div>
+<div class="ha-features">
+    <div class="ha-card fade-in">
+        <div class="ha-icon">
+            <i class="fas fa-cogs"></i>
+        </div>
+        <h3>Интеллектуальное управление ресурсами</h3>
+        <p>Автоматизированная система анализирует бизнес-процессы и самостоятельно оптимизирует распределение ресурсов,
+           предотвращая простои и перегрузки без участия IT-специалистов. Ваша инфраструктура работает с максимальной
+           эффективностью 24/7, экономя до 40% на вычислительных мощностях.</p>
+    </div>
+
+    <div class="ha-card fade-in">
+        <div class="ha-icon">
+            <i class="fas fa-bolt"></i>
+        </div>
+        <h3>Мгновенное ограничение ресурсов</h3>
+        <p>Технология cgroups v2 обеспечивает моментальное применение лимитов на уровне ядра Linux — ограничения
+           срабатывают за 1-5 миллисекунд. Контролируйте тысячи виртуальных машин без снижения производительности,
+           гарантируя стабильность критически важных сервисов даже при пиковых нагрузках.</p>
+    </div>
+
+    <div class="ha-card fade-in">
+        <div class="ha-icon">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <h3>Предсказуемая стоимость инфраструктуры</h3>
+        <p>Автоматическая оптимизация затрат на облачную инфраструктуру. Система интеллектуально распределяет ресурсы между
+виртуальными машинами, устраняя простои мощностей и предотвращая необходимость в резервных серверах. Снижайте
+IT-бюджет на 25-40% без риска для производительности бизнес-приложений.</p>
+    </div>
+</div>
             
             <div style="text-align: center; margin-top: 4rem;">
                 <div style="background: var(--gray-dark); border-radius: var(--radius); padding: 2rem; display: inline-block; border: 1px solid var(--gray);">
@@ -948,13 +952,13 @@
                         </div>
                         <div style="height: 50px; width: 2px; background: var(--gray);"></div>
                         <div style="text-align: center;">
-                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--red);">60 сек</div>
-                            <div style="color: #a3a3a3;">Время восстановления</div>
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--red);">25-40%</div>
+                            <div style="color: #a3a3a3;">Сокращение затрат на облачную инфраструктуру</div>
                         </div>
                         <div style="height: 50px; width: 2px; background: var(--gray);"></div>
                         <div style="text-align: center;">
-                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--red);">5 мин</div>
-                            <div style="color: #a3a3a3;">Интервал снапшотов</div>
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--red);">Экономия</div>
+                            <div style="color: #a3a3a3;">Защита от перерасходов бюджета</div>
                         </div>
                     </div>
                 </div>
@@ -1112,19 +1116,19 @@
             <div class="footer-content">
                 <div>
                     <a href="#" class="logo">esk<span>visor</span></a>
-                    <p style="color: #a3a3a3; max-width: 400px; margin-top: 1rem;">Промышленная платформа управления виртуализацией с улучшенной отказоустойчивостью HA+.</p>
+                    <p style="color: #a3a3a3; max-width: 400px; margin-top: 1rem;">Промышленная платформа управления виртуализацией с улучшенной системой контроля ресурсов</p>
                 </div>
                 
                 <ul class="footer-links">
                     <li><a href="#features">Функционал</a></li>
-                    <li><a href="#ha-plus">HA+</a></li>
+                    <li><a href="#ha-plus">Балансиръ</a></li>
                     <li><a href="#configurator">Конфигуратор</a></li>
                     <li><a href="#contacts">Контакты</a></li>
                 </ul>
             </div>
             
             <div class="copyright">
-                <p>&copy; 2023 eskvisor. Все права защищены. Индивидуальный предприниматель Байсиев Эскандер Хакимович. ОГРНИП: 325070000046405</p>
+                <p>&copy; 2025 eskvisor. Все права защищены. Индивидуальный предприниматель Байсиев Эскандер Хакимович. ОГРНИП: 325070000046405</p>
             </div>
         </div>
     </footer>
@@ -1254,7 +1258,6 @@
             }
         });
 
-        // Анимация статуса HA+
         setInterval(() => {
             const statusDot = document.querySelector('.status-dot');
             if (statusDot) {
