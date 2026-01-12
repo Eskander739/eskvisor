@@ -1,0 +1,50 @@
+# /etc/systemd/system/eskvisor-cgroup.service
+[Unit]
+Description=EskVisor CGroup Management Service
+After=local-fs.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Основные команды без сложных оберток
+ExecStart=/usr/local/bin/restore-cgroups.sh
+ExecStop=/usr/local/bin/save-cgroups.sh
+
+# Отключаем ВСЕ изоляции
+PrivateTmp=no
+PrivateMounts=no
+PrivateDevices=no
+PrivateNetwork=no
+PrivateUsers=no
+ProtectHome=no
+ProtectSystem=no
+ProtectHostname=no
+ProtectClock=no
+ProtectKernelTunables=no
+ProtectKernelModules=no
+ProtectKernelLogs=no
+ProtectControlGroups=no
+NoNewPrivileges=no
+RestrictNamespaces=no
+RestrictRealtime=no
+RestrictSUIDSGID=no
+LockPersonality=no
+MemoryDenyWriteExecute=no
+
+# Разрешаем все системные вызовы
+SystemCallArchitectures=native
+SystemCallFilter=@default @privileged
+SystemCallErrorNumber=EPERM
+
+# Разрешаем доступ ко всему
+ReadWritePaths=/
+ReadOnlyPaths=/
+InaccessiblePaths=-/proc/sysrq-trigger
+
+# Убираем ограничения
+UMask=0022
+WorkingDirectory=/
+
+[Install]
+WantedBy=multi-user.target

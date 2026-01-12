@@ -544,9 +544,9 @@ class VmManager(LibvirtClient):
         if config.noautoconsole:
             cmd_parts.append("--noautoconsole")
 
-        cmd_parts.append(
-            '--qemu-commandline="-netdev user,id=net0,ipv4=on,ipv6=off,dns=8.8.8.8,hostfwd=tcp::2222-:22"'
-        )
+        # cmd_parts.append(
+        #     '--qemu-commandline="-netdev user,id=net0,ipv4=on,ipv6=off,dns=8.8.8.8,hostfwd=tcp::2222-:22"'
+        # ) TODO: Вернуть потом и доработать
 
         return " ".join(cmd_parts)
 
@@ -1936,7 +1936,7 @@ if __name__ == "__main__":
         for vm in vms:
             # vm_manager.start_vm(vm.name, str(uuid.uuid4()))
             # vm_manager.shutoff_vm(vm.name, str(uuid.uuid4()), force=True)
-            vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
+            # vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
             print(
                 f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}"
             )

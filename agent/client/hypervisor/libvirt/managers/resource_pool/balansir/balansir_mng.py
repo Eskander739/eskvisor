@@ -1,12 +1,10 @@
 import datetime
-import random
 import shutil
-import xml.etree.ElementTree as ET
 
 import orjson
 import os
 import uuid
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from dotenv import load_dotenv
 

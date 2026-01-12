@@ -1,0 +1,13 @@
+# /etc/systemd/system/cgroup-timer.timer
+[Unit]
+Description=Periodic CGroup Backup Timer
+Requires=eskvisor-cgroup.service
+
+[Timer]
+# Сохраняем каждые 6 часов
+OnCalendar=*-*-* */6:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
