@@ -1,7 +1,5 @@
 import os
 import random
-import time
-import uuid
 
 import pytest
 
@@ -36,7 +34,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         rp_template = ResourcePoolVirtualCreate(
             name=random_name,
             cpu_core_limit=2,
-            ram_limit=512,
+            ram_limit_gb=0.5,
             storage_limit=1,
             storage_type=StoragePoolType.LOGICAL,
         )
@@ -59,7 +57,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         )
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_core_limit == rp_template.cpu_core_limit
-        assert get_rp_info.rp_info.ram_limit == rp_template.ram_limit
+        assert get_rp_info.rp_info.ram_limit_bytes == rp_template.ram_limit_bytes
         assert get_rp_info.rp_info.storage_type.value == StoragePoolType.LOGICAL.value
 
         lv_capacity = resource_pool_session.logic_volume_manager.get_volume_by_name(

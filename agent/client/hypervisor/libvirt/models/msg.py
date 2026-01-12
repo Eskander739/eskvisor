@@ -27,6 +27,7 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
 
 
 class CommandMessagesEnum(Enum):
+    # Виртуальные машины
     vm_with_name_already_exists = "VM with name already exists"
     vm_config_not_found = "VM config not found"
     vm_successfully_deleted_from_virtual_resource_pool = (
@@ -55,6 +56,9 @@ class CommandMessagesEnum(Enum):
     vm_successfully_restarted = "VM successfully restarted"
     vm_create_unexpected_error = "VM create unexpected error"
     vm_create_subprocess_timeout_error = "VM create subprocess timeout error"
+    vm_not_found_in_resource_pool = "VM not found in resource pool"
+
+    # Виртуальные диски
     disk_convert_error = "Disk convert error"
     disk_not_found = "Disk not found"
     disk_founded = "Disk founded"

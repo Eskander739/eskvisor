@@ -16,7 +16,9 @@ class ResourceReservationVM(BaseModel):
 class ResourcePoolVirtualCreate(BaseModel):
     name: str
     cpu_core_limit: int  # Сколько ядер установить в качестве лимита
-    ram_limit: int  # Какой объем RAM установить в качестве лимита(в байтах)
+    ram_limit_gb: (
+        int | float
+    )  # Какой объем RAM установить в качестве лимита(в гигабайтах)
     storage_limit: int  # Какой объем STORAGE установить в качестве лимита
     storage_type: StoragePoolType = (
         StoragePoolType.LOGICAL
@@ -32,12 +34,17 @@ class ResourcePoolVirtualCreate(BaseModel):
 
         return values
 
+    @computed_field
+    @property
+    def ram_limit_bytes(self) -> int:
+        return int(self.ram_limit_gb * (1024**3))
+
 
 class ResourcePoolVirtualEdit(BaseModel):
     name: str
     cpu_core_limit: int | None = None  # Сколько ядер установить в качестве лимита
-    ram_limit: int | None = (
-        None  # Какой объем RAM установить в качестве лимита(в байтах)
+    ram_limit_gb: int | float | None = (
+        None  # Какой объем RAM установить в качестве лимита(в гигабайтах)
     )
     vm_uuid_list: list[str] | str | None = None
     storage_limit: int | None = None  # Какой объем STORAGE установить в качестве лимита
@@ -60,13 +67,20 @@ class ResourcePoolVirtualEdit(BaseModel):
 
         return values
 
+    @computed_field
+    @property
+    def ram_limit_bytes(self) -> None | int:
+        if self.ram_limit_gb:
+            return int(self.ram_limit_gb * (1024**3))
+        return None
+
 
 class ResourcePoolVirtual(BaseModel):
     name: str
     cpu_core_limit: int  # Сколько ядер установлено в качестве лимита
     cpu_core_allocated: int  # Сколько ядер уже используется
     cpu_core_available: int  # Сколько ядер свободно для использования
-    ram_limit: int  # Какой объем RAM установлено в качестве лимита(в байтах)
+    ram_limit_bytes: int  # Какой объем RAM установлено в качестве лимита(в байтах)
     ram_allocated: int  # Какой объем RAM уже используется(в байтах)
     ram_available: int  # Какой объем RAM свободен для использования(в байтах)
     storage_limit: int  # Какой объем STORAGE установлено в качестве лимита(в байтах)
@@ -91,7 +105,7 @@ class ResourcePoolVirtual(BaseModel):
     @computed_field
     @property
     def ram_limit_gb(self) -> float:
-        return self.ram_limit / (1024**3)
+        return self.ram_limit_bytes / (1024**3)
 
     @computed_field
     @property

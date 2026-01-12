@@ -17,14 +17,18 @@ SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
 
 
 @pytest.mark.tags(
+    "RP‑10",
     "RP‑02",
-    "Удаление пула (пустой)",
+    "Добавление ресурсов в пул",
+    "Просмотр использования ресурсов пула",
 )
-def test_rp_02_add_resource_to_resource_pool(resource_pool_session):
+def test_rp_02_rp_10_add_resource_to_resource_pool_and_read_info(resource_pool_session):
     """
     RP‑02: Добавление ресурсов в пул
+    RP‑10: Просмотр использования ресурсов пула
 
     Увеличить лимит CPU или памяти для пула. Убедиться, что изменения отражаются в статистике.
+    Открыть dashboard пула: текущее использование CPU, памяти, дисков.
     """
     random_name = None
     rp_deleted = False
@@ -34,13 +38,13 @@ def test_rp_02_add_resource_to_resource_pool(resource_pool_session):
         rp_template = ResourcePoolVirtualCreate(
             name=random_name,
             cpu_core_limit=2,
-            ram_limit=512,
+            ram_limit_gb=0.5,
             storage_limit=1,
             storage_type=StoragePoolType.LOGICAL,
         )
         edit_rp_template = ResourcePoolVirtualEdit(
             name=random_name,
-            ram_limit=1024,
+            ram_limit_gb=0.5,
             cpu_core_limit=3,
             storage_limit=2,
             storage_type=StoragePoolType.LOGICAL,
@@ -65,7 +69,7 @@ def test_rp_02_add_resource_to_resource_pool(resource_pool_session):
         )
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_core_limit == rp_template.cpu_core_limit
-        assert get_rp_info.rp_info.ram_limit == rp_template.ram_limit
+        assert get_rp_info.rp_info.ram_limit_bytes == rp_template.ram_limit_bytes
         assert get_rp_info.rp_info.storage_type.value == StoragePoolType.LOGICAL.value
 
         lv_capacity = resource_pool_session.logic_volume_manager.get_volume_by_name(
@@ -96,7 +100,7 @@ def test_rp_02_add_resource_to_resource_pool(resource_pool_session):
         )
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_core_limit == edit_rp_template.cpu_core_limit
-        assert get_rp_info.rp_info.ram_limit == edit_rp_template.ram_limit
+        assert get_rp_info.rp_info.ram_limit_bytes == edit_rp_template.ram_limit_bytes
         assert get_rp_info.rp_info.storage_type.value == StoragePoolType.LOGICAL.value
 
         lv_capacity = resource_pool_session.logic_volume_manager.get_volume_by_name(

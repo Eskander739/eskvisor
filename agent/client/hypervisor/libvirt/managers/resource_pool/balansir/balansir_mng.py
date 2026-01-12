@@ -112,21 +112,35 @@ class Balansir(LibvirtClient):
                     f"Запрещенный символ: '{invalid_linux_char}' в UUID: '{vm_uuid}'"
                 )
 
-    def validate_vm_list(self, create_rp: ResourcePoolVirtualCreate) -> RpMessage:
+    def validate_vm_list(
+        self,
+        current_rp: ResourcePoolVirtualCreate | ResourcePoolVirtualEdit,
+        create_config: bool = False,
+    ) -> RpMessage:
         self.logger.info(f"Старт валидации списка ВМ")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
-        if isinstance(create_rp.vm_uuid_list, list):
-            for vm_uuid in create_rp.vm_uuid_list:
+        if create_config:
+            resource_pool_config = create_config
+        else:
+            resource_pool_config = self.get_virtual_resource_pool_by_name(
+                current_rp.name
+            )
+            resource_pool_config = resource_pool_config.rp_info
+        if isinstance(current_rp.vm_uuid_list, list):
+            for vm_uuid in current_rp.vm_uuid_list:
                 self.validate_uuid(vm_uuid)
 
                 try:
                     self.logger.info(f"Поиск ВМ {vm_uuid}")
                     virtual_machine = self.vm_manager.conn.lookupByUUIDString(vm_uuid)
                     current_vm_info = self.vm_manager.get_vm_info(virtual_machine)
-                    if current_vm_info.memory_bytes > create_rp.ram_limit:
+                    if (
+                        current_vm_info.memory_bytes
+                        > resource_pool_config.ram_limit_bytes
+                    ):
                         err_text = (
                             f"Объем оперативной памяти ВМ: '{current_vm_info.memory_bytes}' "
-                            f"больше чем у создаваемого пула: '{create_rp.ram_limit}'"
+                            f"больше чем у создаваемого пула: '{resource_pool_config.ram_limit_bytes}'"
                         )
                         self.logger.info(err_text)
                         return RpMessage(
@@ -136,10 +150,10 @@ class Balansir(LibvirtClient):
                             success=False,
                             note=err_text,
                         )
-                    if current_vm_info.vcpus > create_rp.cpu_core_limit:
+                    if current_vm_info.vcpus > resource_pool_config.cpu_core_limit:
                         err_text = (
                             f"Количество ядер ВМ: '{current_vm_info.vcpus}' "
-                            f"больше чем у создаваемого пула: '{create_rp.cpu_core_limit}'"
+                            f"больше чем у создаваемого пула: '{resource_pool_config.cpu_core_limit}'"
                         )
                         self.logger.info(err_text)
                         return RpMessage(
@@ -149,13 +163,14 @@ class Balansir(LibvirtClient):
                             success=False,
                             note=err_text,
                         )
-                except Exception:
+                except Exception as e:
                     self.logger.info(f"ВМ {vm_uuid} не найдена")
                     return RpMessage(
                         request_id=internal_request_id,
                         message=CommandMessagesEnum.vm_found_error.value,
                         code=CommandMessagesEnum.vm_found_error.name,
                         success=False,
+                        note=str(e),
                     )
             self.logger.info(f"Список ВМ валиден")
             return RpMessage(
@@ -166,7 +181,7 @@ class Balansir(LibvirtClient):
             )
         else:
             raise ValueError(
-                f"Некорректный тип данных: '{type(create_rp.vm_uuid_list)}'"
+                f"Некорректный тип данных: '{type(current_rp.vm_uuid_list)}'"
             )
 
     def validate_resource_reservation(
@@ -212,7 +227,7 @@ class Balansir(LibvirtClient):
                     f"CPU COUNT RESERVE: {current_resource_reservation_vm.cpu_core_count},"
                     f"AVAILABLE CPU COUNT: {virtual_rp_info.cpu_core_limit}",
                 )
-            if current_resource_reservation_vm.ram > virtual_rp_info.ram_limit:
+            if current_resource_reservation_vm.ram > virtual_rp_info.ram_limit_bytes:
                 return RpMessage(
                     request_id=internal_request_id,
                     message=CommandMessagesEnum.vm_can_not_reserve_more_ram_than_available_on_the_virtual_rp.value,
@@ -220,7 +235,7 @@ class Balansir(LibvirtClient):
                     success=False,
                     note=f"VM: {current_resource_reservation_vm.vm_uuid}, "
                     f"RAM RESERVE: {current_resource_reservation_vm.ram},"
-                    f"AVAILABLE RAM: {virtual_rp_info.ram_limit}",
+                    f"AVAILABLE RAM: {virtual_rp_info.ram_limit_bytes}",
                 )
 
             if current_vm.memory_bytes > current_resource_reservation_vm.ram:
@@ -451,8 +466,6 @@ class Balansir(LibvirtClient):
             with open(ram_info, "rb") as ram_info_file_read:
                 ram_data = orjson.loads(ram_info_file_read.read())
 
-            print("ram_data: ", ram_data)
-            print("ram_limit3333: ", ram_limit)
             if ram_data.get("ram_allocated"):
                 if ram_data.get("ram_allocated") > ram_limit:
                     return RpMessage(
@@ -470,7 +483,9 @@ class Balansir(LibvirtClient):
         with open(ram_info, "wb") as ram_info_file:
             ram_info_file.write(orjson.dumps(ram_info_data))
 
-        self.logger.info(f"Конфигурация RAM '{str(ram_info)}' успешно применена")
+        self.logger.info(
+            f"Конфигурация RAM '{str(ram_info)}': {ram_limit} успешно применена"
+        )
 
         return True
 
@@ -585,7 +600,6 @@ class Balansir(LibvirtClient):
             )
         vm_info = rp_main_path / "vm_info.json"
         self.logger.info(f"Конфигурация ВМ: '{str(vm_info)}'")
-        # TODO: Добавить проверку наличия ВМ в других ресурс пулах
         if vm_info.is_file():
             with open(vm_info, "r") as vm_info_file_read:
                 current_vms_uuid_list: list = orjson.loads(vm_info_file_read.read())[
@@ -598,11 +612,22 @@ class Balansir(LibvirtClient):
                 code=CommandMessagesEnum.vm_config_not_found.name,
                 success=False,
             )
-
-        current_vms_uuid_list.remove(vm_uuid)
-        vm_info_data = {"vm_uuid_list": current_vms_uuid_list}
-        with open(vm_info, "wb") as vm_info_file:
-            vm_info_file.write(orjson.dumps(vm_info_data))
+        if current_vms_uuid_list.count(vm_uuid):
+            current_vms_uuid_list.remove(vm_uuid)
+            vm_info_data = {"vm_uuid_list": current_vms_uuid_list}
+            with open(vm_info, "wb") as vm_info_file:
+                vm_info_file.write(orjson.dumps(vm_info_data))
+            self.logger.info(f"Успешное удаление ВМ '{str(vm_info)}' из ресурс пула")
+        else:
+            self.logger.warning(
+                f"ВМ '{str(vm_info)}' не найдена в ресурс пуле '{name}'"
+            )
+            return RpMessage(
+                request_id=internal_request_id,
+                message=CommandMessagesEnum.vm_not_found_in_resource_pool.value,
+                code=CommandMessagesEnum.vm_not_found_in_resource_pool.name,
+                success=False,
+            )
 
         if not vm_info.is_file():
             self.logger.warning(f"Ошибка конфигурации ВМ: '{str(vm_info)}'")
@@ -614,6 +639,7 @@ class Balansir(LibvirtClient):
             )
 
         self.logger.info(f"Конфигурация ВМ '{str(vm_info)}' успешно применена")
+        self.sync_resource_pool(name)
 
         return RpMessage(
             request_id=internal_request_id,
@@ -630,7 +656,7 @@ class Balansir(LibvirtClient):
         ram_allocated = 0
         cpu_allocated = 0
         for current_rp_virtual in self.get_virtual_resource_pool_list():
-            ram_allocated += current_rp_virtual.ram_limit
+            ram_allocated += current_rp_virtual.ram_limit_bytes
             cpu_allocated += current_rp_virtual.cpu_core_limit
         self.logger.info(
             f"Определен общий объем используемых ресурсов ресурс пулами - "
@@ -664,8 +690,11 @@ class Balansir(LibvirtClient):
         rp_main_path = Path(self.virtual_rp_manager_path) / create_rp.name
         internal_request_id = f"internal_{str(uuid.uuid4())}"
 
+        if isinstance(create_rp.ram_limit_bytes, float):
+            raise ValueError("Байты не могут быть числом с плавающей точкой")
+
         if not self.validate_max_ram_and_max_cpu(
-            create_rp.ram_limit, create_rp.cpu_core_limit
+            create_rp.ram_limit_bytes, create_rp.cpu_core_limit
         ):
             return RpMessage(
                 request_id=internal_request_id,
@@ -705,7 +734,7 @@ class Balansir(LibvirtClient):
                         code=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.name,
                         success=False,
                     )
-            validate_vm_list_info = self.validate_vm_list(create_rp)
+            validate_vm_list_info = self.validate_vm_list(create_rp, True)
             if (
                 validate_vm_list_info.message
                 != CommandMessagesEnum.vm_list_is_correct.value
@@ -738,7 +767,7 @@ class Balansir(LibvirtClient):
         self.logger.info(f"CPU конфигурация ресурс пула успешно установлена")
 
         create_ram_config = self.configuration_ram(
-            rp_main_path, create_rp.ram_limit, create_config=True
+            rp_main_path, create_rp.ram_limit_bytes, create_config=True
         )
         if create_ram_config is not True:
             rp_main_path.rmdir()
@@ -759,6 +788,9 @@ class Balansir(LibvirtClient):
 
         rp_main_path = Path(self.virtual_rp_manager_path) / edit_rp.name
         internal_request_id = f"internal_{str(uuid.uuid4())}"
+        if edit_rp.ram_limit_gb is not None:
+            if isinstance(edit_rp.ram_limit_bytes, float):
+                raise ValueError("Байты не могут быть числом с плавающей точкой")
 
         if not rp_main_path.exists():
             self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' не найден")
@@ -772,7 +804,7 @@ class Balansir(LibvirtClient):
         current_virtual_rp = self.get_virtual_resource_pool_by_name(edit_rp.name)
         current_virtual_rp = current_virtual_rp.rp_info
         if not self.validate_max_ram_and_max_cpu(
-            current_virtual_rp.ram_limit, current_virtual_rp.cpu_core_limit
+            current_virtual_rp.ram_limit_bytes, current_virtual_rp.cpu_core_limit
         ):
             return RpMessage(
                 request_id=internal_request_id,
@@ -786,6 +818,12 @@ class Balansir(LibvirtClient):
                 edit_rp.vm_uuid_list = [edit_rp.vm_uuid_list]
             for current_uuid in edit_rp.vm_uuid_list:
                 self.validate_uuid(current_uuid)
+            validate_vm_list_info = self.validate_vm_list(edit_rp)
+            if (
+                validate_vm_list_info.message
+                != CommandMessagesEnum.vm_list_is_correct.value
+            ):
+                return validate_vm_list_info
             self.configuration_vm(
                 rp_main_path,
                 edit_rp.vm_uuid_list,
@@ -841,15 +879,17 @@ class Balansir(LibvirtClient):
                 f"CPU конфигурация ресурс пула '{edit_rp.cpu_core_limit}' успешно изменена"
             )
 
-        if edit_rp.ram_limit is not None:
+        if edit_rp.ram_limit_bytes is not None:
             self.logger.info(
                 f"Изменение RAM конфигурации ресурс пула: '{edit_rp.cpu_core_limit}'"
             )
-            create_ram_config = self.configuration_ram(rp_main_path, edit_rp.ram_limit)
+            create_ram_config = self.configuration_ram(
+                rp_main_path, edit_rp.ram_limit_bytes
+            )
             if create_ram_config is not True:
                 return create_ram_config
             self.logger.info(
-                f"RAM конфигурация ресурс пула '{edit_rp.ram_limit}' успешно изменена"
+                f"RAM конфигурация ресурс пула '{edit_rp.ram_limit_bytes}' успешно изменена"
             )
 
         self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' успешно изменен")
@@ -1082,7 +1122,7 @@ class Balansir(LibvirtClient):
             cpu_core_limit=cpu_info.get("cpu_core_limit"),
             cpu_core_allocated=cpu_info.get("cpu_core_allocated"),
             cpu_core_available=cpu_info.get("cpu_core_available"),
-            ram_limit=ram_info.get("ram_limit"),
+            ram_limit_bytes=ram_info.get("ram_limit"),
             ram_allocated=ram_info.get("ram_allocated"),
             ram_available=ram_info.get("ram_available"),
             vm_uuid_list=vm_uuid_list,
@@ -1115,7 +1155,6 @@ class Balansir(LibvirtClient):
             storage_config = rp_main_path / virtual_rp_name / "storage_info.json"
             ram_config = rp_main_path / virtual_rp_name / "ram_info.json"
             cpu_config = rp_main_path / virtual_rp_name / "cpu_info.json"
-            print("storage_config.is_file(): ", storage_config.is_file())
             if (
                 not cpu_config.is_file()
                 or not ram_config.is_file()

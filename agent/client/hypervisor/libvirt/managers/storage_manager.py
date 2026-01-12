@@ -286,16 +286,20 @@ class StorageManager(LibvirtClient):
                 pool.create()
 
             size_bytes = int(disk_create.size_gb * 1024 * 1024 * 1024)
+            # TODO: При создании volume нужно добавить возможность указания типа: thin volume или обычный logic volume
+            # TODO: Убрать использование ресурс пула libvirt
             xml_desc = f"""
-            <volume>
-                <name>{disk_create.name}</name>
-                <capacity unit="bytes">{size_bytes}</capacity>
-                <target>
-                    <format type='{disk_create.format.value}'/>
-                    <permissions>
-                        <mode>0644</mode>
-                    </permissions>
-                </target>
+            <volume type='block'>
+              <name>{disk_create.name}</name>
+              <source>
+                <device path='/dev/vg_eskvisor_01/{disk_create.name}'/>
+              </source>
+              <target>
+                <format type='raw'/>
+                <permissions>
+                  <mode>0644</mode>
+                </permissions>
+              </target>
             </volume>
             """
 
