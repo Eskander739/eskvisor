@@ -311,7 +311,6 @@ if $all_success && [[ ${#restored_pools[@]} -gt 0 ]]; then
     echo ""
     echo "Проверка:"
     echo "  ls /sys/fs/cgroup/resource_pool*"
-    ls -la /sys/fs/cgroup/resource_pool* 2>/dev/null || echo "  Нет восстановленных пулов"
     exit 0
 else
     color_echo "$RED" "======================================"
