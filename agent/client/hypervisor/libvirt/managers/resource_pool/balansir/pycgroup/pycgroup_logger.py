@@ -46,7 +46,3 @@ class PyCGroupLogger:
     def critical(self, message: str, *args, **kwargs):
         """Логирование критической ошибки"""
         self.logger.critical(message, *args, **kwargs)
-
-
-# Глобальный экземпляр логгера
-logger = DefaultLogger()
