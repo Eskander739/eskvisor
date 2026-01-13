@@ -405,10 +405,10 @@
         }
 
         .metric .value {
-            font-size: 2rem;
+            font-size: 1.3rem;
             font-weight: 800;
             color: var(--red);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
         }
 
         /* Особенности */
@@ -760,11 +760,8 @@
                     <li><a href="#ha-plus">Балансиръ</a></li>
                     <li><a href="#configurator">Конфигуратор</a></li>
                     <li><a href="#contacts">Контакты</a></li>
-                    <li><a href="#request" class="btn">Оставить заявку</a></li>
+                    <li><a href="#request" class="btn"  style="font-weight: 400 !important; padding: 0.5rem 0.5rem !important; top: -10px;">Оставить заявку</a></li>
                 </ul>
-                <button class="mobile-menu-btn">
-                    <i class="fas fa-bars"></i>
-                </button>
             </nav>
         </div>
     </header>
@@ -811,30 +808,29 @@
                     <div class="dashboard-preview">
                         <div class="dashboard-header">
                             <div>
-                                <h4 style="color: var(--white); margin: 0;">Панель управления Балансиръ</h4>
-                                <small style="color: #a3a3a3;">Все системы активны</small>
+                                <h4 style="color: var(--white); margin: 0;">Почему именно мы ?</h4>
                             </div>
                             <div class="dashboard-status">
                                 <div class="status-dot"></div>
-                                <span style="color: var(--red); font-weight: 600;">Балансиръ Активен</span>
+                                <span style="color: var(--red); font-weight: 600;">eskvisor</span>
                             </div>
                         </div>
                         <div class="dashboard-metrics">
                             <div class="metric">
-                                <div class="value">60 сек</div>
-                                <div style="color: #a3a3a3;">Время восстановления</div>
+                                <div class="value">Официальный статус</div>
+                                <div style="color: #a3a3a3;">У нас имеется регистрация в Роспатенте и мы находимся в процессе получения сертификата Минцифры</div>
                             </div>
                             <div class="metric">
-                                <div class="value">99.99%</div>
-                                <div style="color: #a3a3a3;">Доступность</div>
+                                <div class="value">Особый контроль за ВМ</div>
+                                <div style="color: #a3a3a3;">Полный контроль нам ресурсами как на уровне бизнес-логики, так и на уровне ядра Linux</div>
                             </div>
                             <div class="metric">
-                                <div class="value">5 мин</div>
-                                <div style="color: #a3a3a3;">Интервал снапшотов</div>
+                                <div class="value">Установка ПО за наш счет</div>
+                                <div style="color: #a3a3a3;">Мы дорожим каждым клиентом и тем самым проводим установку ПО за наш счет</div>
                             </div>
                             <div class="metric">
-                                <div class="value">142</div>
-                                <div style="color: #a3a3a3;">ВМ под защитой</div>
+                                <div class="value">Суверенность на деле</div>
+                                <div style="color: #a3a3a3;">Собственная кодовая база и архитектура благодаря которой мы не зависим от OpenSource решений</div>
                             </div>
                         </div>
                     </div>
@@ -857,7 +853,7 @@
                         <i class="fas fa-shield-alt"></i>
                     </div>
                     <h3>Контроль ресурсов на уровне ядра Linux</h3>
-                    <p>Технология Балансиръ: Наш модуль сочетает в себе высокоуровневый бизнес контроль логики в сочетании с контролем ресурсов на уровне ядра Linux, что гарантирует 100% ограничение ресурсов</p>
+                    <p>Технология «Балансиръ»: Наш модуль сочетает в себе высокоуровневый бизнес контроль логики в сочетании с контролем ресурсов на уровне ядра Linux, что гарантирует 100% ограничение ресурсов</p>
                 </div>
                 
                 <div class="feature-card fade-in">
@@ -865,7 +861,7 @@
                         <i class="fas fa-sliders-h"></i>
                     </div>
                     <h3>Мощный конфигуратор</h3>
-                    <p>Создание ВМ с любым функционалом через удобный UI-интерфейс. Максимальный набор features без работы с XML.</p>
+                    <p>Создание ВМ с любым функционалом через удобный UI-интерфейс.</p>
                 </div>
                 
                 <div class="feature-card fade-in">
@@ -891,14 +887,6 @@
                     <h3>Виртуальные сети</h3>
                     <p>Сложные сетевые конфигурации, VLAN, изолированные среды, мониторинг трафика и безопасность.</p>
                 </div>
-                
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <h3>Учет расходов</h3>
-                    <p>Детальный анализ затрат на инфраструктуру, оптимизация ресурсов, прогнозирование расходов.</p>
-                </div>
             </div>
         </div>
     </section>
@@ -915,10 +903,8 @@
         <div class="ha-icon">
             <i class="fas fa-cogs"></i>
         </div>
-        <h3>Интеллектуальное управление ресурсами</h3>
-        <p>Автоматизированная система анализирует бизнес-процессы и самостоятельно оптимизирует распределение ресурсов,
-           предотвращая простои и перегрузки без участия IT-специалистов. Ваша инфраструктура работает с максимальной
-           эффективностью 24/7, экономя до 40% на вычислительных мощностях.</p>
+        <h3>Управление ресурсами с защитой бизнес-логики</h3>
+        <p>Система предотвращает выполнение некорректных операции с точки зрения бизнес-логики при работе с ресурсами</p>
     </div>
 
     <div class="ha-card fade-in">
@@ -936,9 +922,7 @@
             <i class="fas fa-chart-line"></i>
         </div>
         <h3>Предсказуемая стоимость инфраструктуры</h3>
-        <p>Автоматическая оптимизация затрат на облачную инфраструктуру. Система интеллектуально распределяет ресурсы между
-виртуальными машинами, устраняя простои мощностей и предотвращая необходимость в резервных серверах. Снижайте
-IT-бюджет на 25-40% без риска для производительности бизнес-приложений.</p>
+        <p>Платформа обеспечивает мониторинг использования ресурсов в реальном времени, предупреждая о простоях. Это позволяет выявлять и устранять дисбалансы, такие как простаивающий выделенный пул при высокой нагрузке на хост-систему</p>
     </div>
 </div>
             
@@ -970,7 +954,7 @@ IT-бюджет на 25-40% без риска для производитель�
         <div class="container">
             <div class="text-center">
                 <h2>Мощный UI-конфигуратор</h2>
-                <p>Создание виртуальных машин с максимальным набором features через удобный интерфейс</p>
+                <p>Создание виртуальных машин через удобный интерфейс</p>
             </div>
             
             <div style="max-width: 800px; margin: 3rem auto 0; background: var(--gray-dark); border-radius: var(--radius-lg); padding: 2.5rem; border: 1px solid var(--gray);">
