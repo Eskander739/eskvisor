@@ -1,0 +1,10 @@
+apt update
+apt install pipx
+apt install nginx
+# Далее берем nginx.conf из проекта и добавляем оттуда server в /etc/nginx/nginx.conf
+# service nginx restart
+pipx inject uvicorn fastapi
+pipx inject uvicorn uvicorn
+pipx inject uvicorn jinja2
+# Клонируем landing и переходим в папку landing
+uvicorn main:app --host 127.0.0.1 --port 8080 --ssl-keyfile key.pem --ssl-certfile cert.pem
