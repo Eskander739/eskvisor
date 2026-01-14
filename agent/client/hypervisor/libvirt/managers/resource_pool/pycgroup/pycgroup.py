@@ -3,19 +3,19 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.pycgroup.cgroup_cli import (
+from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.cgroup_cli import (
     CLICGroup,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.pycgroup.ctl.cpu_ctl import (
+from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.cpu_ctl import (
     CPUController,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.pycgroup.ctl.io_ctl import (
+from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.io_ctl import (
     IoController,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.pycgroup.ctl.memory_ctl import (
+from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.memory_ctl import (
     MemortController,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.pycgroup.ctl.pid_ctl import (
+from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.pid_ctl import (
     PidController,
 )
 
@@ -25,7 +25,7 @@ load_dotenv()
 class PyCGroup:
     """
     pool - ресурс пул
-    contaienr - виртуальная машина
+    container - виртуальная машина
 
     в pool ставим ограничения на весь ресурс пул
     в container ставим ограничения на конкретную виртуальную машину
