@@ -12,6 +12,7 @@ formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.head("/", response_class=HTMLResponse)
 async def main(request: Request):
     return templates.TemplateResponse(
         "landing.html", {"request": request, "title": "Главная страница"}

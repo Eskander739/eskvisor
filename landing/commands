@@ -7,4 +7,4 @@ pipx inject uvicorn fastapi
 pipx inject uvicorn uvicorn
 pipx inject uvicorn jinja2
 # Клонируем landing и переходим в папку landing
-uvicorn main:app --host 127.0.0.1 --port 8080 --ssl-keyfile key.pem --ssl-certfile cert.pem
+uvicorn main:app --host 127.0.0.1 --port 8080 --ssl-keyfile certificate.key --ssl-certfile certificate.crt
