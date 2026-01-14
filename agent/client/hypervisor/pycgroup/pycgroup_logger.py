@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 class PyCGroupLogger:
-    def __init__(self, log_dir: str = "/var/log/pycgroup"):
+    def __init__(self, log_dir: str = "/pycgroup"):
         self.logger = logging.getLogger("PyCGroup")
         self.logger.setLevel(logging.INFO)
         self.logger.handlers.clear()

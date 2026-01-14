@@ -7,10 +7,11 @@ from agent.client.hypervisor.libvirt.models.general import StoragePoolType
 
 
 class ResourceReservationVM(BaseModel):
+    name: str
     cpu_core_count: int  # Сколько ядер установить в качестве резерва
     ram: int  # Какой объем RAM установить в качестве резерва(в байтах)
     storage: int  # Какой объем STORAGE установить в качестве резерва(в байтах)
-    vm_uuid: str
+    vm_pid: int
 
 
 class ResourcePoolVirtualCreate(BaseModel):
@@ -19,18 +20,21 @@ class ResourcePoolVirtualCreate(BaseModel):
     ram_limit_gb: (
         int | float
     )  # Какой объем RAM установить в качестве лимита(в гигабайтах)
-    storage_limit: int  # Какой объем STORAGE установить в качестве лимита
+    storage_limit: int  # Какой объем STORAGE установить в качестве лимита, единица измерения в поле volume_size_type
     storage_type: StoragePoolType = (
         StoragePoolType.LOGICAL
     )  # Какой объем STORAGE установить в качестве лимита(в байтах)
     volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB
-    vm_uuid_list: list[str] | None = None
+    vms: list[str] | None = None # имена ВМ
     vm_reservation_list: list[ResourceReservationVM] | None = None
 
     @model_validator(mode="after")
     def validate_disk_type_constraints(cls, values):
         if values.storage_type != StoragePoolType.LOGICAL:
             raise ValueError("Отсутствует поддержка других типов хранилищ")
+
+        if not values.name.startswith("resource_pool_"):
+            raise ValueError("Имя ресурс пула должно начинаться с resource_pool_")
 
         return values
 
@@ -86,7 +90,7 @@ class ResourcePoolVirtual(BaseModel):
     storage_limit: int  # Какой объем STORAGE установлено в качестве лимита(в байтах)
     storage_allocated: int  # Какой объем STORAGE уже используется(в байтах)
     storage_available: int  # Какой объем STORAGE свободен для использования(в байтах)
-    vm_uuid_list: list[str] | None = None  # Количество ВМ в ресурс пуле
+    vms: list[str] | None = None  # Количество ВМ в ресурс пуле
     vm_reservation_list: list[ResourceReservationVM] | None = None
     storage_type: StoragePoolType
     group_volume: str | None = None

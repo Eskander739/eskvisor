@@ -105,6 +105,7 @@ class CommandMessagesEnum(Enum):
     rp_ram_or_cpu_more_than_on_node = "Resource pool RAM/CPU more than on the node"
     rp_already_created = "Resource pool already"
     vm_list_is_correct = "VM List is correct"
+    rp_cpu_configuration_error = "Resource pool CPU configuration error"
     rp_cpu_configuration_not_found = "Resource pool CPU configuration not found"
     rp_ram_configuration_not_found = "Resource pool RAM configuration not found"
     rp_cpu_configuration_file_not_found = (
