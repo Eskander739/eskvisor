@@ -1,6 +1,6 @@
 import subprocess
 
-from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.pycgroup_logger import (
+from agent.client.hypervisor.pycgroup.pycgroup_logger import (
     PyCGroupLogger,
 )
 

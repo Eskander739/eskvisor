@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.cgroup_cli import (
+from agent.client.hypervisor.pycgroup.cgroup_cli import (
     CLICGroup,
 )
 

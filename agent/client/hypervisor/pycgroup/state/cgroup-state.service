@@ -1,0 +1,19 @@
+#!/bin/bash
+# /etc/systemd/system/cgroup-state.service
+
+[Unit]
+Description=CGroup Management Service
+After=local-fs.target
+Before=shutdown.target reboot.target halt.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/restore.sh
+ExecStop=/usr/local/bin/save.sh
+User=root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WorkingDirectory=/
+
+[Install]
+WantedBy=multi-user.target

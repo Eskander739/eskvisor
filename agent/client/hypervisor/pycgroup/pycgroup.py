@@ -3,19 +3,19 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.cgroup_cli import (
+from agent.client.hypervisor.pycgroup.cgroup_cli import (
     CLICGroup,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.cpu_ctl import (
+from agent.client.hypervisor.pycgroup.ctl.cpu_ctl import (
     CPUController,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.io_ctl import (
+from agent.client.hypervisor.pycgroup.ctl.io_ctl import (
     IoController,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.memory_ctl import (
+from agent.client.hypervisor.pycgroup.ctl.memory_ctl import (
     MemortController,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.pycgroup.ctl.pid_ctl import (
+from agent.client.hypervisor.pycgroup.ctl.pid_ctl import (
     PidController,
 )
 
@@ -64,8 +64,24 @@ class PyCGroup:
                 raise FileNotFoundError(f"{cgroup_path} контейнер не найден")
             if not cgroup_path.is_dir():
                 raise ValueError(f"{cgroup_path} не является директорией")
+        else:
+            if cgroup_path.exists():
+                raise ValueError(f"{cgroup_path} контейнер уже создан")
 
         return cgroup_path
+
+    def app_pid_to_container(self, pool_name: str, container_name: str, pid: int) -> str:
+        cgroup_path = self.cgroup_container_path(pool_name, container_name)
+        is_current_pids = self.pid_ctl.get_pids_from_pool(cgroup_path)
+        if is_current_pids:
+            raise ValueError("Нельзя добавлять в контейнер больше 1 PID")
+        result = self.pid_ctl.add_pid_to_pool(cgroup_path, pid)
+        return result
+
+    def delete_pid_from_container(self, pool_name: str, container_name: str, pid: int) -> str:
+        cgroup_path = self.cgroup_container_path(pool_name, container_name)
+        result = self.pid_ctl.delete_pid_from_pool(cgroup_path, pid)
+        return result
 
     def create_cgroup_container(
         self,
@@ -104,7 +120,7 @@ class PyCGroup:
         cpu_core_limit: int = None,
         memory_reservation: int | None = None,
     ):
-        cgroup_path = self.cgroup_container_path(pool_name, container_name, True)
+        cgroup_path = self.cgroup_container_path(pool_name, container_name)
 
         if max_memory is not None:
             mem_max_result = self.memory_ctl.set_memory_max(cgroup_path, max_memory)
@@ -143,8 +159,26 @@ class PyCGroup:
                 raise FileNotFoundError(f"{cgroup_path} пул не найден")
             if not cgroup_path.is_dir():
                 raise ValueError(f"{cgroup_path} не является директорией")
+        else:
+            if cgroup_path.exists():
+                raise ValueError(f"{cgroup_path} пул уже создан")
 
         return cgroup_path
+
+    def app_pid_to_pool(self, pool_name: str, pid: int) -> str:
+        cgroup_path = self.cgroup_pool_path(pool_name)
+        result = self.pid_ctl.add_pid_to_pool(cgroup_path, pid)
+        return result
+
+    def delete_pid_from_pool(self, pool_name: str, pid: int) -> str:
+        cgroup_path = self.cgroup_pool_path(pool_name)
+        result = self.pid_ctl.delete_pid_from_pool(cgroup_path, pid)
+        return result
+
+    def delete_all_pid_from_pool(self, pool_name: str) -> str:
+        cgroup_path = self.cgroup_pool_path(pool_name)
+        result = self.pid_ctl.delete_all_pid_from_pool(cgroup_path)
+        return result
 
     def create_cgroup_pool(
         self,
@@ -185,7 +219,7 @@ class PyCGroup:
         cpu_core_limit: int | None = None,
         memory_reservation: int | None = None,
     ):
-        cgroup_path = self.cgroup_pool_path(name, True)
+        cgroup_path = self.cgroup_pool_path(name)
 
         if max_memory is not None:
             mem_max_result = self.memory_ctl.set_memory_max(cgroup_path, max_memory)

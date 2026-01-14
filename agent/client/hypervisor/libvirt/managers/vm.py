@@ -14,7 +14,7 @@ from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
-from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
+from agent.client.hypervisor.libvirt.managers.storage import StorageManager
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     BusType,
     Disk,

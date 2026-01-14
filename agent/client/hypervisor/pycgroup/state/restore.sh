@@ -1,13 +1,13 @@
 #!/bin/bash
-# /usr/local/bin/restore-cgroups.sh
+# /usr/local/bin/restore.sh
 # Автоматическое восстановление конфигураций cgroup для resource_pool*
 
 set -euo pipefail
 
 # Конфигурация
-BACKUP_ROOT="/eskvisor/backups/cgroups"
+BACKUP_ROOT="/cgroup/backups/cgroups"
 BACKUP_DIR="${1:-$BACKUP_ROOT}"
-LOG_FILE="/var/log/eskvisor-cgroup-restore.log"
+LOG_FILE="/var/log/cgroup-state.log"
 
 # Цвета для вывода
 GREEN='\033[0;32m'
@@ -314,7 +314,7 @@ if $all_success && [[ ${#restored_pools[@]} -gt 0 ]]; then
     exit 0
 else
     color_echo "$RED" "======================================"
-    color_echo "$RED" "ВОССТАНОВЛЕНИЕ ЗАВЕРШИЛОСЬ С ОШИБКАМИ"
+    color_echo "$RED" "ВОССТАНОВЛЕНИЕ ЗАВЕРШИЛОСЬ С ОШИБКАМИ ИЛИ ПУЛЫ ОТСУТСТВУЮТ"
     color_echo "$RED" "======================================"
     echo ""
     echo "Успешно восстановлено: ${#restored_pools[@]} пулов"
@@ -349,5 +349,5 @@ else
         find "$BACKUP_DIR" -type f -name "*.max" -o -name "*.weight" -o -name "*.high" | head -10
     fi
 
-    exit 1
+    exit 0
 fi

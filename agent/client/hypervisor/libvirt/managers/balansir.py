@@ -11,17 +11,17 @@ from dotenv import load_dotenv
 from agent.client.cli import CLIControl
 from agent.client.constants import INVALID_LINUX_CHAR
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.logical_volume_manager import (
+from agent.client.hypervisor.volumes.logical import (
     LogicalVolumeManager,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.physical_volume_manager import (
+from agent.client.hypervisor.volumes.physical import (
     PhysicalVolumeManager,
 )
-from agent.client.hypervisor.libvirt.managers.resource_pool.volume_managers.volume_group_manager import (
+from agent.client.hypervisor.volumes.group import (
     VolumeGroupManager,
 )
-from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
-from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
+from agent.client.hypervisor.libvirt.managers.storage import StorageManager
+from agent.client.hypervisor.libvirt.managers.vm import VmManager
 from agent.client.hypervisor.libvirt.models.msg import RpMessage, CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,

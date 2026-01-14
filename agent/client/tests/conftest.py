@@ -5,16 +5,16 @@ import uuid
 
 import pytest
 
-from agent.client.hypervisor.libvirt.managers.network_manager import NetworkManager
-from agent.client.hypervisor.libvirt.managers.resource_pool.balansir.balansir_mng import (
+from agent.client.hypervisor.libvirt.managers.network import NetworkManager
+from agent.client.hypervisor.libvirt.managers.balansir import (
     Balansir,
 )
-from agent.client.hypervisor.libvirt.managers.snapshot_manager import SnapshotManager
-from agent.client.hypervisor.libvirt.managers.storage_manager import StorageManager
-from agent.client.hypervisor.libvirt.managers.virsh_manager import (
+from agent.client.hypervisor.libvirt.managers.snapshot import SnapshotManager
+from agent.client.hypervisor.libvirt.managers.storage import StorageManager
+from agent.client.hypervisor.libvirt.managers.virsh import (
     VirshConsoleController,
 )
-from agent.client.hypervisor.libvirt.managers.vm_manager import VmManager
+from agent.client.hypervisor.libvirt.managers.vm import VmManager
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest

@@ -1,13 +1,13 @@
 #!/bin/bash
-# /usr/local/bin/save-cgroups.sh
+# /usr/local/bin/save.sh
 # Автоматическое сохранение конфигураций cgroup для resource_pool*
 
 set -euo pipefail
 
 # Конфигурация
-BACKUP_ROOT="/eskvisor/backups/cgroups"
+BACKUP_ROOT="/cgroup/backups/cgroups"
 DATE=$(date +%Y%m%d_%H%M%S)
-LOG_FILE="/var/log/eskvisor-cgroup-backup.log"
+LOG_FILE="/var/log/cgroup-backup.log"
 
 # Логирование
 exec >> "$LOG_FILE" 2>&1
