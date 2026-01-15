@@ -30,7 +30,7 @@ def test_sn_02_create_snapshot_stopped_vm(
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
-        # ____________________________Создание снапшота работающей ВМ_____________
+        # ____________________________Создание снапшота остановленной ВМ_____________
         vm_template = SnapshotCreateRequest(
             vm_name=vm_name, snapshot_name=snapshot_name, description=description
         )

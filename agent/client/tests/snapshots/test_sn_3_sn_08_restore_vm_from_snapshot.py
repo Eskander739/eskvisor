@@ -1,3 +1,4 @@
+import datetime
 import uuid
 
 import pytest
@@ -9,14 +10,16 @@ from agent.client.hypervisor.libvirt.models.vm import VmUpdateRequest
 from agent.client.tools import wait_while_not
 
 
-@pytest.mark.tags("SN‑03", "Восстановление ВМ из снапшота")
-def test_sn_03_restore_vm_from_snapshot(
+@pytest.mark.tags("SN‑03", "SN‑08", "Восстановление ВМ из снапшота", "Просмотр информации о снапшоте (дата, размер, описание)")
+def test_sn_03_sn_08_restore_vm_from_snapshot(
     snapshot_session, create_stopped_vm_func, vm_session, storage_session
 ):
     """
     SN‑03: Восстановление ВМ из снапшота
+    SN‑08: Просмотр информации о снапшоте (дата, размер, описание)
 
     Выбрать снапшот и выполнить restore. Проверить, что ВМ возвращается в состояние на момент снапшота.
+    Открыть свойства снапшота: время создания, занимаемое место, пользовательское описание.
     """
     vm_name, request_id = create_stopped_vm_func
     description = f"snapshot-description-{uuid.uuid4()}"
@@ -53,6 +56,7 @@ def test_sn_03_restore_vm_from_snapshot(
         assert snapshot_info.vm_name == vm_name
         assert snapshot_info.state.value == VMState.SHUTOFF.value
         assert snapshot_info.size_bytes > 0
+        assert (datetime.datetime.now(datetime.timezone.utc) - snapshot_info.created).total_seconds() < 5
         # _________________________________Проверка конфигурации ВМ_______________
         vm_config = snapshot_info.vm_config
         assert vm_config.name == vm_name
