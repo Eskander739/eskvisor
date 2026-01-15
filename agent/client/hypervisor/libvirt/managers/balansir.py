@@ -353,8 +353,8 @@ class Balansir(LibvirtClient):
             except Exception:
                 return RpMessage(
                     request_id=internal_request_id,
-                    message=CommandMessagesEnum.rp_not_found.value,
-                    code=CommandMessagesEnum.rp_not_found.name,
+                    message=CommandMessagesEnum.rp_virtual_not_found.value,
+                    code=CommandMessagesEnum.rp_virtual_not_found.name,
                     success=False,
                 )
 
@@ -407,8 +407,8 @@ class Balansir(LibvirtClient):
         except Exception:
             return RpMessage(
                 request_id=internal_request_id,
-                message=CommandMessagesEnum.rp_not_found.value,
-                code=CommandMessagesEnum.rp_not_found.name,
+                message=CommandMessagesEnum.rp_virtual_not_found.value,
+                code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
             )
         self.pycgroup.delete_vm_from_pool(name, vn_name)
@@ -578,8 +578,8 @@ class Balansir(LibvirtClient):
             self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' не найден")
             return RpMessage(
                 request_id=internal_request_id,
-                message=CommandMessagesEnum.rp_not_found.value,
-                code=CommandMessagesEnum.rp_not_found.name,
+                message=CommandMessagesEnum.rp_virtual_not_found.value,
+                code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
             )
 
@@ -757,8 +757,8 @@ class Balansir(LibvirtClient):
             self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден в cgroup: {e}")
             return RpMessage(
                 request_id=internal_request_id,
-                message=CommandMessagesEnum.rp_not_found.value,
-                code=CommandMessagesEnum.rp_not_found.name,
+                message=CommandMessagesEnum.rp_virtual_not_found.value,
+                code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
             )
 

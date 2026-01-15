@@ -246,13 +246,13 @@ class PYCGroup:
         pids = [int(pid) for pid in pids if pid] if pids else pids
 
         name = cgroup_path.replace(self.system_cgroup_path + "/", "")
-        container = {"name": name,
+        pool = {"name": name,
                      "path": cgroup_path,
                      "cpu": (cpu, cpu_percent, cpu_allocated, cpu_available, cpu_weight),
                      "ram": (ram_max, ram_available, ram_allocated, ram_reservation),
                      "pids": pids}
 
-        return container
+        return pool
 
     def add_pid_to_pool(self, pool_name: str, pid: int) -> str:
         cgroup_path = self.cgroup_pool_path(pool_name)

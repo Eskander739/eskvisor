@@ -141,7 +141,6 @@ class CommandMessagesEnum(Enum):
     )
     rp_virtual_delete_error = "Virtual resource pool delete error"
     rp_virtual_not_found = "Virtual resource pool not found"
-    rp_not_found = "Resource pool not found"
     forbidden_set_available_and_allocated_data = (
         "Forbidden set available and allocated data when creating virtual resource pool"
     )

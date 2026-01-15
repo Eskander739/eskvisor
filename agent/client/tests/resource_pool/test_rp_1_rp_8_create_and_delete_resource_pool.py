@@ -76,8 +76,8 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
         )
-        assert get_rp_info.message == CommandMessagesEnum.rp_not_found.value
-        assert get_rp_info.code == CommandMessagesEnum.rp_not_found.name
+        assert get_rp_info.message == CommandMessagesEnum.rp_virtual_not_found.value
+        assert get_rp_info.code == CommandMessagesEnum.rp_virtual_not_found.name
         rp_deleted = True
         # ____________________________________Проверка отсутствия LOGICAL______________
         logical_volume_info = (
