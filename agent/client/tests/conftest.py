@@ -1,11 +1,14 @@
 import logging
+import os
 import random
 import sys
 import time
 import uuid
 
 import pytest
+from dotenv import load_dotenv
 
+from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.managers.network import NetworkManager
 from agent.client.hypervisor.libvirt.managers.balansir import (
     Balansir,
@@ -21,9 +24,14 @@ from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
+from agent.client.hypervisor.volumes.group import VolumeGroupManager
+from agent.client.hypervisor.volumes.logical import LogicalVolumeManager
+from agent.client.hypervisor.volumes.physical import PhysicalVolumeManager
+from agent.client.stg.nfs import NFSStorage
 from agent.client.tools import wait_while_not
 
-IMG_PATH = "/home/eska/alpine-virt-3.19.0-x86_64.iso"
+load_dotenv()
+IMG_PATH = os.environ.get("IMAGE_PATH")
 
 
 def pytest_configure(config):
@@ -50,6 +58,57 @@ def pytest_configure(config):
     # Отключаем слишком шумные логи
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+
+@pytest.fixture(scope="session")
+def volume_session():
+    return VolumeGroupManager(), LogicalVolumeManager(), PhysicalVolumeManager()
+
+
+@pytest.fixture(scope="session")
+def create_nfs_storage_session():
+    cli = CLIControl()
+    nfs_stg = NFSStorage()
+    nfs_path =  f"/srv/nfs/share_{random.randint(100000, 999999)}/"
+    nfs_mount_path =  f"/mnt/nfs_{random.randint(100000, 999999)}/"
+
+    # Создать директории
+    nfs_share_mkdir = [
+        "mkdir",
+        "-p",
+        nfs_path
+    ]
+    cli.execute(nfs_share_mkdir)
+
+    # Настроить экспорт
+    setting_export = [nfs_path, "127.0.0.1(rw,sync,no_subtree_check)"]
+    cli.execute(setting_export)
+
+    # Применить
+    apply_setting = ["exportfs", "-a"]
+    cli.execute(apply_setting)
+
+    # Монтировать локально
+    mkdir_local = [
+        "mkdir", "-p", nfs_mount_path
+    ]
+    cli.execute(mkdir_local)
+    nfs_stg.mount(f"127.0.0.1:{nfs_path}", nfs_mount_path)
+
+    yield nfs_mount_path
+
+    # Отмонтировать принудительно
+    nfs_stg.unmount(nfs_mount_path)
+
+    # Удаление локальных директории хранилища
+    nfs_local_rmdir = [
+        "rmdir", nfs_path
+    ]
+    cli.execute(nfs_local_rmdir)
+
+    nfs_local_rmdir = [
+        "rmdir", nfs_mount_path
+    ]
+    cli.execute(nfs_local_rmdir)
 
 @pytest.fixture(scope="session")
 def create_stopped_vm():

@@ -354,10 +354,12 @@ class DiskCreate(BaseModel):
                     self.path = str(
                         Path(self.path) / f"{self.name}.{self.format.value}"
                     )
+                    print("KOSADKFKSADFKSDFKSD: ", self.path)
                 elif current_format.value == DiskFormat.UNKNOWN.value:
                     self.path = str(
                         Path(self.path) / f"{self.name}.{self.format.value}"
                     )
+                    print("self.path: ", self.path)
                 else:
                     if current_format.value in (
                         DiskFormat.ISO.value,

@@ -2,13 +2,15 @@ import logging
 import os
 import re
 import shutil
-import subprocess
+import time
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from subprocess import TimeoutExpired
 
 import libvirt
 
+from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
 from agent.client.hypervisor.libvirt.models.volume.disk import (
@@ -35,6 +37,7 @@ class StorageManager(LibvirtClient):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.libvirt_config = LibvirtConfig()
+        self.cli = CLIControl()
 
     def create_disk(
         self, disk_create: DiskCreate, request_id: str = str(uuid.uuid4())
@@ -79,7 +82,7 @@ class StorageManager(LibvirtClient):
             self.logger.info(
                 f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB"
             )
-            if os.path.isfile(disk_dir):
+            if not self.cli.is_directory(disk_dir):
                 self.logger.info(f"Файл уже существует: {disk_path}")
                 return StorageMessage(
                     request_id=request_id,
@@ -170,23 +173,30 @@ class StorageManager(LibvirtClient):
             + sparse_flag
             + [disk_path, f"{size_gb}G"]
         )
-
-        self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.returncode != 0:
+        try:
+            self.logger.info(f"Выполнение команды: {' '.join(cmd)}")
+            result = self.cli.execute(cmd, return_proc=True)
+            self.logger.info(f"Результат выполнения команды: {result}")
+            if result.returncode != 0:
+                return StorageMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.disk_create_error.value,
+                    code=CommandMessagesEnum.disk_create_error.name,
+                    stderr=result.stderr,
+                    stdout=result.stdout,
+                )
+            return StorageMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.disk_successfully_created.value,
+                code=CommandMessagesEnum.disk_successfully_created.name,
+            )
+        except TimeoutExpired as e:
             return StorageMessage(
                 request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
                 code=CommandMessagesEnum.disk_create_error.name,
-                stderr=result.stderr,
-                stdout=result.stdout,
+                note=str(e),
             )
-        return StorageMessage(
-            request_id=request_id,
-            message=CommandMessagesEnum.disk_successfully_created.value,
-            code=CommandMessagesEnum.disk_successfully_created.name,
-        )
 
     def _add_qcow2_metadata(self, disk_path: str, disk_name: str):
 
@@ -202,8 +212,7 @@ class StorageManager(LibvirtClient):
             ]
 
             self.logger.debug(f"Добавление метаданных: {' '.join(metadata_cmd)}")
-            result = subprocess.run(metadata_cmd, capture_output=True, text=True)
-
+            result = self.cli.execute(metadata_cmd, return_proc=True)
             if result.returncode == 0:
                 self.logger.info(f"Добавлены метаданные диска: имя={disk_name}")
             else:
@@ -241,8 +250,7 @@ class StorageManager(LibvirtClient):
             ]
 
         self.logger.debug(f"Создание RAW диска: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
+        result = self.cli.execute(cmd, return_proc=True)
         if result.returncode != 0:
             self.delete_disk(path=disk_path)
             return StorageMessage(
@@ -366,7 +374,7 @@ class StorageManager(LibvirtClient):
                 return True
 
             elif path:
-                if not os.path.exists(path):
+                if not self.cli.is_exists(path):
                     self.logger.warning(f"Файл {path} не существует")
                     return False
 
@@ -374,11 +382,11 @@ class StorageManager(LibvirtClient):
                     self.logger.warning(f"Диск {path} используется")
                     return False
 
-                os.remove(path)
+                self.cli.execute(["rm",  "-r", path])
 
                 metadata_path = f"{path}.meta"
-                if os.path.exists(metadata_path):
-                    os.remove(metadata_path)
+                if self.cli.is_exists(metadata_path):
+                    self.cli.execute(["rm", "-r", metadata_path])
 
                 self.logger.info(f"Файл диска {path} удален")
                 return True
@@ -475,8 +483,7 @@ class StorageManager(LibvirtClient):
                     cmd = ["qemu-img", "resize", path, f"{new_size_gb}G"]
 
                     self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
-                    result = subprocess.run(cmd, capture_output=True, text=True)
-
+                    result = self.cli.execute(cmd, return_proc=True)
                     if result.returncode != 0:
                         raise Exception(f"Ошибка qemu-img: {result.stderr}")
 
@@ -498,8 +505,8 @@ class StorageManager(LibvirtClient):
                 return None
 
             target_dir = os.path.dirname(target_path)
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir, exist_ok=True)
+            if not self.cli.is_exists(target_dir):
+                self.cli.mkdir(target_dir)
 
             if source_disk.format == DiskFormat.QCOW2:
                 cmd = [
@@ -514,7 +521,7 @@ class StorageManager(LibvirtClient):
                 ]
                 self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
 
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                result = self.cli.execute(cmd, return_proc=True)
                 if result.returncode != 0:
                     raise Exception(f"Ошибка qemu-img: {result.stderr}")
             else:
@@ -740,7 +747,7 @@ class StorageManager(LibvirtClient):
             disk_name = os.path.basename(disk_path)
 
             # Проверяем существование файла
-            file_path_exists = os.path.exists(disk_path)
+            file_path_exists = self.cli.is_exists(disk_path)
 
             # Получаем размер файла если он существует
             capacity_bytes = None
@@ -780,9 +787,7 @@ class StorageManager(LibvirtClient):
             if disk_format == DiskFormat.QCOW2 and file_path_exists:
                 try:
                     cmd = ["qemu-img", "info", "--output=json", disk_path]
-                    result = subprocess.run(
-                        cmd, capture_output=True, text=True, timeout=5
-                    )
+                    result = self.cli.execute(cmd, timeout=5, return_proc=True)
                     if result.returncode == 0:
                         import json
 
@@ -919,13 +924,13 @@ class StorageManager(LibvirtClient):
         """
 
         try:
-            if not os.path.exists(source_path):
+            if not self.cli.is_exists(source_path):
                 self.logger.error("Исходный файл не существует")
                 return False
             if target_path is not None:
                 target_dir = os.path.dirname(target_path)
-                if not os.path.exists(target_dir):
-                    os.makedirs(target_dir, exist_ok=True)
+                if not self.cli.is_exists(target_dir):
+                    self.cli.mkdir(target_dir)
             else:
                 current_disk_format = self.libvirt_config.disk_format_by_path(
                     source_path
@@ -946,8 +951,7 @@ class StorageManager(LibvirtClient):
             )
             self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
-
+            result = self.cli.execute(cmd, return_proc=True)
             if result.returncode != 0:
                 self.logger.error(f"Ошибка при конвертации: {result.stderr}")
                 return StorageMessage(
@@ -964,14 +968,6 @@ class StorageManager(LibvirtClient):
                 target_path=target_path,
             )
 
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Ошибка qemu-img при конвертации: {e}")
-            return StorageMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.disk_convert_error.value,
-                code=CommandMessagesEnum.disk_convert_error.name,
-                note=str(e),
-            )
         except Exception as e:
             self.logger.exception(f"Ошибка при конвертации диска: {e}")
             return StorageMessage(
@@ -1069,8 +1065,15 @@ class StorageManager(LibvirtClient):
     ) -> Disk | StorageMessage:
         try:
             if path:
-                if os.path.exists(path):
+                if self.cli.is_exists(path):
                     disk_info = self._get_file_disk_info(path)
+                    if disk_info is None or isinstance(disk_info, str):
+                        return StorageMessage(
+                            request_id=request_id,
+                            message=CommandMessagesEnum.disk_not_found.value,
+                            code=CommandMessagesEnum.disk_not_found.name,
+                            note=disk_info
+                        )
                     return StorageMessage(
                         request_id=request_id,
                         message=CommandMessagesEnum.disk_founded.value,
@@ -1132,7 +1135,7 @@ class StorageManager(LibvirtClient):
 
     def get_disk_virtual_size(self, path: str) -> int:  # Возвращает размер в байтах
         cmd = ["qemu-img", "info", path]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = self.cli.execute(cmd, return_proc=True)
 
         if result.returncode != 0:
             raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
@@ -1142,7 +1145,7 @@ class StorageManager(LibvirtClient):
 
     def get_disk_size(self, path: str) -> int:  # Возвращает размер в байтах
         cmd = ["qemu-img", "info", path]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = self.cli.execute(cmd, return_proc=True)
 
         if result.returncode != 0:
             raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
@@ -1150,9 +1153,9 @@ class StorageManager(LibvirtClient):
         size_data = float(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
         return self.convert_to_bytes_simple(size_data, size_type)
 
-    def _get_file_disk_info(self, path: str) -> Disk | None:
+    def _get_file_disk_info(self, path: str) -> Disk | str:
         try:
-            file_path_exists = os.path.exists(path)
+            file_path_exists = self.cli.is_exists(path)
             disk_format = DiskFormat.UNKNOWN
 
             # Определяем формат по расширению
@@ -1174,7 +1177,7 @@ class StorageManager(LibvirtClient):
             disk_name = os.path.basename(path)
 
             metadata_path = f"{path}.meta"
-            if os.path.exists(metadata_path):
+            if self.cli.is_exists(metadata_path):
                 try:
                     with open(metadata_path, "r") as f:
                         for line in f:
@@ -1217,7 +1220,7 @@ class StorageManager(LibvirtClient):
 
         except Exception as e:
             self.logger.exception(f"Ошибка получения файловой информации: {e}")
-            return None
+            return str(e)
 
     def _get_pool_disk_info(self, pool_name: str, disk_name: str) -> Disk | None:
         try:
@@ -1335,7 +1338,7 @@ class StorageManager(LibvirtClient):
             standard_dirs.insert(0, query.search_path)
 
         for dir_path in standard_dirs:
-            if os.path.exists(dir_path) and os.path.isdir(dir_path):
+            if self.cli.is_exists(dir_path) and self.cli.is_directory(dir_path):
                 try:
                     for file_name in os.listdir(dir_path):
                         file_path = os.path.join(dir_path, file_name)
@@ -1350,7 +1353,7 @@ class StorageManager(LibvirtClient):
 
     def _is_disk_file(self, file_path: str) -> bool:
         disk_extensions = list(self.libvirt_config.disk_extensions) + [".iso", ".img"]
-        return os.path.isfile(file_path) and any(
+        return not self.cli.is_directory(file_path) and any(
             file_path.endswith(ext) for ext in disk_extensions
         )
 
@@ -1477,7 +1480,7 @@ class StorageManager(LibvirtClient):
                 disk_format = self.libvirt_config.disk_format_by_path(disk_path)
 
             size_bytes = (
-                self.get_disk_size(disk_path) if os.path.exists(disk_path) else 0
+                self.get_disk_size(disk_path) if self.cli.is_exists(disk_path) else 0
             )
 
             bus_type = None
@@ -1490,7 +1493,7 @@ class StorageManager(LibvirtClient):
             disk = Disk(
                 name=os.path.basename(disk_path),
                 path=disk_path,
-                file_path_exists=os.path.exists(disk_path),
+                file_path_exists=self.cli.is_exists(disk_path),
                 type=DiskType.VM_ATTACHED,
                 format=disk_format,
                 capacity_bytes=size_bytes,

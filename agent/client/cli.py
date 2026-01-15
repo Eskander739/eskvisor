@@ -1,9 +1,15 @@
-import getpass
 import os
 import subprocess
 
 from agent.client.constants import DIRECTORIES_FOR_SEARCH, QEMU_EMULATORS
 from agent.client.logger_config import DefaultLogger
+
+
+class ProcessResult:
+    def __init__(self, returncode: int, stdout: str, stderr: str):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 class CLIControl:
@@ -32,40 +38,33 @@ class CLIControl:
 
         return result
 
-    @staticmethod
-    def is_directory(path_str: str) -> bool:
-        """
-        Проверяет, является ли строка директорией (или потенциальным путем к директории).
-
-        Args:
-            path_str: Путь для проверки
-
-        Returns:
-            bool: True если базовый путь существует и является директорией, иначе False
-        """
-        try:
-            # Используем pathlib для более чистой обработки путей
-            from pathlib import Path
-
-            # Преобразуем строку в Path объект
-            path_obj = Path(path_str)
-
-            # Если путь содержит wildcards, проверяем родительскую директорию
-            if "*" in path_str or "?" in path_str:
-                # Берем родительскую директорию для проверки
-                parent_dir = path_obj.parent
-                # Если родительская директория - это текущая директория ('.') или пусто,
-                # проверяем текущую рабочую директорию
-                if str(parent_dir) == ".":
-                    parent_dir = Path.cwd()
-                return parent_dir.exists() and parent_dir.is_dir()
-
-            # Для обычных путей - расширяем домашнюю директорию и проверяем
-            expanded_path = path_obj.expanduser()
-            return expanded_path.exists() and expanded_path.is_dir()
-
-        except Exception:
+    def is_exists(self, cgroup_path: str):
+        ru_err = "Нет такого файла или каталога"
+        eng_err = "No such file or directory"
+        cmd_args = ["ls", cgroup_path]
+        result = self.execute(cmd_args)
+        if ru_err in result or eng_err in result:
             return False
+        return True
+
+    def is_directory(self, cgroup_path: str):
+        ru_err = "Это каталог"
+        eng_err = "Is a directory"
+        cmd_args = ["cat", cgroup_path]
+        result = self.execute(cmd_args)
+        if ru_err in result or eng_err in result:
+            return True
+        return False
+
+    def mkdir(self, cgroup_path: str):
+        cmd_args = ["mkdir", cgroup_path]
+        result = self.execute(cmd_args)
+        return result
+
+    def rmdir(self, cgroup_path: str):
+        cmd_args = ["rmdir", cgroup_path]
+        result = self.execute(cmd_args)
+        return result
 
     def search_emulators(
         self, new_directories: list[str] | str | None = None, only_name: bool = False
@@ -175,7 +174,7 @@ class CLIControl:
 
             return emulators[0]
 
-    def execute(self, command, user="root", password="root"):
+    def execute(self, command, user="root", password="root", timeout: int = 10, return_proc: bool = False):
         # Формируем команду
         if isinstance(command, str):
             command = command.split()
@@ -192,7 +191,9 @@ class CLIControl:
         )
 
         # Критически важно: пароль + \n
-        stdout, stderr = proc.communicate(input=f"{password}\n", timeout=10)
+        stdout, stderr = proc.communicate(input=f"{password}\n", timeout=timeout)
+        if return_proc:
+            return ProcessResult(proc.returncode, stdout, stderr)
         return stdout if proc.returncode == 0 else stderr
 
 

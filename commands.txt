@@ -5,21 +5,34 @@ sudo apt update
 sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst
 sudo apt install lvm2
 sudo apt install numactl
+sudo apt install nfs-kernel-server
+sudo apt install nfs-common
 
 # Для CentOS/RHEL/ALT Linux:
 sudo yum install -y qemu-kvm libvirt libvirt-client virt-install
 sudo yum install lvm2
 sudo yum install numactl
+sudo yum install nfs-kernel-server
+sudo yum install nfs-common
 
 # Для Fedora:
 sudo dnf install -y qemu-kvm libvirt libvirt-client virt-install
 sudo dnf install lvm2
 sudo dnf install numactl
+sudo dnf install nfs-kernel-server
+sudo dnf install nfs-common
+
 sudo systemctl start libvirtd
+sudo systemctl enable nfs-server
+sudo systemctl start nfs-server
 sudo systemctl enable libvirtd
 
 # Проверьте статус (должен быть "active (running)")
 sudo systemctl status libvirtd
+
+# команда ниже нужна для корректной работы nfs хранилищ
+sudo sh -c "echo '/srv/nfs 127.0.0.1(rw,sync,no_root_squash,fsid=0,no_subtree_check)' >> /etc/exports"
+sudo exportfs -ra
 
 #_________________________________Запуск анализатора кода и автоформатирование black______________________________
 

@@ -26,8 +26,11 @@ def test_vd_09_disk_creation_error(storage_session, disk_format):
     attach_disk = storage_session.create_disk(attach_disk_create)
     assert attach_disk.message == CommandMessagesEnum.disk_create_error.value
     assert attach_disk.code == CommandMessagesEnum.disk_create_error.name
-    assert attach_disk.disk_info.path in attach_disk.stderr
-    assert ERROR_MSG.format(disk_format.value) in attach_disk.stderr
+    if disk_format == DiskFormat.QCOW2:
+        assert "timed out after 10 seconds" in attach_disk.note
+    else:
+        assert attach_disk.disk_info.path in attach_disk.stderr
+        assert ERROR_MSG.format(disk_format.value) in attach_disk.stderr
     vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
     assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
     assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
