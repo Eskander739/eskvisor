@@ -15,6 +15,7 @@ CURRENT_PATH = Path(__file__).parent.parent.parent / "hypervisor" / "pycgroup" /
 SAVE_SCRIPT = str(CURRENT_PATH / "save.sh")
 RESTORE_SCRIPT = str(CURRENT_PATH / "restore.sh")
 
+
 @pytest.mark.tags(
     "SF‑01",
     "Сохранение и восстановление ресурс пула через скрипт агента",
@@ -37,7 +38,7 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
             storage_limit=1,
             storage_type=StoragePoolType.LOGICAL,
             cpu_weight=479,
-            ram_reservation_gb=0.5
+            ram_reservation_gb=0.5,
         )
         create_rp_info = resource_pool_session.create_virtual_resource_pool(rp_template)
         assert (
@@ -59,7 +60,10 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_core_limit == rp_template.cpu_core_limit
         assert get_rp_info.rp_info.cpu_weight == rp_template.cpu_weight
-        assert get_rp_info.rp_info.ram_reservation_bytes == rp_template.ram_reservation_bytes
+        assert (
+            get_rp_info.rp_info.ram_reservation_bytes
+            == rp_template.ram_reservation_bytes
+        )
         assert get_rp_info.rp_info.ram_limit_bytes == rp_template.ram_limit_bytes
         assert get_rp_info.rp_info.storage_type.value == StoragePoolType.LOGICAL.value
 
@@ -87,13 +91,8 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
         )
-        assert (
-            get_rp_info.message
-            == CommandMessagesEnum.rp_virtual_not_found.value
-        )
-        assert (
-            get_rp_info.code == CommandMessagesEnum.rp_virtual_not_found.name
-        )
+        assert get_rp_info.message == CommandMessagesEnum.rp_virtual_not_found.value
+        assert get_rp_info.code == CommandMessagesEnum.rp_virtual_not_found.name
 
         # ____________________________________Восстановление пула ресурсов через скрипт______________
         cmd_args = ["bash", RESTORE_SCRIPT]
@@ -109,16 +108,9 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
 
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______
-        resource_pool_session.pycgroup.delete_cgroup_pool(
-            random_name, True
-        )
+        resource_pool_session.pycgroup.delete_cgroup_pool(random_name, True)
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
         )
-        assert (
-                get_rp_info.message
-                == CommandMessagesEnum.rp_virtual_not_found.value
-        )
-        assert (
-                get_rp_info.code == CommandMessagesEnum.rp_virtual_not_found.name
-        )
+        assert get_rp_info.message == CommandMessagesEnum.rp_virtual_not_found.value
+        assert get_rp_info.code == CommandMessagesEnum.rp_virtual_not_found.name

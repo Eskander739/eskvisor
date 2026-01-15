@@ -7,7 +7,10 @@ from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest
 
 
-@pytest.mark.tags("SN‑07", "Восстановление из родительского снапшота (откат к более раннему состоянию)")
+@pytest.mark.tags(
+    "SN‑07",
+    "Восстановление из родительского снапшота (откат к более раннему состоянию)",
+)
 def test_sn_06_create_snapshot_chain(
     snapshot_session, create_stopped_vm_func, vm_session, storage_session
 ):
@@ -33,18 +36,22 @@ def test_sn_06_create_snapshot_chain(
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # ____________________________Создание снапшота остановленной ВМ_____________
 
-        for snapshot_name in (snapshot_name_first, snapshot_name_second, snapshot_name_third):
+        for snapshot_name in (
+            snapshot_name_first,
+            snapshot_name_second,
+            snapshot_name_third,
+        ):
             vm_template = SnapshotCreateRequest(
                 vm_name=vm_name, snapshot_name=snapshot_name, description=description
             )
             create_vm_info = snapshot_session.create_snapshot(vm_template, request_id)
             assert (
-                    create_vm_info.message
-                    == CommandMessagesEnum.snapshot_successfully_created.value
+                create_vm_info.message
+                == CommandMessagesEnum.snapshot_successfully_created.value
             )
             assert (
-                    create_vm_info.code
-                    == CommandMessagesEnum.snapshot_successfully_created.name
+                create_vm_info.code
+                == CommandMessagesEnum.snapshot_successfully_created.name
             )
             assert create_vm_info.snapshot_info is not None
             snapshot_info = create_vm_info.snapshot_info

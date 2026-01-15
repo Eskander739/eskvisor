@@ -33,7 +33,7 @@ def test_rp_06_set_pool_resource_reserve(resource_pool_session):
             ram_limit_gb=0.5,
             storage_limit=1,
             storage_type=StoragePoolType.LOGICAL,
-            ram_reservation_gb=0.5
+            ram_reservation_gb=0.5,
         )
         create_rp_info = resource_pool_session.create_virtual_resource_pool(rp_template)
         assert (
@@ -53,7 +53,10 @@ def test_rp_06_set_pool_resource_reserve(resource_pool_session):
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
         )
         assert get_rp_info.rp_info.name == random_name
-        assert get_rp_info.rp_info.ram_reservation_bytes == rp_template.ram_reservation_bytes
+        assert (
+            get_rp_info.rp_info.ram_reservation_bytes
+            == rp_template.ram_reservation_bytes
+        )
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______
         if not rp_deleted:

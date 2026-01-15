@@ -7,10 +7,11 @@ class CPUController:
     def __init__(self):
         self.cli = CLICGroup()
         self._DEFAULT_WEIGHT = 100  # Стандартный вес в cgroup v2
-        self._MAX_WEIGHT = 10000    # Максимальный вес в cgroup v2
-        self._MIN_WEIGHT = 1        # Минимальный вес в cgroup v2
+        self._MAX_WEIGHT = 10000  # Максимальный вес в cgroup v2
+        self._MIN_WEIGHT = 1  # Минимальный вес в cgroup v2
 
-    def set_cpu_percent(self,
+    def set_cpu_percent(
+        self,
         cgroup_pool: str,
         cpu_percent: float | None = None,
         period_us: int = 100000,
@@ -152,7 +153,7 @@ class CPUController:
 
         stats = {}
         try:
-            with open(cpu_stat_file, 'r') as f:
+            with open(cpu_stat_file, "r") as f:
                 for line in f:
                     if line.strip():
                         parts = line.split()
@@ -192,7 +193,9 @@ class CPUController:
         except (ValueError, AttributeError) as e:
             raise ValueError(f"Некорректный формат в {cpu_max_file}: {value}") from e
 
-    def get_cpu_usage_cores(self, cgroup_pool: str, window_seconds: float = 1.0) -> float:
+    def get_cpu_usage_cores(
+        self, cgroup_pool: str, window_seconds: float = 1.0
+    ) -> float:
         """
         Получает текущее использование CPU в ядрах (allocated - сколько УЖЕ используется)
 
@@ -210,7 +213,7 @@ class CPUController:
         """
         # Получаем текущее использование из cpu.stat
         stats = self._read_cpu_stat(cgroup_pool)
-        usage_usec = stats.get('usage_usec', 0)
+        usage_usec = stats.get("usage_usec", 0)
 
         # usage_usec - это общее накопленное использование в микросекундах
         # Для получения текущей скорости использования нам нужно измерить за период времени
@@ -220,7 +223,7 @@ class CPUController:
         current_usage = usage_usec
 
         # Если у нас есть предыдущие измерения, вычисляем скорость
-        if hasattr(self, '_prev_measurement'):
+        if hasattr(self, "_prev_measurement"):
             prev_time, prev_usage = self._prev_measurement.get(str(cgroup_pool), (0, 0))
 
             if prev_time > 0 and current_time > prev_time:
@@ -237,34 +240,41 @@ class CPUController:
                     # Ограничиваем окно измерений
                     if time_diff > window_seconds * 2:
                         # Слишком большой разрыв, используем непосредственное измерение
-                        usage_cores = self._get_instant_usage(cgroup_pool, window_seconds)
+                        usage_cores = self._get_instant_usage(
+                            cgroup_pool, window_seconds
+                        )
 
                     # Сохраняем текущее измерение для следующего вызова
-                    self._prev_measurement[str(cgroup_pool)] = (current_time, current_usage)
+                    self._prev_measurement[str(cgroup_pool)] = (
+                        current_time,
+                        current_usage,
+                    )
                     return round(max(0.0, usage_cores), 3)
 
         # Если это первый вызов или измерения недоступны
         usage_cores = self._get_instant_usage(cgroup_pool, window_seconds)
 
         # Инициализируем сохранение измерений
-        if not hasattr(self, '_prev_measurement'):
+        if not hasattr(self, "_prev_measurement"):
             self._prev_measurement = {}
         self._prev_measurement[str(cgroup_pool)] = (current_time, current_usage)
 
         return round(usage_cores, 3)
 
-    def _get_instant_usage(self, cgroup_pool: str, window_seconds: float = 1.0) -> float:
+    def _get_instant_usage(
+        self, cgroup_pool: str, window_seconds: float = 1.0
+    ) -> float:
         """
         Измеряет мгновенное использование CPU за указанный период
         """
         # Делаем два измерения с интервалом
         stats1 = self._read_cpu_stat(cgroup_pool)
-        usage1 = stats1.get('usage_usec', 0)
+        usage1 = stats1.get("usage_usec", 0)
 
         time.sleep(min(window_seconds, 0.5))  # Ждем немного
 
         stats2 = self._read_cpu_stat(cgroup_pool)
-        usage2 = stats2.get('usage_usec', 0)
+        usage2 = stats2.get("usage_usec", 0)
 
         # Использование за прошедшее время
         # (предполагаем, что sleep был примерно window_seconds)
@@ -324,7 +334,7 @@ class CPUController:
             return "max"
 
         if limit == 0:
-            return float('inf') if usage > 0 else 0.0
+            return float("inf") if usage > 0 else 0.0
 
         usage_percent = (usage / limit) * 100
         return round(min(usage_percent, 100.0), 1)
@@ -335,10 +345,10 @@ class CPUController:
         """
         stats = self._read_cpu_stat(cgroup_pool)
 
-        total_usage = stats.get('usage_usec', 0)
-        throttled_usec = stats.get('throttled_usec', 0)
-        nr_throttled = stats.get('nr_throttled', 0)
-        nr_periods = stats.get('nr_periods', 0)
+        total_usage = stats.get("usage_usec", 0)
+        throttled_usec = stats.get("throttled_usec", 0)
+        nr_throttled = stats.get("nr_throttled", 0)
+        nr_periods = stats.get("nr_periods", 0)
 
         # Процент времени под throttling
         throttling_percent = 0.0
@@ -351,12 +361,12 @@ class CPUController:
             throttled_periods_percent = (nr_throttled / nr_periods) * 100
 
         return {
-            'throttled_usec': throttled_usec,
-            'nr_throttled': nr_throttled,
-            'nr_periods': nr_periods,
-            'throttling_percent': round(throttling_percent, 2),
-            'throttled_periods_percent': round(throttled_periods_percent, 2),
-            'total_usage_usec': total_usage
+            "throttled_usec": throttled_usec,
+            "nr_throttled": nr_throttled,
+            "nr_periods": nr_periods,
+            "throttling_percent": round(throttling_percent, 2),
+            "throttled_periods_percent": round(throttled_periods_percent, 2),
+            "total_usage_usec": total_usage,
         }
 
     def get_cpu_summary(self, cgroup_pool: str) -> dict:
@@ -364,12 +374,22 @@ class CPUController:
         Получает полную сводку по CPU для cgroup
         """
         return {
-            'max_limit_cores': self.get_cpu_limit_cores(cgroup_pool),  # сколько МОЖНО использовать
-            'allocated_cores': self.get_cpu_usage_cores(cgroup_pool),  # сколько УЖЕ используется
-            'available_cores': self.get_cpu_available_cores(cgroup_pool),  # сколько ещё МОЖНО использовать
-            'usage_percent': self.get_cpu_usage_percent(cgroup_pool),  # использование в % от лимита
-            'throttling': self.get_cpu_throttling_info(cgroup_pool),  # информация о throttling
-            'cpu_weight': self.get_cpu_weight(cgroup_pool)  # информация о weight
+            "max_limit_cores": self.get_cpu_limit_cores(
+                cgroup_pool
+            ),  # сколько МОЖНО использовать
+            "allocated_cores": self.get_cpu_usage_cores(
+                cgroup_pool
+            ),  # сколько УЖЕ используется
+            "available_cores": self.get_cpu_available_cores(
+                cgroup_pool
+            ),  # сколько ещё МОЖНО использовать
+            "usage_percent": self.get_cpu_usage_percent(
+                cgroup_pool
+            ),  # использование в % от лимита
+            "throttling": self.get_cpu_throttling_info(
+                cgroup_pool
+            ),  # информация о throttling
+            "cpu_weight": self.get_cpu_weight(cgroup_pool),  # информация о weight
         }
 
     # === УТИЛИТАРНЫЕ МЕТОДЫ ДЛЯ ВЫВОДА ===
@@ -387,12 +407,16 @@ class CPUController:
         print(f"  cpu weight:          {summary['cpu_weight']}")
         print(f"  Usage:          {summary['usage_percent']}% of limit")
 
-        throttling = summary['throttling']
-        if throttling['nr_throttled'] > 0:
+        throttling = summary["throttling"]
+        if throttling["nr_throttled"] > 0:
             print(f"  Throttling:     {throttling['throttling_percent']}% of time")
-            print(f"  Throttled for:  {throttling['throttled_usec'] / 1_000_000:.2f}s total")
+            print(
+                f"  Throttled for:  {throttling['throttled_usec'] / 1_000_000:.2f}s total"
+            )
 
-    def set_cpu_weight(self, cgroup_pool: str, weight: int | float | None = None) -> int:
+    def set_cpu_weight(
+        self, cgroup_pool: str, weight: int | float | None = None
+    ) -> int:
         """
         Устанавливает вес CPU (cpu.weight) для гарантированной доли CPU.
 

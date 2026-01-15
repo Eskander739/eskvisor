@@ -18,6 +18,7 @@ async def main(request: Request):
         "landing.html", {"request": request, "title": "Главная страница"}
     )
 
+
 if __name__ == "__main__":
     import uvicorn
 

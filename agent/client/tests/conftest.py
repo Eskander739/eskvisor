@@ -107,8 +107,6 @@ def create_running_vm_session():
         vm_manager.delete_vm_with_force(vm_config.name, request_id)
 
 
-
-
 @pytest.fixture(scope="session")
 def create_running_vm_session_with_os():
     with VmManager() as vm_manager:

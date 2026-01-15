@@ -8,6 +8,7 @@ from agent.client.hypervisor.pycgroup.cgroup_cli import (
 
 load_dotenv()
 
+
 class PidController:
     def __init__(self):
         self.cli = CLICGroup()
@@ -35,7 +36,9 @@ class PidController:
         cmd_arg = "ls -d /run/libvirt/qemu/*.pid"
         vm_with_pids = {}
         resource_pool_vm_with_pids = {}
-        pids_from_vm_pid_path = self.cli.execute(cmd_arg, shell=True, is_text=True).split("\n")
+        pids_from_vm_pid_path = self.cli.execute(
+            cmd_arg, shell=True, is_text=True
+        ).split("\n")
         pids_from_vm_pid_path.remove(f"{self.system_vm_pid_path}/driver.pid")
         pids_from_vm_pid_path.remove("")
         for vm in pids_from_vm_pid_path:
@@ -47,6 +50,7 @@ class PidController:
             if vm_current_pid in pids:
                 resource_pool_vm_with_pids[vm_name] = vm_current_pid
         return resource_pool_vm_with_pids
+
     def get_pids_from_pool(self, cgroup_pool: str) -> list[int] | None:
         cgroup_pool = self.validate_path(cgroup_pool)
         cgroup_pool = f"{cgroup_pool}/cgroup.procs"
@@ -70,14 +74,18 @@ class PidController:
             raise ValueError(f"PID может быть только числом, pid: {type(pid)}")
         self.validate_path(cgroup_pool)
         cgroup_pool = f"{cgroup_pool}/cgroup.procs"
-        self.cli.execute(["sh", "-c", f"echo {pid} > {self.system_cgroup_path}/cgroup.procs"])
+        self.cli.execute(
+            ["sh", "-c", f"echo {pid} > {self.system_cgroup_path}/cgroup.procs"]
+        )
         result = self.cli.execute(["cat", f"{cgroup_pool}"])
         return result
 
     def delete_all_pid_from_pool(self, cgroup_pool: str) -> str:
         self.validate_path(cgroup_pool)
         cgroup_pool = f"{cgroup_pool}/cgroup.procs"
-        self.cli.execute(["sh", "-c", f"cat {cgroup_pool} > {self.system_cgroup_path}/cgroup.procs"])
+        self.cli.execute(
+            ["sh", "-c", f"cat {cgroup_pool} > {self.system_cgroup_path}/cgroup.procs"]
+        )
         result = self.cli.execute(["cat", f"{cgroup_pool}"])
         return result
 

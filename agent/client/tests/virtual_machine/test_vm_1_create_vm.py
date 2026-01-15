@@ -52,11 +52,10 @@ def test_vm_01_create_vm(vm_session, vm_state):
                 name=random_name, request_id=request_id
             )
             assert (
-                    delete_vm_info.message
-                    == CommandMessagesEnum.vm_successfully_deleted.value
+                delete_vm_info.message
+                == CommandMessagesEnum.vm_successfully_deleted.value
             )
             assert (
-                    delete_vm_info.code
-                    == CommandMessagesEnum.vm_successfully_deleted.name
+                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
             assert delete_vm_info.success is True

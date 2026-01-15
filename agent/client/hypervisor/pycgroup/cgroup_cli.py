@@ -9,7 +9,14 @@ class CLICGroup:
     def __init__(self):
         self.logger = PyCGroupLogger()
 
-    def execute(self, command, user="root", password="root", shell: bool = False, is_text: bool = False):
+    def execute(
+        self,
+        command,
+        user="root",
+        password="root",
+        shell: bool = False,
+        is_text: bool = False,
+    ):
         if not is_text:
             if isinstance(command, str):
                 command = command.split()
@@ -25,7 +32,7 @@ class CLICGroup:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            shell=shell
+            shell=shell,
         )
 
         stdout, stderr = proc.communicate(input=f"{password}\n", timeout=10)
@@ -41,8 +48,8 @@ class CLICGroup:
         return True
 
     def is_directory(self, cgroup_path: str):
-        ru_err  = "Это каталог"
-        eng_err  = "Is a directory"
+        ru_err = "Это каталог"
+        eng_err = "Is a directory"
         cmd_args = ["cat", cgroup_path]
         result = self.execute(cmd_args)
         if ru_err in result or eng_err in result:
@@ -68,6 +75,7 @@ class CLICGroup:
         cmd_args = ["cat", f"{file_path}"]
         result = self.execute(cmd_args)
         return result
+
 
 if __name__ == "__main__":
     cli = CLICGroup()

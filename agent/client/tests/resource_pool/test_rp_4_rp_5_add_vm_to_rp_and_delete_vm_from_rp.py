@@ -91,8 +91,12 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
         assert vm_info.name in rp_info.vms
         assert rp_info.ram_allocated < vm_info.max_memory * 1024
         assert rp_info.cpu_core_allocated < vm_info.vcpus
-        current_pid_rp = resource_pool_session.pycgroup.pid_ctl.get_pids_from_pool(random_name).pop()
-        assert current_pid_rp == resource_pool_session.pycgroup.pid_ctl.vm_pid(vm_info.name)
+        current_pid_rp = resource_pool_session.pycgroup.pid_ctl.get_pids_from_pool(
+            random_name
+        ).pop()
+        assert current_pid_rp == resource_pool_session.pycgroup.pid_ctl.vm_pid(
+            vm_info.name
+        )
 
         # ____________________________________Удаление ВМ из ресурс пула______________
         add_vm_to_resource_pool = (
@@ -123,7 +127,10 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
         assert get_rp_info.rp_info.vms is None
         assert rp_info.ram_allocated == 4096
         assert rp_info.cpu_core_allocated < 0.7
-        assert resource_pool_session.pycgroup.pid_ctl.get_pids_from_pool(random_name) is None
+        assert (
+            resource_pool_session.pycgroup.pid_ctl.get_pids_from_pool(random_name)
+            is None
+        )
 
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______

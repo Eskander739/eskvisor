@@ -5,7 +5,7 @@ from agent.client.hypervisor.libvirt.models.volume.logic_volume import (
 )
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType
 
-PAGE_SIZE = 4096 # Система работает со страницами памяти, обычно по (4096 байт) на большинстве современных систем
+PAGE_SIZE = 4096  # Система работает со страницами памяти, обычно по (4096 байт) на большинстве современных систем
 
 
 class ResourceReservationVM(BaseModel):
@@ -22,14 +22,16 @@ class ResourcePoolVirtualCreate(BaseModel):
     ram_limit_gb: (
         int | float
     )  # Какой объем RAM установить в качестве лимита(в гигабайтах)
-    ram_reservation_gb: int | float | None = None   # Какой объем RAM установить в качестве лимита(в гигабайтах)
+    ram_reservation_gb: int | float | None = (
+        None  # Какой объем RAM установить в качестве лимита(в гигабайтах)
+    )
     cpu_weight: int | None = None  # Веса процессорного времени
     storage_limit: int  # Какой объем STORAGE установить в качестве лимита, единица измерения в поле volume_size_type
     storage_type: StoragePoolType = (
         StoragePoolType.LOGICAL
     )  # Какой объем STORAGE установить в качестве лимита(в байтах)
     volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB
-    vms: list[str] | None = None # имена ВМ
+    vms: list[str] | None = None  # имена ВМ
     vm_reservation_list: list[ResourceReservationVM] | None = None
 
     @model_validator(mode="after")
@@ -45,14 +47,14 @@ class ResourcePoolVirtualCreate(BaseModel):
     @computed_field
     @property
     def ram_limit_bytes(self) -> int:
-        bytes_value = int(self.ram_limit_gb * (1024 ** 3))
+        bytes_value = int(self.ram_limit_gb * (1024**3))
         return (bytes_value // PAGE_SIZE) * PAGE_SIZE
 
     @computed_field
     @property
     def ram_reservation_bytes(self) -> int | None:
         if self.ram_reservation_gb is not None:
-            return int(self.ram_reservation_gb * (1024 ** 3))
+            return int(self.ram_reservation_gb * (1024**3))
         return None
 
 
@@ -88,7 +90,7 @@ class ResourcePoolVirtualEdit(BaseModel):
     @property
     def ram_limit_bytes(self) -> None | int:
         if self.ram_limit_gb:
-            bytes_value = int(self.ram_limit_gb * (1024 ** 3))
+            bytes_value = int(self.ram_limit_gb * (1024**3))
             return (bytes_value // PAGE_SIZE) * PAGE_SIZE
         return None
 
@@ -100,7 +102,9 @@ class ResourcePoolVirtual(BaseModel):
     cpu_core_available: int | float  # Сколько ядер свободно для использования
     cpu_weight: int  # Веса процессорного времени
     ram_limit_bytes: int  # Какой объем RAM установлено в качестве лимита(в байтах)
-    ram_reservation_bytes: int  # Какой объем RAM установлено в качестве резерва(в байтах)
+    ram_reservation_bytes: (
+        int  # Какой объем RAM установлено в качестве резерва(в байтах)
+    )
     ram_allocated: int | float  # Какой объем RAM уже используется(в байтах)
     ram_available: int | float  # Какой объем RAM свободен для использования(в байтах)
     storage_limit: int  # Какой объем STORAGE установлено в качестве лимита(в байтах)

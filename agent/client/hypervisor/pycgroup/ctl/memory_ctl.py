@@ -5,6 +5,7 @@ class MemortController:
     """
     В память информацию записываем в килобайтах, а получаем в байтах
     """
+
     def __init__(self):
         self.cli = CLICGroup()
 
@@ -22,7 +23,11 @@ class MemortController:
         memory_max = f"{cgroup_pool}/memory.max"
         memory_max_info = self.read_text(memory_max)
         memory_max_value = memory_max_info.split(" ")[0].replace("\n", "")
-        return "max" if memory_max_value == "max" else int(memory_max_info.replace("K", ""))
+        return (
+            "max"
+            if memory_max_value == "max"
+            else int(memory_max_info.replace("K", ""))
+        )
 
     def get_memory_reservation(self, cgroup_pool: str):
         memory_reservation = f"{cgroup_pool}/memory.min"
@@ -51,8 +56,8 @@ class MemortController:
             self.write_text(cgroup_pool, f"{memory_max}K")  # в килобайтах
         return self.cli.read_text(cgroup_pool)
 
-    def set_memory_reservation(self,
-        cgroup_pool: str, memory_reservation: int | None = None
+    def set_memory_reservation(
+        self, cgroup_pool: str, memory_reservation: int | None = None
     ):
         # гарантированный минимум
         cgroup_pool = f"{cgroup_pool}/memory.min"
@@ -76,10 +81,11 @@ class MemortController:
         # порог для защиты от давления
         cgroup_pool = f"{cgroup_pool}/memory.low"
         if memory_low is None:
-            self.write_text(cgroup_pool,"0")
+            self.write_text(cgroup_pool, "0")
         else:
             self.write_text(cgroup_pool, f"{memory_low}K")  # в килобайтах
         return self.cli.read_text(cgroup_pool)
+
 
 if __name__ == "__main__":
     cpu_ctl = MemortController()

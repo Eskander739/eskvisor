@@ -75,7 +75,9 @@ class PYCGroup:
 
         return cgroup_path
 
-    def add_pid_to_container(self, pool_name: str, container_name: str, pid: int) -> str:
+    def add_pid_to_container(
+        self, pool_name: str, container_name: str, pid: int
+    ) -> str:
         cgroup_path = self.cgroup_container_path(pool_name, container_name)
         is_current_pids = self.pid_ctl.get_pids_from_pool(cgroup_path)
         if is_current_pids:
@@ -118,7 +120,9 @@ class PYCGroup:
                     f"Установлено некорректное значение memory_reservation: '{memory_reservation}'"
                 )
 
-    def get_cgroup_container(self,  pool_name: str, container_name: str) -> dict[str, tuple]:
+    def get_cgroup_container(
+        self, pool_name: str, container_name: str
+    ) -> dict[str, tuple]:
         cgroup_path = self.cgroup_container_path(pool_name, container_name)
 
         cpu = self.cpu_ctl.get_cpu_cores(cgroup_path)
@@ -128,15 +132,24 @@ class PYCGroup:
         cpu_weight = self.cpu_ctl.get_cpu_weight(cgroup_path)
 
         ram_max = self.byte_to_mb(self.memory_ctl.get_memory_max(cgroup_path))
-        ram_allocated = self.byte_to_mb(self.memory_ctl.get_memory_allocated(cgroup_path))
-        ram_available = self.byte_to_mb(self.memory_ctl.get_memory_available(cgroup_path))
-        ram_reservation = self.byte_to_mb(self.memory_ctl.get_memory_reservation(cgroup_path))
+        ram_allocated = self.byte_to_mb(
+            self.memory_ctl.get_memory_allocated(cgroup_path)
+        )
+        ram_available = self.byte_to_mb(
+            self.memory_ctl.get_memory_available(cgroup_path)
+        )
+        ram_reservation = self.byte_to_mb(
+            self.memory_ctl.get_memory_reservation(cgroup_path)
+        )
 
         pids = self.pid_ctl.get_pids_from_pool(cgroup_path)
         pid = [int(pid) for pid in pids if pid.isdigit()]
         pid = int(pid.pop()) if pid else pid
-        container = {"cpu": (cpu, cpu_percent, cpu_allocated, cpu_available, cpu_weight),
-                     "ram": (ram_max, ram_available, ram_allocated, ram_reservation), "pid": pid}
+        container = {
+            "cpu": (cpu, cpu_percent, cpu_allocated, cpu_available, cpu_weight),
+            "ram": (ram_max, ram_available, ram_allocated, ram_reservation),
+            "pid": pid,
+        }
 
         return container
 
@@ -175,9 +188,7 @@ class PYCGroup:
                 )
 
         if cpu_weight is not None:
-            current_cpu_weight = self.cpu_ctl.set_cpu_weight(
-                cgroup_path, cpu_weight
-            )
+            current_cpu_weight = self.cpu_ctl.set_cpu_weight(cgroup_path, cpu_weight)
             if current_cpu_weight != cpu_weight:
                 raise ValueError(
                     f"Установлено некорректное значение current_cpu_weight: '{memory_reservation}', ожидаемое значение: '{cpu_weight}'"
@@ -213,7 +224,11 @@ class PYCGroup:
         all_cgroup = self.cli.execute(cmd_arg, shell=True, is_text=True)
         ru_err = "Нет такого файла или каталога"
         eng_err = "No such file or directory"
-        cgroup_list = [pool.replace(f"{self.system_cgroup_path}/", "") for pool in all_cgroup.split("\n") if pool]
+        cgroup_list = [
+            pool.replace(f"{self.system_cgroup_path}/", "")
+            for pool in all_cgroup.split("\n")
+            if pool
+        ]
         if len(cgroup_list) == 1:
             if ru_err in cgroup_list[0] or eng_err in cgroup_list[0]:
                 return []
@@ -225,7 +240,7 @@ class PYCGroup:
             cgroup_info_list.append(self.get_cgroup_pool(cgroup_path))
         return cgroup_info_list
 
-    def get_cgroup_pool(self,  pool_name: str) -> dict[str, tuple]:
+    def get_cgroup_pool(self, pool_name: str) -> dict[str, tuple]:
         cgroup_path = self.cgroup_pool_path(pool_name)
 
         cpu = self.cpu_ctl.get_cpu_cores(cgroup_path)
@@ -246,11 +261,13 @@ class PYCGroup:
         pids = [int(pid) for pid in pids if pid] if pids else pids
 
         name = cgroup_path.replace(self.system_cgroup_path + "/", "")
-        pool = {"name": name,
-                     "path": cgroup_path,
-                     "cpu": (cpu, cpu_percent, cpu_allocated, cpu_available, cpu_weight),
-                     "ram": (ram_max, ram_available, ram_allocated, ram_reservation),
-                     "pids": pids}
+        pool = {
+            "name": name,
+            "path": cgroup_path,
+            "cpu": (cpu, cpu_percent, cpu_allocated, cpu_available, cpu_weight),
+            "ram": (ram_max, ram_available, ram_allocated, ram_reservation),
+            "pids": pids,
+        }
 
         return pool
 
@@ -317,7 +334,6 @@ class PYCGroup:
         if vms is not None:
             self.add_vms_to_pool(cgroup_path, vms)
 
-
     def add_vms_to_pool(self, cgroup_path: str, vms: list[str]):
         cgroup_path = self.cgroup_pool_path(cgroup_path)
         add_vm_pids = []
@@ -332,14 +348,14 @@ class PYCGroup:
                 raise ValueError("Добавление PID в пул завершилось с ошибкой")
             for added_vm_pid in add_vm_pids:
                 if added_vm_pid not in pids:
-                    raise ValueError(f"Добавление PID '{added_vm_pid}' в пул завершилось с ошибкой")
-
-
+                    raise ValueError(
+                        f"Добавление PID '{added_vm_pid}' в пул завершилось с ошибкой"
+                    )
 
     def edit_cgroup_pool(
         self,
         name: str,
-        max_memory: int | None = None, # килобайты
+        max_memory: int | None = None,  # килобайты
         cpu_core_limit: int | None = None,
         memory_reservation: int | None = None,
         cpu_weight: int | None = None,
@@ -371,9 +387,7 @@ class PYCGroup:
                 )
 
         if cpu_weight is not None:
-            current_cpu_weight = self.cpu_ctl.set_cpu_weight(
-                cgroup_path, cpu_weight
-            )
+            current_cpu_weight = self.cpu_ctl.set_cpu_weight(cgroup_path, cpu_weight)
             if current_cpu_weight != cpu_weight:
                 raise ValueError(
                     f"Установлено некорректное значение current_cpu_weight: '{memory_reservation}', ожидаемое значение: '{cpu_weight}'"
@@ -387,7 +401,9 @@ class PYCGroup:
         eng_err = "Device or resource busy"
         if ru_err in result or eng_err in result:
             if not force:
-                raise ValueError("В пуле присутствуют процессы, используйте force для удаления")
+                raise ValueError(
+                    "В пуле присутствуют процессы, используйте force для удаления"
+                )
 
             pid_list = self.pid_ctl.get_pids_from_pool(cgroup_path)
             for current_pid in pid_list:
