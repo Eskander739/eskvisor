@@ -25,7 +25,7 @@ class PidController:
         if not self.cli.is_directory(cgroup_path):
             raise ValueError("Отсутствует директория в системе")
 
-    def get_vm_names_resource_pool(self, cgroup_pool: str):
+    def get_vm_names_resource_pool(self, cgroup_pool: str) -> dict[str, int]:
         pids = self.get_pids_from_pool(cgroup_pool)
         if pids is None:
             return None

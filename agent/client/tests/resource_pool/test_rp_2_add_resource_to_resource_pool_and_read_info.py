@@ -1,5 +1,6 @@
 import os
 import random
+import time
 
 import pytest
 
@@ -34,7 +35,7 @@ def test_rp_02_rp_10_add_resource_to_resource_pool_and_read_info(resource_pool_s
     rp_deleted = False
     try:
         # ____________________________________Создание пула ресурсов______________
-        random_name = f"RP-TEST-{random.randint(10000, 99999)}"
+        random_name = f"resource_pool_{random.randint(10000, 99999)}"
         rp_template = ResourcePoolVirtualCreate(
             name=random_name,
             cpu_core_limit=2,

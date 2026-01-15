@@ -50,7 +50,7 @@ class ResourcePoolVirtualEdit(BaseModel):
     ram_limit_gb: int | float | None = (
         None  # Какой объем RAM установить в качестве лимита(в гигабайтах)
     )
-    vm_uuid_list: list[str] | str | None = None
+    vms: list[str] | str | None = None
     storage_limit: int | None = None  # Какой объем STORAGE установить в качестве лимита
     storage_type: StoragePoolType | None = (
         None  # Какой объем STORAGE установить в качестве лимита(в байтах)
@@ -82,11 +82,11 @@ class ResourcePoolVirtualEdit(BaseModel):
 class ResourcePoolVirtual(BaseModel):
     name: str
     cpu_core_limit: int  # Сколько ядер установлено в качестве лимита
-    cpu_core_allocated: int  # Сколько ядер уже используется
-    cpu_core_available: int  # Сколько ядер свободно для использования
+    cpu_core_allocated: int | float  # Сколько ядер уже используется
+    cpu_core_available: int | float  # Сколько ядер свободно для использования
     ram_limit_bytes: int  # Какой объем RAM установлено в качестве лимита(в байтах)
-    ram_allocated: int  # Какой объем RAM уже используется(в байтах)
-    ram_available: int  # Какой объем RAM свободен для использования(в байтах)
+    ram_allocated: int | float  # Какой объем RAM уже используется(в байтах)
+    ram_available: int | float  # Какой объем RAM свободен для использования(в байтах)
     storage_limit: int  # Какой объем STORAGE установлено в качестве лимита(в байтах)
     storage_allocated: int  # Какой объем STORAGE уже используется(в байтах)
     storage_available: int  # Какой объем STORAGE свободен для использования(в байтах)

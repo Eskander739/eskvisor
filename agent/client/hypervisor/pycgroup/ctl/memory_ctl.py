@@ -84,4 +84,6 @@ class MemortController:
 if __name__ == "__main__":
     cpu_ctl = MemortController()
     # print(cpu_ctl.set_memory_max("/sys/fs/cgroup/resource_pool_123", 4194304))
-    print(cpu_ctl.get_memory_max("/sys/fs/cgroup/resource_pool_123"))
+    # print(cpu_ctl.get_memory_max("/sys/fs/cgroup/resource_pool_87023"))
+    print(cpu_ctl.get_memory_allocated("/sys/fs/cgroup/resource_pool_87023"))
+    # print(cpu_ctl.get_memory_available("/sys/fs/cgroup/resource_pool_87023"))

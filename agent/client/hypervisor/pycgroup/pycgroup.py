@@ -225,10 +225,10 @@ class PYCGroup:
         ram_max = self.memory_ctl.get_memory_max(cgroup_path)
         ram_available = self.memory_ctl.get_memory_available(cgroup_path)
 
-        ram_max = self.byte_to_mb(ram_max) if ram_max != "max" else ram_max
-        ram_allocated = self.byte_to_mb(self.memory_ctl.get_memory_allocated(cgroup_path))
-        ram_available = self.byte_to_mb(ram_available) if ram_available != "max" else ram_available
-        ram_reservation = self.byte_to_mb(self.memory_ctl.get_memory_reservation(cgroup_path))
+        ram_max = ram_max if ram_max != "max" else ram_max
+        ram_allocated = self.memory_ctl.get_memory_allocated(cgroup_path)
+        ram_available = ram_available if ram_available != "max" else ram_available
+        ram_reservation = self.memory_ctl.get_memory_reservation(cgroup_path)
 
         pids = self.pid_ctl.get_pids_from_pool(cgroup_path)
         pids = [int(pid) for pid in pids if pid] if pids else pids

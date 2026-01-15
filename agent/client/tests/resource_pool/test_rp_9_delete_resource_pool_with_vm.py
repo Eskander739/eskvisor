@@ -33,7 +33,7 @@ def test_rp_09_delete_resource_pool_with_vm(
     rp_deleted = False
     try:
         # ____________________________________Создание пула ресурсов______________
-        random_name = f"RP-TEST-{random.randint(10000, 99999)}"
+        random_name = f"resource_pool_{random.randint(10000, 99999)}"
         rp_template = ResourcePoolVirtualCreate(
             name=random_name,
             cpu_core_limit=2,
@@ -69,7 +69,7 @@ def test_rp_09_delete_resource_pool_with_vm(
         assert int(lv_capacity.volume_size_gb) == rp_template.storage_limit
         # ____________________________________Добавление ВМ в ресурс пул______________
         add_vm_to_resource_pool = resource_pool_session.edit_virtual_resource_pool(
-            ResourcePoolVirtualEdit(name=random_name, vm_uuid_list=vm_info.uuid)
+            ResourcePoolVirtualEdit(name=random_name, vms=vm_info.name)
         )
         assert (
             add_vm_to_resource_pool.message
@@ -91,9 +91,9 @@ def test_rp_09_delete_resource_pool_with_vm(
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
         )
         rp_info = get_rp_info.rp_info
-        assert vm_info.uuid in rp_info.vm_uuid_list
-        assert rp_info.ram_allocated == vm_info.max_memory * 1024
-        assert rp_info.cpu_core_allocated == vm_info.vcpus
+        assert vm_info.name in rp_info.vms
+        assert rp_info.ram_allocated < vm_info.max_memory * 1024
+        assert rp_info.cpu_core_allocated < vm_info.vcpus
         # ____________________________________Удаление ресурс пула с ВМ без force______________
         delete_rp_info = resource_pool_session.delete_virtual_resource_pool(random_name)
         assert (

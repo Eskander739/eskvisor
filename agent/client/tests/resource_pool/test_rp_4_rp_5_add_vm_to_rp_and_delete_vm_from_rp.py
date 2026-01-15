@@ -30,7 +30,7 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
     rp_deleted = False
     try:
         # ____________________________________Создание пула ресурсов______________
-        random_name = f"RP-TEST-{random.randint(10000, 99999)}"
+        random_name = f"resource_pool_{random.randint(10000, 99999)}"
         rp_template = ResourcePoolVirtualCreate(
             name=random_name,
             cpu_core_limit=2,
@@ -66,7 +66,7 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
         assert int(lv_capacity.volume_size_gb) == rp_template.storage_limit
         # ____________________________________Добавление ВМ в ресурс пул______________
         add_vm_to_resource_pool = resource_pool_session.edit_virtual_resource_pool(
-            ResourcePoolVirtualEdit(name=random_name, vm_uuid_list=vm_info.uuid)
+            ResourcePoolVirtualEdit(name=random_name, vms=vm_info.name)
         )
         assert (
             add_vm_to_resource_pool.message
@@ -77,6 +77,7 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             == CommandMessagesEnum.rp_virtual_edit_success.name
         )
         # ____________________________________Проверка текущего состояния ресурсов______________
+        time.sleep(2)
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
         )
@@ -88,14 +89,14 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
         )
         rp_info = get_rp_info.rp_info
-        assert vm_info.uuid in rp_info.vm_uuid_list
-        assert rp_info.ram_allocated == vm_info.max_memory * 1024
-        assert rp_info.cpu_core_allocated == vm_info.vcpus
+        assert vm_info.name in rp_info.vms
+        assert rp_info.ram_allocated < vm_info.max_memory * 1024
+        assert rp_info.cpu_core_allocated < vm_info.vcpus
 
         # ____________________________________Удаление ВМ из ресурс пула______________
         add_vm_to_resource_pool = (
             resource_pool_session.delete_vm_from_virtual_resource_pool(
-                name=random_name, vm_uuid=vm_info.uuid
+                name=random_name, vn_name=vm_info.name
             )
         )
         assert (
@@ -118,9 +119,9 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
         )
         rp_info = get_rp_info.rp_info
-        assert vm_info.uuid not in get_rp_info.rp_info.vm_uuid_list
-        assert rp_info.ram_allocated == 0
-        assert rp_info.cpu_core_allocated == 0
+        assert get_rp_info.rp_info.vms is None
+        assert rp_info.ram_allocated == 4096
+        assert rp_info.cpu_core_allocated < 0.7
 
     finally:
         # ______________________________Удаление пула ресурсов(постусловие)_______

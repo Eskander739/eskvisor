@@ -597,8 +597,8 @@ class Balansir(LibvirtClient):
         if edit_rp.vms is not None:
             if isinstance(edit_rp.vms, str):
                 edit_rp.vms = [edit_rp.vms]
-            for current_uuid in edit_rp.vms:
-                self.validate_name(current_uuid)
+            for current_name in edit_rp.vms:
+                self.validate_name(current_name)
             validate_vm_list_info = self.validate_vm_list(edit_rp)
             if (
                     validate_vm_list_info.message
@@ -763,7 +763,7 @@ class Balansir(LibvirtClient):
 
         storage_info = self.logic_volume_manager.get_volume_by_name(name, self.system_volume_group_name)
         cpu = cgroup_info.get("cpu")
-        ram = cgroup_info.get("cpu")
+        ram = cgroup_info.get("ram")
         cpu_limit = cpu[0]
         cpu_allocated = cpu[2]
         cpu_available = cpu[3]
@@ -781,7 +781,7 @@ class Balansir(LibvirtClient):
             ram_limit_bytes=ram_limit,
             ram_allocated=ram_allocated,
             ram_available=ram_available,
-            vms=vms,
+            vms=list(vms) if vms else None,
             vm_reservation_list=vm_reservation_list,
             storage_type=StoragePoolType.LOGICAL,
             storage_limit=storage_info.volume_size,
