@@ -1,16 +1,20 @@
+# Инструкция требует доработки, пользователь eskvisor не интегрирован в продукт
 #____________________________________Установка библиотек для работы гипервизора_________________________________
 # Для Ubuntu/Debian:
 sudo apt update
 sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst
 sudo apt install lvm2
+sudo apt install numactl
 
 # Для CentOS/RHEL/ALT Linux:
 sudo yum install -y qemu-kvm libvirt libvirt-client virt-install
 sudo yum install lvm2
+sudo yum install numactl
 
 # Для Fedora:
 sudo dnf install -y qemu-kvm libvirt libvirt-client virt-install
 sudo dnf install lvm2
+sudo dnf install numactl
 sudo systemctl start libvirtd
 sudo systemctl enable libvirtd
 

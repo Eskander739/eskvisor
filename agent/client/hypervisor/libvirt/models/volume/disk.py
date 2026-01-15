@@ -340,8 +340,8 @@ class DiskCreate(BaseModel):
     readonly: bool = False
     shareable: bool = False
     serial: str | None = None
-    # RAW с sparse=True — должен создавать разреженный файл (sparse file)
-    # RAW с sparse=False — должен создавать полный файл, заполненный нулями
+    # RAW с sparse=True - должен создавать разреженный файл (sparse file)
+    # RAW с sparse=False - должен создавать полный файл, заполненный нулями
 
     @model_validator(mode="after")
     def validate_query(self) -> Self:

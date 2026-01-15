@@ -14,18 +14,21 @@ class PidController:
         self.system_cgroup_path = os.environ.get("SYSTEM_CGROUP")
         self.system_vm_pid_path = os.environ.get("SYSTEM_VM_PID_PATH")
 
-    def vm_pid(self, name: str) -> int:
+    def vm_pid(self, name: str) -> int | None:
         cmd_args = ["cat", f"{self.system_vm_pid_path}/{name}.pid"]
         result = self.cli.execute(cmd_args)
         if not result:
             return None
         return int(result.split("\n")[0])
 
-    def validate_path(self, cgroup_path: str) -> list[str] | None:
+    def validate_path(self, cgroup_path: str) -> str | None:
+        if self.system_cgroup_path not in cgroup_path:
+            cgroup_path = f"{self.system_cgroup_path}/{cgroup_path}"
         if not self.cli.is_directory(cgroup_path):
             raise ValueError("Отсутствует директория в системе")
+        return cgroup_path
 
-    def get_vm_names_resource_pool(self, cgroup_pool: str) -> dict[str, int]:
+    def get_vm_names_resource_pool(self, cgroup_pool: str) -> dict[str, int] | None:
         pids = self.get_pids_from_pool(cgroup_pool)
         if pids is None:
             return None
@@ -45,7 +48,7 @@ class PidController:
                 resource_pool_vm_with_pids[vm_name] = vm_current_pid
         return resource_pool_vm_with_pids
     def get_pids_from_pool(self, cgroup_pool: str) -> list[int] | None:
-        self.validate_path(cgroup_pool)
+        cgroup_pool = self.validate_path(cgroup_pool)
         cgroup_pool = f"{cgroup_pool}/cgroup.procs"
         result = self.cli.execute(["cat", f"{cgroup_pool}"])
         if result:

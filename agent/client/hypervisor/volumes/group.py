@@ -7,7 +7,7 @@ from agent.client.logger_config import DefaultLogger
 
 class VolumeGroupManager:
     """
-    VG (Volume Group) — группа томов (объединяем физические тома (PV) в группу,
+    VG (Volume Group) - группа томов (объединяем физические тома (PV) в группу,
     создаём единый диск, который будем дальше разбивать так, как нам хочется)
     """
 

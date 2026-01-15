@@ -12,7 +12,7 @@ from agent.client.logger_config import DefaultLogger
 
 class LogicalVolumeManager:
     """
-    LV (Logical Volume) — логические разделы, собственно раздел нашего нового «единого диска» ака Группы Томов,
+    LV (Logical Volume) - логические разделы, собственно раздел нашего нового «единого диска» ака Группы Томов,
     который мы потом форматируем и используем как обычный раздел, обычного жёсткого диска.
     """
 
@@ -28,7 +28,7 @@ class LogicalVolumeManager:
         logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
         thin_pool: bool = True,  # для ресурса пулов(можно внутри такого logic volume создавать другие logic volume)
     ):
-        # /dev/vg_eskvisor_01/RP-TEST-10562
+
         logic_volume_path = f"/dev/{volume_group_name}/{logic_volume_name}"
         if os.path.exists(logic_volume_path):
             self.logger.info(f"Логический том уже существует: {logic_volume_path}")

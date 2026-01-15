@@ -7,7 +7,7 @@ from agent.client.logger_config import DefaultLogger
 
 class PhysicalVolumeManager:
     """
-    PV (Physical Volume) — физические тома (это могут быть разделы или целые «неразбитые» диски)
+    PV (Physical Volume) - физические тома (это могут быть разделы или целые «неразбитые» диски)
     """
 
     def __init__(self):

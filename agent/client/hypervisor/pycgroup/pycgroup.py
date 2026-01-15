@@ -45,7 +45,7 @@ class PYCGroup:
     def byte_to_mb(byte: int) -> int:
         if isinstance(byte, str):
             byte = int(byte)
-        return int(byte / 1024 /1024)
+        return int(byte / 1024 / 1024)
 
     @staticmethod
     def byte_to_kb(byte: int) -> int:
@@ -327,7 +327,7 @@ class PYCGroup:
     def edit_cgroup_pool(
         self,
         name: str,
-        max_memory: int | None = None,
+        max_memory: int | None = None, # килобайты
         cpu_core_limit: int | None = None,
         memory_reservation: int | None = None,
     ):
@@ -335,16 +335,17 @@ class PYCGroup:
 
         if max_memory is not None:
             mem_max_result = self.memory_ctl.set_memory_max(cgroup_path, max_memory)
-            if self.byte_to_kb(mem_max_result) != max_memory:
+            new_limit_kb = self.byte_to_kb(mem_max_result)
+            if max_memory != new_limit_kb:
                 raise ValueError(
-                    f"Установлено некорректное значение max_memory: '{mem_max_result}'"
+                    f"Установлено некорректное значение max_memory: '{new_limit_kb}', ожидаемое значение: '{max_memory}'"
                 )
 
         if cpu_core_limit is not None:
             core_max_result = self.cpu_ctl.set_cpu_cores(cgroup_path, cpu_core_limit)
             if core_max_result != cpu_core_limit:
                 raise ValueError(
-                    f"Установлено некорректное значение cpu_core_limit: '{cpu_core_limit}'"
+                    f"Установлено некорректное значение cpu_core_limit: '{cpu_core_limit}', ожидаемое значение: '{cpu_core_limit}'"
                 )
 
         if memory_reservation is not None:
@@ -353,7 +354,7 @@ class PYCGroup:
             )
             if self.byte_to_kb(mem_reserv_result) != memory_reservation:
                 raise ValueError(
-                    f"Установлено некорректное значение memory_reservation: '{memory_reservation}'"
+                    f"Установлено некорректное значение memory_reservation: '{memory_reservation}', ожидаемое значение: '{memory_reservation}'"
                 )
 
     def delete_cgroup_pool(self, name: str, force: bool = False):

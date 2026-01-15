@@ -5,6 +5,8 @@ from agent.client.hypervisor.libvirt.models.volume.logic_volume import (
 )
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType
 
+PAGE_SIZE = 4096 # Система работает со страницами памяти, обычно по (4096 байт) на большинстве современных систем
+
 
 class ResourceReservationVM(BaseModel):
     name: str
@@ -41,7 +43,8 @@ class ResourcePoolVirtualCreate(BaseModel):
     @computed_field
     @property
     def ram_limit_bytes(self) -> int:
-        return int(self.ram_limit_gb * (1024**3))
+        bytes_value = int(self.ram_limit_gb * (1024 ** 3))
+        return (bytes_value // PAGE_SIZE) * PAGE_SIZE
 
 
 class ResourcePoolVirtualEdit(BaseModel):
@@ -75,7 +78,8 @@ class ResourcePoolVirtualEdit(BaseModel):
     @property
     def ram_limit_bytes(self) -> None | int:
         if self.ram_limit_gb:
-            return int(self.ram_limit_gb * (1024**3))
+            bytes_value = int(self.ram_limit_gb * (1024 ** 3))
+            return (bytes_value // PAGE_SIZE) * PAGE_SIZE
         return None
 
 
