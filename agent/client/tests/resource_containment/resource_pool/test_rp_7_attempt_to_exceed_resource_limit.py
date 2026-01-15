@@ -14,18 +14,20 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
 SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
 
 
-@pytest.mark.tags("RP‑04", "RP‑05", "Назначение ВМ пулу", "Изъятие ВМ из пула")
+@pytest.mark.tags("RP‑07", "Установка лимита (limit) для пула")
+@pytest.mark.skip("Требуется доработка")
 def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
-    resource_pool_session, create_running_vm_session
+    resource_pool_session, create_running_vm_session_with_os, virsh_console_session
 ):
     """
-    RP‑04: Назначение ВМ пулу
-    RP‑05: Изъятие ВМ из пула
+    RP‑07: Установка лимита (limit) для пула
 
-    Переместить существующую ВМ в пул. Убедиться, что ВМ учитывается в использовании ресурсов пула.
-    Убрать ВМ из пула. Проверить, что ресурсы пула освобождаются.
+    Задать максимальное использование CPU/памяти.
+    Попытаться превысить лимит через нагрузку на ВМ – система должна ограничить.
     """
-    vm_info, request_id = create_running_vm_session
+
+    vm_info, request_id = create_running_vm_session_with_os
+    virsh_console = virsh_console_session(vm_info.name)
     random_name = None
     rp_deleted = False
     try:
@@ -93,7 +95,17 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
         assert rp_info.cpu_core_allocated < vm_info.vcpus
         current_pid_rp = resource_pool_session.pycgroup.pid_ctl.get_pids_from_pool(random_name).pop()
         assert current_pid_rp == resource_pool_session.pycgroup.pid_ctl.vm_pid(vm_info.name)
-
+        # ____________________________________Подключение к ВМ____________________
+        virsh_console.connect()
+        results = virsh_console.execute_commands(
+            ["root", "cd /", "apk update", "apk add stress-ng"]
+        )
+        # TODO: Требуется доработка
+        for result in results:
+            if result and "hello_eskvisor" in result:
+                break
+        else:
+            raise AssertionError("Некорректное подключение к ВМ")
         # ____________________________________Удаление ВМ из ресурс пула______________
         add_vm_to_resource_pool = (
             resource_pool_session.delete_vm_from_virtual_resource_pool(

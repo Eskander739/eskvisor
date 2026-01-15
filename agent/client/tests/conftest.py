@@ -1,6 +1,7 @@
 import logging
 import random
 import sys
+import time
 import uuid
 
 import pytest
@@ -15,6 +16,8 @@ from agent.client.hypervisor.libvirt.managers.virsh import (
     VirshConsoleController,
 )
 from agent.client.hypervisor.libvirt.managers.vm import VmManager
+from agent.client.hypervisor.libvirt.models.enum import NetworkType
+from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
@@ -84,6 +87,32 @@ def create_running_vm_session():
 
         yield vm_info.vm_info, request_id
         vm_manager.delete_vm_with_force(vm_config.name, request_id)
+
+
+
+
+@pytest.fixture(scope="session")
+def create_running_vm_session_with_os():
+    with VmManager() as vm_manager:
+        random_name = f"TEST-VM_{random.randint(10000, 99999)}"
+        request_id = str(uuid.uuid4())
+        vm_template = VMCreateRequest(
+            name=random_name,
+            autostart_vm=True,
+            disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
+            networks=[VmNetAdapter(network_type=NetworkType.USER)],
+        )
+        # ____________________________________Создание ВМ_________________________
+        vm_info = vm_manager.create_vm(vm_template)
+        time.sleep(60)
+        assert wait_while_not(
+            lambda: vm_manager.get_vm_state_by_name(vm_info.name)
+            == VMState.RUNNING.value,
+            timeout=120,
+        )
+
+        yield vm_info.vm_info, request_id
+        vm_manager.delete_vm_with_force(vm_info.name, request_id)
 
 
 @pytest.fixture(scope="function")

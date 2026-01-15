@@ -125,6 +125,7 @@ class PYCGroup:
         cpu_percent = self.cpu_ctl.get_cpu_percent(cgroup_path)
         cpu_allocated = self.cpu_ctl.get_cpu_usage_cores(cgroup_path)
         cpu_available = self.cpu_ctl.get_cpu_available_cores(cgroup_path)
+        cpu_weight = self.cpu_ctl.get_cpu_weight(cgroup_path)
 
         ram_max = self.byte_to_mb(self.memory_ctl.get_memory_max(cgroup_path))
         ram_allocated = self.byte_to_mb(self.memory_ctl.get_memory_allocated(cgroup_path))
@@ -134,7 +135,7 @@ class PYCGroup:
         pids = self.pid_ctl.get_pids_from_pool(cgroup_path)
         pid = [int(pid) for pid in pids if pid.isdigit()]
         pid = int(pid.pop()) if pid else pid
-        container = {"cpu": (cpu, cpu_percent, cpu_allocated, cpu_available),
+        container = {"cpu": (cpu, cpu_percent, cpu_allocated, cpu_available, cpu_weight),
                      "ram": (ram_max, ram_available, ram_allocated, ram_reservation), "pid": pid}
 
         return container
@@ -146,6 +147,7 @@ class PYCGroup:
         max_memory: int | None = None,
         cpu_core_limit: int = None,
         memory_reservation: int | None = None,
+        cpu_weight: int | None = None,
     ):
         cgroup_path = self.cgroup_container_path(pool_name, container_name)
 
@@ -153,14 +155,14 @@ class PYCGroup:
             mem_max_result = self.memory_ctl.set_memory_max(cgroup_path, max_memory)
             if self.byte_to_kb(mem_max_result) != max_memory:
                 raise ValueError(
-                    f"Установлено некорректное значение: '{mem_max_result}'"
+                    f"Установлено некорректное значение: '{mem_max_result}', ожидаемое значение: '{max_memory}'"
                 )
 
         if cpu_core_limit is not None:
             core_max_result = self.cpu_ctl.set_cpu_cores(cgroup_path, cpu_core_limit)
             if core_max_result != cpu_core_limit:
                 raise ValueError(
-                    f"Установлено некорректное значение: '{cpu_core_limit}'"
+                    f"Установлено некорректное значение: '{core_max_result}', ожидаемое значение: '{cpu_core_limit}'"
                 )
 
         if memory_reservation is not None:
@@ -169,7 +171,16 @@ class PYCGroup:
             )
             if self.byte_to_kb(mem_reserv_result) != memory_reservation:
                 raise ValueError(
-                    f"Установлено некорректное значение memory_reservation: '{memory_reservation}'"
+                    f"Установлено некорректное значение memory_reservation: '{mem_reserv_result}', ожидаемое значение: '{memory_reservation}'"
+                )
+
+        if cpu_weight is not None:
+            current_cpu_weight = self.cpu_ctl.set_cpu_weight(
+                cgroup_path, cpu_weight
+            )
+            if current_cpu_weight != cpu_weight:
+                raise ValueError(
+                    f"Установлено некорректное значение current_cpu_weight: '{memory_reservation}', ожидаемое значение: '{cpu_weight}'"
                 )
 
     def delete_cgroup_container(self, pool_name: str, container_name: str):
@@ -221,6 +232,7 @@ class PYCGroup:
         cpu_percent = self.cpu_ctl.get_cpu_percent(cgroup_path)
         cpu_allocated = self.cpu_ctl.get_cpu_usage_cores(cgroup_path)
         cpu_available = self.cpu_ctl.get_cpu_available_cores(cgroup_path)
+        cpu_weight = self.cpu_ctl.get_cpu_weight(cgroup_path)
 
         ram_max = self.memory_ctl.get_memory_max(cgroup_path)
         ram_available = self.memory_ctl.get_memory_available(cgroup_path)
@@ -236,7 +248,7 @@ class PYCGroup:
         name = cgroup_path.replace(self.system_cgroup_path + "/", "")
         container = {"name": name,
                      "path": cgroup_path,
-                     "cpu": (cpu, cpu_percent, cpu_allocated, cpu_available),
+                     "cpu": (cpu, cpu_percent, cpu_allocated, cpu_available, cpu_weight),
                      "ram": (ram_max, ram_available, ram_allocated, ram_reservation),
                      "pids": pids}
 
@@ -330,6 +342,7 @@ class PYCGroup:
         max_memory: int | None = None, # килобайты
         cpu_core_limit: int | None = None,
         memory_reservation: int | None = None,
+        cpu_weight: int | None = None,
     ):
         cgroup_path = self.cgroup_pool_path(name)
 
@@ -355,6 +368,15 @@ class PYCGroup:
             if self.byte_to_kb(mem_reserv_result) != memory_reservation:
                 raise ValueError(
                     f"Установлено некорректное значение memory_reservation: '{memory_reservation}', ожидаемое значение: '{memory_reservation}'"
+                )
+
+        if cpu_weight is not None:
+            current_cpu_weight = self.cpu_ctl.set_cpu_weight(
+                cgroup_path, cpu_weight
+            )
+            if current_cpu_weight != cpu_weight:
+                raise ValueError(
+                    f"Установлено некорректное значение current_cpu_weight: '{memory_reservation}', ожидаемое значение: '{cpu_weight}'"
                 )
 
     def delete_cgroup_pool(self, name: str, force: bool = False):

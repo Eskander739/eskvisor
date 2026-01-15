@@ -22,6 +22,8 @@ class ResourcePoolVirtualCreate(BaseModel):
     ram_limit_gb: (
         int | float
     )  # Какой объем RAM установить в качестве лимита(в гигабайтах)
+    ram_reservation_gb: int | float | None = None   # Какой объем RAM установить в качестве лимита(в гигабайтах)
+    cpu_weight: int | None = None  # Веса процессорного времени
     storage_limit: int  # Какой объем STORAGE установить в качестве лимита, единица измерения в поле volume_size_type
     storage_type: StoragePoolType = (
         StoragePoolType.LOGICAL
@@ -46,10 +48,17 @@ class ResourcePoolVirtualCreate(BaseModel):
         bytes_value = int(self.ram_limit_gb * (1024 ** 3))
         return (bytes_value // PAGE_SIZE) * PAGE_SIZE
 
+    @computed_field
+    @property
+    def ram_reservation_bytes(self) -> int:
+        bytes_value = int(self.ram_reservation_gb * (1024 ** 3))
+        return int(self.ram_reservation_gb * (1024 ** 3))
+
 
 class ResourcePoolVirtualEdit(BaseModel):
     name: str
     cpu_core_limit: int | None = None  # Сколько ядер установить в качестве лимита
+    cpu_weight: int | None = None  # Веса процессорного времени
     ram_limit_gb: int | float | None = (
         None  # Какой объем RAM установить в качестве лимита(в гигабайтах)
     )
@@ -88,7 +97,9 @@ class ResourcePoolVirtual(BaseModel):
     cpu_core_limit: int  # Сколько ядер установлено в качестве лимита
     cpu_core_allocated: int | float  # Сколько ядер уже используется
     cpu_core_available: int | float  # Сколько ядер свободно для использования
+    cpu_weight: int  # Веса процессорного времени
     ram_limit_bytes: int  # Какой объем RAM установлено в качестве лимита(в байтах)
+    ram_reservation_bytes: int  # Какой объем RAM установлено в качестве резерва(в байтах)
     ram_allocated: int | float  # Какой объем RAM уже используется(в байтах)
     ram_available: int | float  # Какой объем RAM свободен для использования(в байтах)
     storage_limit: int  # Какой объем STORAGE установлено в качестве лимита(в байтах)

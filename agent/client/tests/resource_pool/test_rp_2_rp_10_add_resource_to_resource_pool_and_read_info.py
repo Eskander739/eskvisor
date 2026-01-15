@@ -39,6 +39,7 @@ def test_rp_02_rp_10_add_resource_to_resource_pool_and_read_info(resource_pool_s
         rp_template = ResourcePoolVirtualCreate(
             name=random_name,
             cpu_core_limit=2,
+            cpu_weight=400,
             ram_limit_gb=0.5,
             storage_limit=1,
             storage_type=StoragePoolType.LOGICAL,
@@ -47,6 +48,7 @@ def test_rp_02_rp_10_add_resource_to_resource_pool_and_read_info(resource_pool_s
             name=random_name,
             ram_limit_gb=0.5,
             cpu_core_limit=3,
+            cpu_weight=800,
             storage_limit=2,
             storage_type=StoragePoolType.LOGICAL,
             volume_size_type=LogicalVolumeSizeType.GB,
@@ -71,6 +73,7 @@ def test_rp_02_rp_10_add_resource_to_resource_pool_and_read_info(resource_pool_s
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_core_limit == rp_template.cpu_core_limit
         assert get_rp_info.rp_info.ram_limit_bytes == rp_template.ram_limit_bytes
+        assert get_rp_info.rp_info.cpu_weight == rp_template.cpu_weight
         assert get_rp_info.rp_info.storage_type.value == StoragePoolType.LOGICAL.value
 
         lv_capacity = resource_pool_session.logic_volume_manager.get_volume_by_name(
@@ -102,6 +105,7 @@ def test_rp_02_rp_10_add_resource_to_resource_pool_and_read_info(resource_pool_s
         assert get_rp_info.rp_info.name == random_name
         assert get_rp_info.rp_info.cpu_core_limit == edit_rp_template.cpu_core_limit
         assert get_rp_info.rp_info.ram_limit_bytes == edit_rp_template.ram_limit_bytes
+        assert get_rp_info.rp_info.cpu_weight == edit_rp_template.cpu_weight
         assert get_rp_info.rp_info.storage_type.value == StoragePoolType.LOGICAL.value
 
         lv_capacity = resource_pool_session.logic_volume_manager.get_volume_by_name(

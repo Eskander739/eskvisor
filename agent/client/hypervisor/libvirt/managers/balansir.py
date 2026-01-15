@@ -234,13 +234,14 @@ class Balansir(LibvirtClient):
             self,
             rp_name: str,
             cpu_core_limit: int,
+            cpu_weight: int | None,
     ) -> RpMessage | bool:
         self.logger.info(f"Старт конфигурации CPU")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             self.pycgroup.edit_cgroup_pool(
                 name=rp_name,
-                cpu_core_limit=cpu_core_limit
+                cpu_core_limit=cpu_core_limit, cpu_weight=cpu_weight
             )
 
             self.logger.info(f"Конфигурация CPU для пула '{rp_name}' успешно применена")
@@ -296,16 +297,19 @@ class Balansir(LibvirtClient):
     def configuration_ram(
             self,
             rp_name: str,
-            ram_limit: int,
+            ram_limit: int | float,
+            ram_reservation: int | float,
     ) -> RpMessage | bool:
         self.logger.info(f"Старт конфигурации RAM")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             # Преобразование байт в килобайты для cgroup
             ram_limit_kb = ram_limit // 1024
+            ram_reservation_kb = ram_reservation // 1024
             self.pycgroup.edit_cgroup_pool(
                 name=rp_name,
-                max_memory=ram_limit_kb
+                max_memory=ram_limit_kb,
+                memory_reservation=ram_reservation_kb
             )
             self.logger.info(f"Конфигурация RAM для пула '{rp_name}': {ram_limit} успешно применена")
             return True
@@ -522,14 +526,14 @@ class Balansir(LibvirtClient):
             self.logger.info(f"STORAGE конфигурация ресурс пула успешно установлена")
 
             create_cpu_config = self.configuration_cpu(
-                create_rp.name, create_rp.cpu_core_limit
+                create_rp.name, create_rp.cpu_core_limit, create_rp.cpu_weight
             )
             if create_cpu_config is not True:
                 return create_cpu_config
             self.logger.info(f"CPU конфигурация ресурс пула успешно установлена")
 
             create_ram_config = self.configuration_ram(
-                create_rp.name, create_rp.ram_limit_bytes
+                create_rp.name, create_rp.ram_limit_bytes, create_rp.ram_reservation_bytes
             )
             if create_ram_config is not True:
                 return create_ram_config
@@ -650,7 +654,7 @@ class Balansir(LibvirtClient):
                 f"Изменение CPU конфигурации ресурс пула: '{edit_rp.cpu_core_limit}'"
             )
             create_cpu_config = self.configuration_cpu(
-                edit_rp.name, edit_rp.cpu_core_limit
+                edit_rp.name, edit_rp.cpu_core_limit, edit_rp.cpu_weight
             )
             if create_cpu_config is not True:
                 return create_cpu_config
@@ -767,10 +771,12 @@ class Balansir(LibvirtClient):
         cpu_limit = cpu[0]
         cpu_allocated = cpu[2]
         cpu_available = cpu[3]
+        cpu_weight = cpu[4]
 
         ram_limit = ram[0] if ram[0] != "max" else 0
         ram_allocated = ram[2]
         ram_available =  ram[1]
+        ram_reservation = ram[3]
 
         storage_allocated = storage_info.volume_size - storage_info.available_volume_size
         current_rp_virtual = ResourcePoolVirtual(
@@ -778,9 +784,11 @@ class Balansir(LibvirtClient):
             cpu_core_limit=cpu_limit,
             cpu_core_allocated=cpu_allocated,
             cpu_core_available=cpu_available,
+            cpu_weight=cpu_weight,
             ram_limit_bytes=ram_limit,
             ram_allocated=ram_allocated,
             ram_available=ram_available,
+            ram_reservation_bytes=ram_reservation,
             vms=list(vms) if vms else None,
             vm_reservation_list=vm_reservation_list,
             storage_type=StoragePoolType.LOGICAL,
@@ -798,16 +806,32 @@ class Balansir(LibvirtClient):
             rp_info=current_rp_virtual,
         )
 
-    def get_virtual_resource_pool_list(self) -> list[ResourcePoolVirtual]:
+    def get_virtual_resource_pool_list(self, name: str | None = None,
+                                       cpu_core_limit: int | float | None = None,
+                                       ram_limit_bytes: int | None = None,
+                                       storage_type: StoragePoolType | None = None,
+                                       ) -> list[ResourcePoolVirtual]:
         self.logger.info("Получение списка ресурс пулов")
         all_rp_virtal = []
 
         try:
             pool_names = self.pycgroup.get_cgroup_pool_names
+            if name:
+                pool_names = [current_name for current_name in pool_names if name in current_name]
             if pool_names:
                 for pool_name in pool_names:
                     rp_data = self.get_virtual_resource_pool_by_name(pool_name)
-                    all_rp_virtal.append(rp_data.rp_info)
+
+                    if cpu_core_limit is not None or ram_limit_bytes is not None or storage_type is not None:
+                        if cpu_core_limit is not None and cpu_core_limit != rp_data.cpu_core_limit:
+                            continue
+                        if ram_limit_bytes is not None and ram_limit_bytes != rp_data.ram_limit_bytes:
+                            continue
+                        if storage_type is not None and storage_type.value != rp_data.storage_type.value:
+                            continue
+                        all_rp_virtal.append(rp_data.rp_info)
+                    else:
+                        all_rp_virtal.append(rp_data.rp_info)
         except Exception as e:
             self.logger.error(f"Ошибка получения списка пулов: {e}")
 

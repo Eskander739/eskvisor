@@ -6,11 +6,9 @@ from agent.client.hypervisor.pycgroup.cgroup_cli import CLICGroup
 class CPUController:
     def __init__(self):
         self.cli = CLICGroup()
-
-    @staticmethod
-    def current_period_us(cgroup_pool: str) -> int:
-        cpu_max_file = f"{cgroup_pool}/cpu.max"
-        return int(cpu_max_file.read_text().strip().split(" ").pop())
+        self._DEFAULT_WEIGHT = 100  # Стандартный вес в cgroup v2
+        self._MAX_WEIGHT = 10000    # Максимальный вес в cgroup v2
+        self._MIN_WEIGHT = 1        # Минимальный вес в cgroup v2
 
     def set_cpu_percent(self,
         cgroup_pool: str,
@@ -370,7 +368,8 @@ class CPUController:
             'allocated_cores': self.get_cpu_usage_cores(cgroup_pool),  # сколько УЖЕ используется
             'available_cores': self.get_cpu_available_cores(cgroup_pool),  # сколько ещё МОЖНО использовать
             'usage_percent': self.get_cpu_usage_percent(cgroup_pool),  # использование в % от лимита
-            'throttling': self.get_cpu_throttling_info(cgroup_pool)  # информация о throttling
+            'throttling': self.get_cpu_throttling_info(cgroup_pool),  # информация о throttling
+            'cpu_weight': self.get_cpu_weight(cgroup_pool)  # информация о weight
         }
 
     # === УТИЛИТАРНЫЕ МЕТОДЫ ДЛЯ ВЫВОДА ===
@@ -385,6 +384,7 @@ class CPUController:
         print(f"  Max limit:      {summary['max_limit_cores']} cores")
         print(f"  Allocated:      {summary['allocated_cores']} cores (currently used)")
         print(f"  Available:      {summary['available_cores']} cores (can still use)")
+        print(f"  cpu weight:          {summary['cpu_weight']}")
         print(f"  Usage:          {summary['usage_percent']}% of limit")
 
         throttling = summary['throttling']
@@ -392,7 +392,57 @@ class CPUController:
             print(f"  Throttling:     {throttling['throttling_percent']}% of time")
             print(f"  Throttled for:  {throttling['throttled_usec'] / 1_000_000:.2f}s total")
 
+    def set_cpu_weight(self, cgroup_pool: str, weight: int | float | None = None) -> int:
+        """
+        Устанавливает вес CPU (cpu.weight) для гарантированной доли CPU.
+
+        Args:
+            cgroup_pool: путь к cgroup
+            weight: значение веса от 1 до 10000.
+                   Если None - устанавливается значение по умолчанию (100).
+                   Также принимает float (округляется до int).
+
+        Returns:
+            Установленное значение веса
+
+        Note:
+            Вес определяет долю CPU при конкуренции.
+            Высокий вес = больше гарантированной CPU.
+            Распределение: доля = вес_группы / сумма_всех_весов
+        """
+        cpu_weight_file = f"{cgroup_pool}/cpu.weight"
+
+        if weight is None:
+            weight = self._DEFAULT_WEIGHT
+
+        # Конвертируем в int и ограничиваем диапазон
+        weight_int = int(round(weight))
+        weight_int = max(self._MIN_WEIGHT, min(weight_int, self._MAX_WEIGHT))
+
+        self.cli.write_text(cpu_weight_file, str(weight_int))
+        return weight_int
+
+    def get_cpu_weight(self, cgroup_pool: str) -> int:
+        """
+        Получает текущее значение cpu.weight.
+
+        Returns:
+            Значение веса CPU (1-10000)
+        """
+        cpu_weight_file = f"{cgroup_pool}/cpu.weight"
+
+        if not self.cli.is_exists(cpu_weight_file):
+            # Если файла нет, возвращаем значение по умолчанию
+            return self._DEFAULT_WEIGHT
+
+        try:
+            value = self.cli.read_text(cpu_weight_file).strip()
+            return int(value)
+        except (ValueError, AttributeError):
+            return self._DEFAULT_WEIGHT
+
+
 if __name__ == "__main__":
     cpu_ctl = CPUController()
-    print(cpu_ctl.set_cpu_cores("/sys/fs/cgroup/resource_pool_123", 3))
-    print(cpu_ctl.print_cpu_info("/sys/fs/cgroup/resource_pool_123"))
+    print(cpu_ctl.set_cpu_weight("/sys/fs/cgroup/ert", 300))
+    print(cpu_ctl.get_cpu_weight("/sys/fs/cgroup/resource_pool_57156"))
