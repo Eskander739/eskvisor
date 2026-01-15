@@ -42,7 +42,7 @@ def test_rp_01_rp_08_create_and_delete_resource_pool(resource_pool_session):
         assert (
             create_rp_info.message
             == CommandMessagesEnum.virtual_rp_create_success.value
-        )
+        ), create_rp_info.note
         assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name
         # ____________________________________Получение информации о пуле ресурсов______________
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(

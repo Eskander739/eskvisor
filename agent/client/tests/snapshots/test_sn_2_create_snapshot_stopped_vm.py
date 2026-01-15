@@ -10,14 +10,14 @@ from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateReque
 
 @pytest.mark.tags("SN‑02", "Создание снапшота остановленной ВМ")
 def test_sn_02_create_snapshot_stopped_vm(
-    snapshot_session, create_stopped_vm, vm_session, storage_session
+    snapshot_session, create_stopped_vm_func, vm_session, storage_session
 ):
     """
     SN‑02: Создание снапшота остановленной ВМ
 
     Создать снапшот при выключенной ВМ. Убедиться, что снапшот сохраняет состояние дисков и конфигурации.
     """
-    vm_name, request_id = create_stopped_vm
+    vm_name, request_id = create_stopped_vm_func
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False

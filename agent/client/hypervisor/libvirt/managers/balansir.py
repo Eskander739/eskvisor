@@ -298,14 +298,14 @@ class Balansir(LibvirtClient):
             self,
             rp_name: str,
             ram_limit: int | float,
-            ram_reservation: int | float,
+            ram_reservation: int | float | None = None,
     ) -> RpMessage | bool:
         self.logger.info(f"Старт конфигурации RAM")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             # Преобразование байт в килобайты для cgroup
             ram_limit_kb = ram_limit // 1024
-            ram_reservation_kb = ram_reservation // 1024
+            ram_reservation_kb = ram_reservation // 1024 if ram_reservation is not None else None
             self.pycgroup.edit_cgroup_pool(
                 name=rp_name,
                 max_memory=ram_limit_kb,

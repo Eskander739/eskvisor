@@ -11,7 +11,7 @@ from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateReque
     "SN‑01", "SN‑04", "Создание снапшота работающей ВМ", "Удаление снапшота"
 )
 def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(
-    snapshot_session, create_running_vm_session
+    snapshot_session, create_running_vm_func
 ):
     """
     SN‑01: Создание снапшота работающей ВМ
@@ -20,7 +20,7 @@ def test_sn_01_sn_04_create_snapshot_running_vm_and_delete_snapshot(
     Создать снапшот без остановки ВМ. Проверить, что снапшот появляется в дереве снапшотов ВМ.
     Удалить отдельный снапшот. Убедиться, что место освобождается и дерево снапшотов корректно обновляется.
     """
-    vm_info, request_id = create_running_vm_session
+    vm_info, request_id = create_running_vm_func
     vm_name = vm_info.name
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name = "snapshot-" + vm_name

@@ -50,9 +50,10 @@ class ResourcePoolVirtualCreate(BaseModel):
 
     @computed_field
     @property
-    def ram_reservation_bytes(self) -> int:
-        bytes_value = int(self.ram_reservation_gb * (1024 ** 3))
-        return int(self.ram_reservation_gb * (1024 ** 3))
+    def ram_reservation_bytes(self) -> int | None:
+        if self.ram_reservation_gb is not None:
+            return int(self.ram_reservation_gb * (1024 ** 3))
+        return None
 
 
 class ResourcePoolVirtualEdit(BaseModel):

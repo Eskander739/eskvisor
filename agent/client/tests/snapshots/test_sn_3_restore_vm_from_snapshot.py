@@ -11,14 +11,14 @@ from agent.client.tools import wait_while_not
 
 @pytest.mark.tags("SN‑03", "Восстановление ВМ из снапшота")
 def test_sn_03_restore_vm_from_snapshot(
-    snapshot_session, create_stopped_vm, vm_session, storage_session
+    snapshot_session, create_stopped_vm_func, vm_session, storage_session
 ):
     """
     SN‑03: Восстановление ВМ из снапшота
 
     Выбрать снапшот и выполнить restore. Проверить, что ВМ возвращается в состояние на момент снапшота.
     """
-    vm_name, request_id = create_stopped_vm
+    vm_name, request_id = create_stopped_vm_func
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False
