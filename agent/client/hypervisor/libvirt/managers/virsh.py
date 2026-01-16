@@ -250,10 +250,6 @@ class VirshConsoleController:
                             # response_started = True
                             output += data
 
-                        # Если видим приглашение, считаем что команда выполнена
-                        # if any(prompt in data for prompt in ['$', '#', '>', '~#', '~$', ':']):
-                        #     break
-
                 except queue.Empty:
                     continue
             return output

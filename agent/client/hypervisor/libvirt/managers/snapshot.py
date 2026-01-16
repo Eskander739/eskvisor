@@ -415,6 +415,42 @@ class SnapshotManager(LibvirtClient):
                 note=str(e),
             )
 
+    def delete_all_snapshots_by_vm_name(
+        self,
+        vm_name: str,
+        request_id: str,
+    ) -> SnapshotMessage:
+        """
+        Удалить снапшотов виртуальной машины
+
+        Returns:
+            SnapshotMessage с результатом операции
+        """
+        try:
+            virtual_machine = self.conn.lookupByName(vm_name)
+            snapshots = virtual_machine.listAllSnapshots(flags=0)
+            for current_snapshot in snapshots:
+                current_snapshot.delete(libvirt.VIR_DOMAIN_SNAPSHOT_DELETE_CHILDREN)
+                self.logger.info(
+                    f"Снапшот '{current_snapshot.getName()}' успешно удален для VM '{vm_name}'"
+                )
+            return SnapshotMessage(
+                request_id=request_id,
+                success=True,
+                message=CommandMessagesEnum.snapshots_successfully_deleted.value,
+                code=CommandMessagesEnum.snapshots_successfully_deleted.name,
+            )
+
+        except self.libvirtError as e:
+            self.logger.error(f"Ошибка удаления снапшота: {e}")
+            return SnapshotMessage(
+                request_id=request_id,
+                success=False,
+                message=CommandMessagesEnum.snapshot_delete_error.value,
+                code=CommandMessagesEnum.snapshot_delete_error.name,
+                note=str(e),
+            )
+
     def revert_to_snapshot(
         self, vm_name: str, snapshot_name: str, request_id: str
     ) -> SnapshotMessage:
@@ -484,7 +520,7 @@ class SnapshotManager(LibvirtClient):
 
             # Создание нового снапшота с обновленным описанием и удаление старого
             new_snapshot = virtual_machine.snapshotCreateXML(
-                updated_xml, flags=libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_REPLACE
+                updated_xml, flags=libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_CURRENT
             )
 
             if new_snapshot:
@@ -1311,9 +1347,9 @@ class SnapshotManager(LibvirtClient):
             # Получаем все потомки целевого снапшота
             descendants = []
 
-            def get_descendants(snapshot):
+            def get_descendants(current_snapshot: libvirt.virDomainSnapshot):
                 try:
-                    children = snapshot.listAllChildren(flags=0)
+                    children = current_snapshot.listAllChildren(flags=0)
                     for child in children:
                         descendants.append(child)
                         get_descendants(child)
@@ -1327,7 +1363,8 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError:
             return []
 
-    def _calculate_chain_depth(self, snapshots: list[SnapshotWithParent]) -> int:
+    @staticmethod
+    def _calculate_chain_depth(snapshots: list[SnapshotWithParent]) -> int:
         """Рассчитать глубину цепочки снапшотов"""
         if not snapshots:
             return 0
@@ -1355,7 +1392,8 @@ class SnapshotManager(LibvirtClient):
 
         return max_depth
 
-    def _build_snapshot_tree(self, snapshots_info: list[SnapshotWithParent]) -> dict:
+    @staticmethod
+    def _build_snapshot_tree(snapshots_info: list[SnapshotWithParent]) -> dict:
         """Построить дерево снапшотов"""
         tree = {}
 
@@ -1375,8 +1413,9 @@ class SnapshotManager(LibvirtClient):
 
         return {"nodes": tree, "roots": root_nodes}
 
+    @staticmethod
     def _build_chain_from_root(
-        self, root_name: str, snapshots_info: list[SnapshotWithParent]
+        root_name: str, snapshots_info: list[SnapshotWithParent]
     ) -> list[SnapshotWithParent]:
         """Построить цепочку начиная с корневого снапшота"""
         chain = []

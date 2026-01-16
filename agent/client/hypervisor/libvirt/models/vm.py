@@ -1,4 +1,5 @@
 import uuid
+from ipaddress import IPv4Address
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
@@ -12,8 +13,58 @@ from agent.client.hypervisor.libvirt.models.enum import (
     GraphicsType,
     OSType,
 )
-from agent.client.hypervisor.libvirt.models.general import MachineType, VMState
+from agent.client.hypervisor.libvirt.models.general import (
+    MachineType,
+    VMState,
+    QemuNetdevType,
+)
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
+
+
+
+class HostForward(BaseModel):
+    protocol: str | None = None
+    host_port: int
+    host_ip: str | None = None
+    guest_port: int
+
+    @model_validator(mode="after")
+    def validate_disk_type_constraints(cls, values):
+        """Проверка условно обязательных полей в зависимости от типа"""
+        if values.host_ip is not None:
+            IPv4Address(values.host_ip)
+
+    @property
+    def hostfwd_to_string(self):
+        return f'{self.protocol}:{self.host_ip if self.host_ip else ""}:{self.host_port}-:{self.guest_port}'
+
+
+class NetQemuCommandline(BaseModel):
+    net_dev: QemuNetdevType = QemuNetdevType.USER
+    net_id: str = "net0"
+    ipv4: bool = True
+    ipv6: bool = False
+    dns: str = "8.8.8.8"
+    hostfwd: HostForward = HostForward(protocol="tcp", host_port=2222, host_ip=None, guest_port=22)
+
+    @model_validator(mode="after")
+    def validate_disk_type_constraints(cls, values):
+        """Проверка условно обязательных полей в зависимости от типа"""
+        IPv4Address(values.dns)
+
+    @property
+    def qemu_commandline_string(self):
+        ipv4 = "on" if self.ipv4 else "off"
+        ipv6 = "on" if self.ipv6 else "off"
+        return (
+            f'--qemu-commandline="'
+            f"-netdev {self.net_dev.value},"
+            f"id={self.net_id},"
+            f"ipv4={ipv4},"
+            f"ipv6={ipv6},"
+            f"dns={self.dns},"
+            f'hostfwd={self.hostfwd.hostfwd_to_string}"'
+        )
 
 
 class VMCreateRequest(BaseModel):
@@ -55,6 +106,7 @@ class VMCreateRequest(BaseModel):
     # Прочие настройки
     autostart_vm: bool = False
     autostart: bool = False
+    qemu_commandline: NetQemuCommandline | None = None
     boot_devices: list[str] | None = None
     extra_args: str | None = None
     video_model: str = "qxl"
@@ -240,6 +292,8 @@ class VirtualMachine(BaseModel):
     name: str
     state: VMState
     id: int | None = None
+    net_id: str | None = None
+    hostfwd: HostForward | None = None
     uuid: str
     vcpus: int
     memory: int  # в килобайтах

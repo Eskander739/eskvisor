@@ -11,7 +11,10 @@ from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
+from agent.client.hypervisor.libvirt.models.vm import (
+    VMCreateRequest,
+    NetQemuCommandline,
+)
 from agent.client.tools import wait_while_not
 
 load_dotenv()
@@ -21,7 +24,7 @@ IMG_PATH = os.environ.get("IMAGE_PATH")
 @pytest.mark.tags(
     "VM‑02", "VM‑10", "Установка ОС на ВМ (загрузка с ISO)", "Просмотр консоли ВМ"
 )
-def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_session):
+def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_session):
     """
     VM‑02: Установка ОС на ВМ (загрузка с ISO)
 
@@ -41,6 +44,7 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
         autostart_vm=True,
         disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
         networks=[VmNetAdapter(network_type=NetworkType.USER)],
+        qemu_commandline=NetQemuCommandline(),
     )
     try:
         # ____________________________________Создание ВМ_________________________
@@ -62,6 +66,7 @@ def test_vm_10_connect_vm_console(vm_session, storage_session, virsh_console_ses
                 break
         else:
             raise AssertionError("Некорректное подключение к ВМ")
+
     finally:
         # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)_
         if random_name is not None:

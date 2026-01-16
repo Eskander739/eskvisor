@@ -93,17 +93,14 @@ class NFSStorage:
 
         return None
 
+
 if __name__ == "__main__":
     cli = CLIControl()
-    nfs_path =  f"/srv/nfs/share_{random.randint(100000, 999999)}"
-    nfs_mount_path =  f"/mnt/nfs_{random.randint(100000, 999999)}"
+    nfs_path = f"/srv/nfs/share_{random.randint(100000, 999999)}"
+    nfs_mount_path = f"/mnt/nfs_{random.randint(100000, 999999)}"
 
     # Создать директории
-    nfs_share_mkdir = [
-        "mkdir",
-        "-p",
-        nfs_path
-    ]
+    nfs_share_mkdir = ["mkdir", "-p", nfs_path]
     result_nfs_share_mkdir = cli.execute(nfs_share_mkdir)
     print("result_nfs_share_mkdir: ", result_nfs_share_mkdir)
     # nfs_share_mkdir = [
@@ -123,31 +120,21 @@ if __name__ == "__main__":
     print("result_apply_setting: ", result_apply_setting)
     # Монтировать локально
 
-    mkdir_local = [
-        "mkdir", "-p", nfs_mount_path
-    ]
+    mkdir_local = ["mkdir", "-p", nfs_mount_path]
     result_mkdir_local = cli.execute(mkdir_local)
     print("result_mkdir_local: ", result_mkdir_local)
-    mount_local = [
-        "mount", "-t", "nfs", f"127.0.0.1:{nfs_path}", nfs_mount_path
-    ]
+    mount_local = ["mount", "-t", "nfs", f"127.0.0.1:{nfs_path}", nfs_mount_path]
     result_mount_local = cli.execute(mount_local)
     print("result_mount_local: ", result_mount_local)
     time.sleep(10)
 
     # Отмонтировать принудительно
-    unmount_local = [
-        "umount", "-f", nfs_mount_path
-    ]
+    unmount_local = ["umount", "-f", nfs_mount_path]
     result = cli.execute(unmount_local)
 
     # Удаление локальных директории хранилища
-    nfs_local_rmdir = [
-        "rmdir", nfs_path
-    ]
+    nfs_local_rmdir = ["rmdir", nfs_path]
     cli.execute(nfs_local_rmdir)
 
-    nfs_local_rmdir = [
-        "rmdir", nfs_mount_path
-    ]
+    nfs_local_rmdir = ["rmdir", nfs_mount_path]
     cli.execute(nfs_local_rmdir)

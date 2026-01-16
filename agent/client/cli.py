@@ -174,7 +174,14 @@ class CLIControl:
 
             return emulators[0]
 
-    def execute(self, command, user="root", password="root", timeout: int = 10, return_proc: bool = False):
+    def execute(
+        self,
+        command,
+        user="root",
+        password="root",
+        timeout: int = 10,
+        return_proc: bool = False,
+    ):
         # Формируем команду
         if isinstance(command, str):
             command = command.split()

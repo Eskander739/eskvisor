@@ -17,7 +17,10 @@ from agent.client.hypervisor.libvirt.models.network import (
     NetworkParameters,
     VmNetAdapter,
 )
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
+from agent.client.hypervisor.libvirt.models.vm import (
+    VMCreateRequest,
+    NetQemuCommandline,
+)
 from agent.client.tools import wait_while_not
 
 load_dotenv()
@@ -46,6 +49,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         autostart_vm=True,
         disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
+        qemu_commandline=NetQemuCommandline(),
     )
     network_name = None
     try:

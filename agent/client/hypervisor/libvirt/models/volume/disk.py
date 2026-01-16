@@ -327,7 +327,6 @@ class DiskCreate(BaseModel):
         f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255
     )
     path: str | None = "/home/eska/.local/share/libvirt/images/"
-    pool: str | None = Field(None, description="Пул для создания диска")
     size_gb: float = Field(1, gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(None, max_length=500)
@@ -354,12 +353,10 @@ class DiskCreate(BaseModel):
                     self.path = str(
                         Path(self.path) / f"{self.name}.{self.format.value}"
                     )
-                    print("KOSADKFKSADFKSDFKSD: ", self.path)
                 elif current_format.value == DiskFormat.UNKNOWN.value:
                     self.path = str(
                         Path(self.path) / f"{self.name}.{self.format.value}"
                     )
-                    print("self.path: ", self.path)
                 else:
                     if current_format.value in (
                         DiskFormat.ISO.value,

@@ -1,6 +1,13 @@
 from enum import Enum
 
 
+class QemuNetdevType(str, Enum):
+    USER = "user"
+    TAP = "tap"
+    BRIDGE = "bridge"
+    SOCKET = "socket"
+
+
 class VMState(Enum):
     """Состояния виртуальной машины"""
 

@@ -4,7 +4,8 @@ import pytest
 
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskCreate,
-    DiskStatus, DiskFormat,
+    DiskStatus,
+    DiskFormat,
 )
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
@@ -15,7 +16,9 @@ from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 )
 @pytest.mark.parametrize("sparse", (True, False))
 @pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
-def test_sf_02_create_and_delete_nfs_storage(storage_session, create_nfs_storage_session, disk_format, sparse):
+def test_sf_02_create_and_delete_nfs_storage(
+    storage_session, create_nfs_storage_session, disk_format, sparse
+):
     """
     SF-01: Создание и удаление NFS хранилища с проверкой создания дисков QCOW2 и RAW
 
@@ -32,7 +35,7 @@ def test_sf_02_create_and_delete_nfs_storage(storage_session, create_nfs_storage
             format=disk_format,
             sparse=sparse,
             description="Create disk description",
-            path=create_nfs_storage_session
+            path=create_nfs_storage_session,
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
         assert attach_disk is not None, "Ошибка: диск для подключения не создан"

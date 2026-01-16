@@ -1,6 +1,5 @@
 import ipaddress
 import subprocess
-import uuid
 from xml.etree import ElementTree as ET
 
 import libvirt
@@ -271,6 +270,9 @@ class NetworkManager(LibvirtClient):
         self, network_name: str, params: NetworkParameters, request_id: str
     ) -> NetworkMessage:
         """Редактирование виртуальной сети"""
+        old_xml = None
+        autostart = None
+        was_active = None
         try:
             # Получаем текущую сеть
             network = self.conn.networkLookupByName(network_name)
@@ -345,16 +347,14 @@ class NetworkManager(LibvirtClient):
 
             # Попытка восстановить оригинальную сеть в случае ошибки
             try:
-                if "old_xml" in locals():
+                if old_xml is not None:
                     self.logger.warning(
                         f"Попытка восстановления оригинальной сети '{network_name}'"
                     )
                     self.conn.networkDefineXML(old_xml)
                     restored = self.conn.networkLookupByName(network_name)
-                    restored.setAutostart(
-                        autostart if "autostart" in locals() else True
-                    )
-                    if was_active if "was_active" in locals() else False:
+                    restored.setAutostart(autostart if autostart is not None else True)
+                    if was_active if was_active is not None else False:
                         restored.create()
             except Exception as restore_error:
                 self.logger.error(f"Не удалось восстановить сеть: {restore_error}")
@@ -694,9 +694,9 @@ class NetworkManager(LibvirtClient):
     def set_network_autostart(self, network_name: str, autostart: bool = True) -> bool:
         """Настройка автозапуска сети"""
         try:
-            network = self.conn.networkLookupByName(network_name)
-            network_type = self._get_network_type_from_xml(network.XMLDesc(0))
-            network.setAutostart(autostart)
+            current_network = self.conn.networkLookupByName(network_name)
+            network_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
+            current_network.setAutostart(autostart)
             self.logger.info(
                 f"Автозапуск сети '{network_name}' (тип: {network_type}) "
                 f"установлен в {autostart}"
@@ -712,11 +712,11 @@ class NetworkManager(LibvirtClient):
     def start_network(self, network_name: str) -> bool:
         """Запуск сети"""
         try:
-            network = self.conn.networkLookupByName(network_name)
-            network_type = self._get_network_type_from_xml(network.XMLDesc(0))
+            current_network = self.conn.networkLookupByName(network_name)
+            network_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
 
-            if not network.isActive():
-                network.create()
+            if not current_network.isActive():
+                current_network.create()
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) запущена"
                 )
@@ -801,7 +801,8 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка получения полного списка сетей: {e}")
             return []
 
-    def _determine_network_type(self, params: NetworkParameters) -> NetworkTypeInfo:
+    @staticmethod
+    def _determine_network_type(params: NetworkParameters) -> NetworkTypeInfo:
         """Определение типа сети на основе параметров"""
         # Определяем базовые характеристики
         has_ipv4 = params.ipv4 and params.ipv4_address is not None
@@ -966,13 +967,14 @@ class NetworkManager(LibvirtClient):
             return False
 
     def enable_network_with_autostart(
-        self, network_name: str, start_now: bool = True
+        self, network_name: str, request_id: str, start_now: bool = True
     ) -> bool:
         """
         Включает сеть и настраивает автозапуск.
 
         Args:
             network_name: Имя сети
+            request_id: id запроса
             start_now: Запускать сеть сразу (True) или только настроить автозапуск (False)
 
         Returns:
@@ -980,7 +982,7 @@ class NetworkManager(LibvirtClient):
         """
         try:
             # Получаем информацию о сети
-            network_info = self.get_network_info(network_name)
+            network_info = self.get_network_info(network_name, request_id)
             if not network_info:
                 self.logger.error(f"Сеть '{network_name}' не найдена")
                 return False
@@ -1234,9 +1236,9 @@ class NetworkManager(LibvirtClient):
     def _get_network_uuid(self, conn, network_name):
         """Получить UUID сети"""
         try:
-            network = conn.networkLookupByName(network_name)
-            return network.UUIDString()
-        except BaseException:
+            current_network = conn.networkLookupByName(network_name)
+            return current_network.UUIDString()
+        except self.libvirtError:
             return None
 
     def _check_guest_agent(self, vm):
@@ -1245,7 +1247,7 @@ class NetworkManager(LibvirtClient):
             # Попробовать получить информацию через агент
             vm.interfaceAddresses(libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT, 0)
             return True
-        except BaseException:
+        except self.libvirtError:
             return False
 
     def detach_vm_network_interface(
@@ -1374,7 +1376,7 @@ class NetworkManager(LibvirtClient):
 
 if __name__ == "__main__":
     # Пример использования
-    with NetworkManager().with_default_user() as nm:
+    with NetworkManager() as nm:
         print("=== Сводка по сетям ===")
         summary = nm.get_network_summary()
         print(f"Всего сетей: {summary['total']}")
@@ -1399,5 +1401,5 @@ if __name__ == "__main__":
             print(f"  DNS: {network.dns_forwarders}")
             print(f"  DNS_HOSTS: {network.dns_hosts}")
             print(f"  DNS_TXTS: {network.dns_txts}")
-            if network.name != "default":
-                nm.delete_network(network.name, str(uuid.uuid4()), force=True)
+            # if network.name != "default":
+            #     nm.delete_network(network.name, str(uuid.uuid4()), force=True)

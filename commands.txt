@@ -7,6 +7,7 @@ sudo apt install lvm2
 sudo apt install numactl
 sudo apt install nfs-kernel-server
 sudo apt install nfs-common
+sudo apt install virt-viewer
 
 # Для CentOS/RHEL/ALT Linux:
 sudo yum install -y qemu-kvm libvirt libvirt-client virt-install
@@ -14,6 +15,7 @@ sudo yum install lvm2
 sudo yum install numactl
 sudo yum install nfs-kernel-server
 sudo yum install nfs-common
+sudo yum install virt-viewer
 
 # Для Fedora:
 sudo dnf install -y qemu-kvm libvirt libvirt-client virt-install
@@ -21,6 +23,7 @@ sudo dnf install lvm2
 sudo dnf install numactl
 sudo dnf install nfs-kernel-server
 sudo dnf install nfs-common
+sudo dnf install virt-viewer
 
 sudo systemctl start libvirtd
 sudo systemctl enable nfs-server

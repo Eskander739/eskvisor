@@ -314,7 +314,6 @@ class CPUController:
             return round(available, 3)
 
         except Exception as e:
-            print(f"Ошибка при вычислении available CPU: {e}")
             return None
 
     def get_cpu_usage_percent(self, cgroup_pool: str) -> float | str:

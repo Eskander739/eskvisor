@@ -1,4 +1,6 @@
 import os
+import random
+import re
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +16,7 @@ from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
+from agent.client.hypervisor.libvirt.managers.snapshot import SnapshotManager
 from agent.client.hypervisor.libvirt.managers.storage import StorageManager
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     BusType,
@@ -39,9 +42,11 @@ from agent.client.hypervisor.libvirt.models.msg import (
 from agent.client.hypervisor.libvirt.models.vm import (
     VirtualMachine,
     VMCreateRequest,
-    VmUpdateRequest,
+    VmUpdateRequest, HostForward,
 )
 from agent.client.logger_config import DefaultLogger
+
+QEMU_NAMESPACE = {"qemu": "http://libvirt.org/schemas/domain/qemu/1.0"}
 
 
 class VmManager(LibvirtClient):
@@ -55,6 +60,8 @@ class VmManager(LibvirtClient):
         self.cli = CLIControl()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger("VmManager")
+        self.snapshot = SnapshotManager()
+        self.snapshot.connect()
         super().__init__()
         self.storage_manager = StorageManager()
         self.storage_manager.connect()
@@ -148,7 +155,6 @@ class VmManager(LibvirtClient):
                         disk_type=disk.disk_type,
                         bus_type=disk.bus_type,
                         description=disk.description,
-                        pool=disk.pool,
                         format=storage_format,
                         path=disk.path or None,
                         sparse=True,
@@ -182,8 +188,8 @@ class VmManager(LibvirtClient):
                             message=f"Ошибка создания диска: {result.message if hasattr(result, 'message') else 'Unknown error'}",
                             code="DISK_CREATION_FAILED",
                         )
-            except Exception as e:
-                self.logger.exception(f"Ошибка при создании дисков: {e}")
+            except Exception as global_e:
+                self.logger.exception(f"Ошибка при создании дисков: {global_e}")
                 # Откатываем созданные диски
                 for created_disk_path in all_disks:
                     try:
@@ -195,7 +201,7 @@ class VmManager(LibvirtClient):
                 return VmMessage(
                     request_id=config.request_id,
                     success=False,
-                    message=f"Ошибка при создании дисков: {str(e)}",
+                    message=f"Ошибка при создании дисков: {str(global_e)}",
                     code="DISK_CREATION_EXCEPTION",
                 )
 
@@ -544,9 +550,18 @@ class VmManager(LibvirtClient):
         if config.noautoconsole:
             cmd_parts.append("--noautoconsole")
 
-        # cmd_parts.append(
-        #     '--qemu-commandline="-netdev user,id=net0,ipv4=on,ipv6=off,dns=8.8.8.8,hostfwd=tcp::2222-:22"'
-        # ) TODO: Вернуть потом и доработать
+        if config.qemu_commandline:
+            net_info = self.get_all_hostfwd_and_net_ids()
+            all_net_ids = {current_net_info[0] for current_net_info in net_info}
+            all_ip_and_port = {(current_net_info[1].host_ip, current_net_info[1].host_port) for current_net_info in net_info}
+
+            if config.qemu_commandline.net_id in all_net_ids:
+                config.qemu_commandline.net_id = self.generate_new_net_id
+
+            if (config.qemu_commandline.hostfwd.host_ip, config.qemu_commandline.hostfwd.host_port) in all_ip_and_port:
+                config.qemu_commandline.host_port = self.generate_new_net_id
+
+            cmd_parts.append(config.qemu_commandline.qemu_commandline_string)
 
         return " ".join(cmd_parts)
 
@@ -1304,7 +1319,6 @@ class VmManager(LibvirtClient):
                     vms.append(self.get_vm_info(domain))
             else:
                 domains = self.conn.listAllDomains(0)
-                print("domains: ", domains)
                 for domain in domains:
                     vms.append(self.get_vm_info(domain))
 
@@ -1313,6 +1327,86 @@ class VmManager(LibvirtClient):
 
         return vms
 
+    @staticmethod
+    def parse_hostfwd_regex(hostfwd_str: str) -> dict:
+        """Парсит строку hostfwd с помощью regex"""
+
+        patterns = (
+            # Стандартный формат: hostfwd=tcp::2222-:22
+            r'hostfwd=(?P<protocol>tcp|udp)::(?P<host_port>\d+)-(?::(?P<host_ip>[^:]+):)?:(?P<guest_port>\d+)',
+
+            # С указанием IP хоста: hostfwd=tcp:192.168.1.1:2222-:22
+            r'hostfwd=(?P<protocol>tcp|udp):(?P<host_ip>[^:]+):(?P<host_port>\d+)-:(?P<guest_port>\d+)',
+
+            # Без протокола (редко): hostfwd=:2222-:22
+            r'hostfwd=:(?P<host_port>\d+)-:(?P<guest_port>\d+)'
+        )
+
+        for pattern in patterns:
+            match = re.match(pattern, hostfwd_str)
+            if match:
+                result = match.groupdict()
+                # Преобразуем порты в int
+                if "host_port" in result:
+                    result["host_port"] = int(result["host_port"])
+                if "guest_port" in result:
+                    result["guest_port"] = int(result["guest_port"])
+                return result
+
+        return {}
+
+    @property
+    def generate_new_net_id(self):
+        return f"net{random.randint(100_000_000, 999_999_999)}"
+
+
+
+
+    def get_all_hostfwd_and_net_ids(self) -> list[tuple[str, HostForward] | tuple[None, None]]:
+        hostfwd_and_net_ids_list = []
+
+        all_domains = self.conn.listAllDomains(libvirt.VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                                          libvirt.VIR_CONNECT_LIST_DOMAINS_INACTIVE)
+
+        for current_domain in all_domains:
+            hostfwd_and_net_id = self.get_hostfwd_and_net_id(current_domain)
+            if hostfwd_and_net_id[0] is not None or hostfwd_and_net_id[1] is not None:
+                hostfwd_and_net_ids_list.append(self.get_hostfwd_and_net_id(current_domain))
+
+        return hostfwd_and_net_ids_list
+
+    def get_hostfwd_and_net_id(self, vm_name: str | libvirt.virDomain) -> tuple[str, HostForward] | tuple[None, None]:
+        if isinstance(vm_name, libvirt.virDomain):
+            domain = vm_name
+        elif isinstance(vm_name, str):
+            domain = self.conn.lookupByName(vm_name)
+        else:
+            raise ValueError(f"Некорректный тип данных: '{type(vm_name)}'")
+        root = ET.fromstring(domain.XMLDesc())
+
+        qemu_commandline = root.find("qemu:commandline", QEMU_NAMESPACE)
+        if not qemu_commandline:
+            return None, None
+
+        qemu_args = qemu_commandline.findall("qemu:arg", QEMU_NAMESPACE)
+        if not qemu_args:
+            return None, None
+
+        qemu_params = qemu_args.pop().get("value").split(",")
+        current_net_id = None
+        hostfwd = None
+
+        for qemu_param in qemu_params:
+            if "id=" in qemu_param:
+                current_net_id = qemu_param.split("=").pop()
+                break
+        for qemu_param in qemu_params:
+            if "hostfwd" in qemu_param:
+                hostfwd = HostForward(**self.parse_hostfwd_regex(qemu_param))
+                break
+
+        return current_net_id, hostfwd
+
     def get_vm_info(self, domain, display_logs: bool = True) -> VirtualMachine | None:
         """Получение информации о виртуальной машине"""
         try:
@@ -1320,11 +1414,15 @@ class VmManager(LibvirtClient):
             state = VMState(info[0])
             if display_logs:
                 self.logger.info(f"ВМ {domain.name()} найдена")
+            current_net_id, hostfwd = self.get_hostfwd_and_net_id(domain.name())
+
             return VirtualMachine(
                 name=domain.name(),
                 state=state,
                 id=domain.ID() if domain.ID() != -1 else -1,
+                net_id=current_net_id,
                 uuid=domain.UUIDString(),
+                hostfwd=hostfwd,
                 vcpus=info[3],
                 memory=info[2],
                 max_memory=info[1],
@@ -1565,6 +1663,7 @@ class VmManager(LibvirtClient):
                 nvram_path = self._extract_nvram_path(xml_config)
 
             disks_to_delete = []
+            self.snapshot.delete_all_snapshots_by_vm_name(name, request_id)
             if delete_disks:
                 disks_to_delete = self._extract_disk_paths(xml_config)
 
@@ -1836,10 +1935,6 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка при парсинге XML для поиска NVRAM: {e}")
             return None
 
-    @staticmethod
-    def _generate_uuid():
-        return str(uuid.uuid4())
-
     def clone_vm(self, source_name: str, new_name: str, new_uuid: bool = True) -> dict:
         """
         Клонирование существующей ВМ
@@ -1865,7 +1960,7 @@ class VmManager(LibvirtClient):
             if new_uuid:
                 uuid_elem = root.find("uuid")
                 if uuid_elem is not None:
-                    uuid_elem.text = self._generate_uuid()
+                    uuid_elem.text = str(uuid.uuid4())
 
             for disk in root.findall(".//disk"):
                 source_elem = disk.find("source")
@@ -1936,7 +2031,8 @@ if __name__ == "__main__":
         for vm in vms:
             # vm_manager.start_vm(vm.name, str(uuid.uuid4()))
             # vm_manager.shutoff_vm("VM-TEST-91553", str(uuid.uuid4()), force=True)
-            vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
+            # if vm.state.value == VMState.SHUTOFF.value:
+            #     vm_manager.delete_vm_with_force(vm.name, str(uuid.uuid4()))
             print(
-                f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}"
+                f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}, HOST_FORWARD: {vm.hostfwd}"
             )

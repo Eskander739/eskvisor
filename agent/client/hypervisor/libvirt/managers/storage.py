@@ -2,7 +2,6 @@ import logging
 import os
 import re
 import shutil
-import time
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -47,12 +46,8 @@ class StorageManager(LibvirtClient):
                 f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB"
             )
 
-            if disk_create.pool:
-                self.logger.debug(f"Создание в пуле: {disk_create.pool}")
-                return self._create_pool_disk(disk_create, request_id)
-            else:
-                self.logger.debug("Создание файлового диска")
-                return self._create_file_disk(disk_create, request_id)
+            self.logger.debug("Создание файлового диска")
+            return self._create_file_disk(disk_create, request_id)
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt: {e}")
@@ -282,57 +277,6 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.warning(f"Не удалось создать файл метаданных: {e}")
 
-    def _create_pool_disk(
-        self, disk_create: DiskCreate, request_id: str
-    ) -> Disk | None:
-        try:
-            pool = self.conn.storagePoolLookupByName(disk_create.pool)
-            pool_info = pool.info()
-
-            if pool_info[0] != libvirt.VIR_STORAGE_POOL_RUNNING:
-                self.logger.info(f"Активация пула {disk_create.pool}")
-                pool.create()
-
-            size_bytes = int(disk_create.size_gb * 1024 * 1024 * 1024)
-            # TODO: При создании volume нужно добавить возможность указания типа: thin volume или обычный logic volume
-            # TODO: Убрать использование ресурс пула libvirt
-            xml_desc = f"""
-            <volume type='block'>
-              <name>{disk_create.name}</name>
-              <source>
-                <device path='/dev/vg_eskvisor_01/{disk_create.name}'/>
-              </source>
-              <target>
-                <format type='raw'/>
-                <permissions>
-                  <mode>0644</mode>
-                </permissions>
-              </target>
-            </volume>
-            """
-
-            vol = pool.createXML(xml_desc, 0)
-
-            if not disk_create.sparse and disk_create.format == DiskFormat.RAW:
-                self._fill_pool_raw_disk_with_zeros(vol, size_bytes)
-
-            disk = self.get_disk_info(
-                pool_name=disk_create.pool, disk_name=disk_create.name
-            )
-
-            if disk:
-                self.logger.info(
-                    f"Пулловой диск создан: {disk.name}, размер: {disk.get_effective_size_gb()}GB"
-                )
-            return disk
-
-        except libvirt.libvirtError as e:
-            self.logger.error(f"Ошибка создания пулового диска: {e}")
-            return None
-        except Exception as e:
-            self.logger.exception(f"Неожиданная ошибка: {e}")
-            return None
-
     def _fill_pool_raw_disk_with_zeros(self, vol, size_bytes: int):
         try:
             stream = self.conn.newStream()
@@ -382,7 +326,7 @@ class StorageManager(LibvirtClient):
                     self.logger.warning(f"Диск {path} используется")
                     return False
 
-                self.cli.execute(["rm",  "-r", path])
+                self.cli.execute(["rm", "-r", path])
 
                 metadata_path = f"{path}.meta"
                 if self.cli.is_exists(metadata_path):
@@ -653,8 +597,8 @@ class StorageManager(LibvirtClient):
     def get_storage_used(self, vm_name: str, request_id: str) -> int:
         used_storage = 0
         all_disks = self.get_disks_by_vm(vm_name, request_id)
-        for current_disk in all_disks:
-            used_storage += current_disk.allocation_bytes
+        for disk_elem in all_disks:
+            used_storage += disk_elem.allocation_bytes
 
         return used_storage
 
@@ -662,7 +606,7 @@ class StorageManager(LibvirtClient):
         """
         Получить все диски, подключенные к указанной ВМ
         """
-        disks = []
+        all_disks = []
         try:
             vm = self.conn.lookupByName(vm_name)
             xml_desc = vm.XMLDesc()
@@ -680,15 +624,15 @@ class StorageManager(LibvirtClient):
                             vm_name, target_dev, request_id
                         )
                         disk = disk.disk_info
-                        disks.append(disk)
+                        all_disks.append(disk)
                     except Exception as e:
                         self.logger.warning(
                             f"Не удалось получить диск {target_dev}: {e}"
                         )
                         continue
 
-            self.logger.info(f"Найдено {len(disks)} дисков для ВМ {vm_name}")
-            return disks
+            self.logger.info(f"Найдено {len(all_disks)} дисков для ВМ {vm_name}")
+            return all_disks
 
         except Exception as e:
             self.logger.exception(f"Ошибка при получении дисков ВМ {vm_name}: {e}")
@@ -896,16 +840,16 @@ class StorageManager(LibvirtClient):
             return False
 
     def list_disks(self, query: DiskQuery | None = None) -> list[Disk]:
-        disks = []
+        all_disks = []
         try:
             # disks.extend(self._get_pool_disks(query))
-            disks.extend(self._get_file_disks(query))
-            disks.extend(self._get_attached_disks(query))
+            all_disks.extend(self._get_file_disks(query))
+            all_disks.extend(self._get_attached_disks(query))
 
-            disks = self._remove_duplicate_disks(disks)
-            disks = self._apply_filters(disks, query)
+            all_disks = self._remove_duplicate_disks(all_disks)
+            all_disks = self._apply_filters(all_disks, query)
 
-            return disks
+            return all_disks
 
         except Exception as e:
             self.logger.exception(f"Ошибка получения списка: {e}")
@@ -918,7 +862,7 @@ class StorageManager(LibvirtClient):
         request_id: str,
         sparse: bool = True,
         target_path: str | None = None,
-    ) -> StorageMessage:
+    ) -> StorageMessage | bool:
         """
         В target_path нужно указывать полный путь включая сам файл диска и его расширение
         """
@@ -1072,7 +1016,7 @@ class StorageManager(LibvirtClient):
                             request_id=request_id,
                             message=CommandMessagesEnum.disk_not_found.value,
                             code=CommandMessagesEnum.disk_not_found.name,
-                            note=disk_info
+                            note=disk_info,
                         )
                     return StorageMessage(
                         request_id=request_id,
@@ -1292,7 +1236,7 @@ class StorageManager(LibvirtClient):
             return None
 
     def _get_pool_disks(self, query: DiskQuery | None) -> list[Disk]:
-        disks = []
+        all_disks = []
         try:
             if query and query.pool:
                 try:
@@ -1316,7 +1260,7 @@ class StorageManager(LibvirtClient):
                         try:
                             disk = self._volume_to_disk(vol, pool.name())
                             if disk:
-                                disks.append(disk)
+                                all_disks.append(disk)
                         except libvirt.libvirtError:
                             continue
 
@@ -1328,10 +1272,10 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Неожиданная ошибка: {e}")
 
-        return disks
+        return all_disks
 
     def _get_file_disks(self, query: DiskQuery | None) -> list[Disk]:
-        disks = []
+        all_disks = []
         standard_dirs = list(self.libvirt_config.search_dirs)
 
         if query and hasattr(query, "search_path"):
@@ -1345,11 +1289,11 @@ class StorageManager(LibvirtClient):
                         if self._is_disk_file(file_path):
                             disk_info = self._get_file_disk_info(file_path)
                             if disk_info:
-                                disks.append(disk_info)
+                                all_disks.append(disk_info)
                 except Exception:
                     continue
 
-        return disks
+        return all_disks
 
     def _is_disk_file(self, file_path: str) -> bool:
         disk_extensions = list(self.libvirt_config.disk_extensions) + [".iso", ".img"]
@@ -1416,7 +1360,8 @@ class StorageManager(LibvirtClient):
 
         return attached_disks
 
-    def _extract_disk_blocks_from_vm_xml(self, xml_desc: str) -> list[dict]:
+    @staticmethod
+    def _extract_disk_blocks_from_vm_xml(xml_desc: str) -> list[dict]:
         disk_blocks = []
         lines = xml_desc.split("\n")
         i = 0
@@ -1509,7 +1454,8 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка создания диска: {e}")
             return None
 
-    def _volume_to_disk(self, vol, pool_name: str) -> Disk | None:
+    @staticmethod
+    def _volume_to_disk(vol, pool_name: str) -> Disk | None:
         try:
             vol_info = vol.info()
             vol_xml = vol.XMLDesc()
@@ -1535,9 +1481,10 @@ class StorageManager(LibvirtClient):
         except libvirt.libvirtError:
             return None
 
-    def _remove_duplicate_disks(self, disks: list[Disk]) -> list[Disk]:
+    @staticmethod
+    def _remove_duplicate_disks(all_disks: list[Disk]) -> list[Disk]:
         unique_disks = {}
-        for disk in disks:
+        for disk in all_disks:
             if disk.path not in unique_disks:
                 unique_disks[disk.path] = disk
             else:
@@ -1552,18 +1499,21 @@ class StorageManager(LibvirtClient):
 
         return list(unique_disks.values())
 
-    def _apply_filters(self, disks: list[Disk], query: DiskQuery | None) -> list[Disk]:
+    def _apply_filters(
+        self, all_disks: list[Disk], query: DiskQuery | None
+    ) -> list[Disk]:
         if not query:
-            return disks
+            return all_disks
 
         filtered_disks = []
-        for disk in disks:
+        for disk in all_disks:
             if self._filter_disk(disk, query):
                 filtered_disks.append(disk)
 
         return filtered_disks
 
-    def _filter_disk(self, disk: Disk, query: DiskQuery | None) -> bool:
+    @staticmethod
+    def _filter_disk(disk: Disk, query: DiskQuery | None) -> bool:
         if not query:
             return True
 

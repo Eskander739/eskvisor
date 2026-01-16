@@ -23,7 +23,10 @@ from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
+from agent.client.hypervisor.libvirt.models.vm import (
+    VMCreateRequest,
+    NetQemuCommandline,
+)
 from agent.client.hypervisor.volumes.group import VolumeGroupManager
 from agent.client.hypervisor.volumes.logical import LogicalVolumeManager
 from agent.client.hypervisor.volumes.physical import PhysicalVolumeManager
@@ -68,15 +71,11 @@ def volume_session():
 def create_nfs_storage_session():
     cli = CLIControl()
     nfs_stg = NFSStorage()
-    nfs_path =  f"/srv/nfs/share_{random.randint(100000, 999999)}/"
-    nfs_mount_path =  f"/mnt/nfs_{random.randint(100000, 999999)}/"
+    nfs_path = f"/srv/nfs/share_{random.randint(100000, 999999)}/"
+    nfs_mount_path = f"/mnt/nfs_{random.randint(100000, 999999)}/"
 
     # Создать директории
-    nfs_share_mkdir = [
-        "mkdir",
-        "-p",
-        nfs_path
-    ]
+    nfs_share_mkdir = ["mkdir", "-p", nfs_path]
     cli.execute(nfs_share_mkdir)
 
     # Настроить экспорт
@@ -88,9 +87,7 @@ def create_nfs_storage_session():
     cli.execute(apply_setting)
 
     # Монтировать локально
-    mkdir_local = [
-        "mkdir", "-p", nfs_mount_path
-    ]
+    mkdir_local = ["mkdir", "-p", nfs_mount_path]
     cli.execute(mkdir_local)
     nfs_stg.mount(f"127.0.0.1:{nfs_path}", nfs_mount_path)
 
@@ -100,15 +97,12 @@ def create_nfs_storage_session():
     nfs_stg.unmount(nfs_mount_path)
 
     # Удаление локальных директории хранилища
-    nfs_local_rmdir = [
-        "rmdir", nfs_path
-    ]
+    nfs_local_rmdir = ["rmdir", nfs_path]
     cli.execute(nfs_local_rmdir)
 
-    nfs_local_rmdir = [
-        "rmdir", nfs_mount_path
-    ]
+    nfs_local_rmdir = ["rmdir", nfs_mount_path]
     cli.execute(nfs_local_rmdir)
+
 
 @pytest.fixture(scope="session")
 def create_stopped_vm():
@@ -176,6 +170,7 @@ def create_running_vm_session_with_os():
             autostart_vm=True,
             disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
             networks=[VmNetAdapter(network_type=NetworkType.USER)],
+            qemu_commandline=NetQemuCommandline(),
         )
         # ____________________________________Создание ВМ_________________________
         vm_info = vm_manager.create_vm(vm_template)

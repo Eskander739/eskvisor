@@ -29,7 +29,6 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
 class CommandMessagesEnum(Enum):
     # Виртуальные машины
     vm_with_name_already_exists = "VM with name already exists"
-    vm_config_not_found = "VM config not found"
     vm_successfully_deleted_from_virtual_resource_pool = (
         "VM successfully deleted from virtual resource pool"
     )
@@ -47,16 +46,11 @@ class CommandMessagesEnum(Enum):
     vm_successfully_shutdowned = "VM successfully shutdown"
     vm_successfully_started = "VM successfully started"
     vm_successfully_found = "VM successfully found"
-    vm_successfully_add_to_cgroup = "VM successfully add to cgroup"
-    vm_error_add_to_cgroup = "VM error add to cgroup"
-    vm_error_remove_from_cgroup = "VM error remove from cgroup"
-    vm_successfully_removed_from_cgroup = "VM successfully removed from cgroup"
     vm_found_error = "VM found error"
     vm_successfully_stopped = "VM successfully stopped"
     vm_successfully_restarted = "VM successfully restarted"
     vm_create_unexpected_error = "VM create unexpected error"
     vm_create_subprocess_timeout_error = "VM create subprocess timeout error"
-    vm_not_found_in_resource_pool = "VM not found in resource pool"
 
     # Виртуальные диски
     disk_convert_error = "Disk convert error"
@@ -67,7 +61,6 @@ class CommandMessagesEnum(Enum):
     disk_create_error = "Disk create error"
     disk_successfully_created = "Disk successfully created"
     disk_successfully_attached = "Disk successfully attached"
-    disk_attach_error = "Disk attach error"
     disk_already_attached_error = "Disk already attached error"
     disk_already_created = "Disk already created"
     disk_attach_libvirt_error = "Disk attach libvirt error"
@@ -106,14 +99,6 @@ class CommandMessagesEnum(Enum):
     rp_already_created = "Resource pool already"
     vm_list_is_correct = "VM List is correct"
     rp_cpu_configuration_error = "Resource pool CPU configuration error"
-    rp_cpu_configuration_not_found = "Resource pool CPU configuration not found"
-    rp_ram_configuration_not_found = "Resource pool RAM configuration not found"
-    rp_cpu_configuration_file_not_found = (
-        "Resource pool CPU configuration file not found"
-    )
-    rp_storage_configuration_file_not_found = (
-        "Resource pool STORAGE configuration file not found"
-    )
     rp_ram_configuration_error = "Resource pool RAM configuration error"
     vm_can_not_reserve_resource_when_vm_not_in_virtual_rp = (
         "VM can't reserve resource when VM not in virtual resource pool"
@@ -127,9 +112,6 @@ class CommandMessagesEnum(Enum):
     )
     vm_can_not_reserve_less_ram_than_use = "VM can't reserve less RAM than use"
     vm_can_not_reserve_less_cpu_than_use = "VM can't reserve less CPU than use"
-    rp_storage_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool STORAGE configuration error - allocated STORAGE more than on the new STORAGE limit"
-    rp_cpu_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool CPU configuration error - allocated CPU core more than on the new CPU core limit"
-    rp_ram_configuration_error_allocated_more_than_on_new_limit = "Virtual resource pool RAM configuration error - allocated RAM more than on the new RAM limit"
     rp_create_error = "Resource pool create error"
     vm_present_on_any_virtual_resource_pool = "VM present on any virtual resource pool"
 
@@ -141,13 +123,11 @@ class CommandMessagesEnum(Enum):
     )
     rp_virtual_delete_error = "Virtual resource pool delete error"
     rp_virtual_not_found = "Virtual resource pool not found"
-    forbidden_set_available_and_allocated_data = (
-        "Forbidden set available and allocated data when creating virtual resource pool"
-    )
 
     # Снапшоты
     snapshot_successfully_created = "Snapshot successfully created"
     snapshot_create_error = "Snapshot create error"
+    snapshots_successfully_deleted = "Snapshots successfully deleted"
     snapshot_successfully_deleted = "Snapshot successfully deleted"
     snapshot_delete_error = "Snapshot delete error"
     snapshot_revert_success = "Snapshot revert success"
