@@ -7,14 +7,14 @@ from dotenv import load_dotenv
 from agent.client.cli import CLIControl
 from agent.client.constants import INVALID_LINUX_CHAR
 from agent.client.hypervisor.libvirt.client import LibvirtClient
-from agent.client.hypervisor.pycgroup.pycgroup import PYCGroup
-from agent.client.hypervisor.volumes.logical import (
+from agent.client.pycgroup.pycgroup import PYCGroup
+from agent.client.volumes.logical import (
     LogicalVolumeManager,
 )
-from agent.client.hypervisor.volumes.physical import (
+from agent.client.volumes.physical import (
     PhysicalVolumeManager,
 )
-from agent.client.hypervisor.volumes.group import (
+from agent.client.volumes.group import (
     VolumeGroupManager,
 )
 from agent.client.hypervisor.libvirt.managers.storage import StorageManager

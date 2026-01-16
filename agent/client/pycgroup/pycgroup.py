@@ -2,19 +2,19 @@ import os
 
 from dotenv import load_dotenv
 
-from agent.client.hypervisor.pycgroup.cgroup_cli import (
+from agent.client.pycgroup.cgroup_cli import (
     CLICGroup,
 )
-from agent.client.hypervisor.pycgroup.ctl.cpu_ctl import (
+from agent.client.pycgroup.ctl.cpu_ctl import (
     CPUController,
 )
-from agent.client.hypervisor.pycgroup.ctl.io_ctl import (
+from agent.client.pycgroup.ctl.io_ctl import (
     IoController,
 )
-from agent.client.hypervisor.pycgroup.ctl.memory_ctl import (
+from agent.client.pycgroup.ctl.memory_ctl import (
     MemortController,
 )
-from agent.client.hypervisor.pycgroup.ctl.pid_ctl import (
+from agent.client.pycgroup.ctl.pid_ctl import (
     PidController,
 )
 

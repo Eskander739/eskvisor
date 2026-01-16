@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 
-from agent.client.hypervisor.pycgroup.cgroup_cli import (
+from agent.client.pycgroup.cgroup_cli import (
     CLICGroup,
 )
 

@@ -1,6 +1,6 @@
 import subprocess
 
-from agent.client.hypervisor.pycgroup.pycgroup_logger import (
+from agent.client.pycgroup.pycgroup_logger import (
     PyCGroupLogger,
 )
 

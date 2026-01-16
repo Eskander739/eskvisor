@@ -27,9 +27,9 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VMCreateRequest,
     NetQemuCommandline,
 )
-from agent.client.hypervisor.volumes.group import VolumeGroupManager
-from agent.client.hypervisor.volumes.logical import LogicalVolumeManager
-from agent.client.hypervisor.volumes.physical import PhysicalVolumeManager
+from agent.client.volumes.group import VolumeGroupManager
+from agent.client.volumes.logical import LogicalVolumeManager
+from agent.client.volumes.physical import PhysicalVolumeManager
 from agent.client.stg.nfs import NFSStorage
 from agent.client.tools import wait_while_not
 

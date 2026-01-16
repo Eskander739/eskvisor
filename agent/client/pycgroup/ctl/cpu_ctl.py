@@ -1,6 +1,6 @@
 import time
 
-from agent.client.hypervisor.pycgroup.cgroup_cli import CLICGroup
+from agent.client.pycgroup.cgroup_cli import CLICGroup
 
 
 class CPUController:
