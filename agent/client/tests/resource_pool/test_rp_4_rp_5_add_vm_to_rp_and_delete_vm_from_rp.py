@@ -1,7 +1,5 @@
 import os
 import random
-import time
-
 import pytest
 
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType

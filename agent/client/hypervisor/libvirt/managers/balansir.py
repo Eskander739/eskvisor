@@ -39,7 +39,7 @@ class Balansir(LibvirtClient):
     def __init__(self):
         super().__init__()
         self.logger = DefaultLogger("Балансиръ")
-        self.logger.info(f"Инициализация виртуального менеджера ресурс пулов")
+        self.logger.info("Инициализация виртуального менеджера ресурс пулов")
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
         self.storage_type_dir_base_path = os.environ.get("STORAGE_TYPE_DIR_BASE_PATH")
         self.storage_manager = StorageManager()
@@ -65,7 +65,7 @@ class Balansir(LibvirtClient):
         self.vm_manager.connect()
         self.node_info = self.vm_manager.get_node_info()
 
-        self.logger.info(f"Виртуальный менеджер ресурс пулов инициализирован")
+        self.logger.info("Виртуальный менеджер ресурс пулов инициализирован")
 
     @staticmethod
     def validate_name(vm_name: str):
@@ -80,7 +80,7 @@ class Balansir(LibvirtClient):
         current_rp: ResourcePoolVirtualCreate | ResourcePoolVirtualEdit,
         create_config: bool = False,
     ) -> RpMessage:
-        self.logger.info(f"Старт валидации списка ВМ")
+        self.logger.info("Старт валидации списка ВМ")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
 
         if create_config:
@@ -138,7 +138,7 @@ class Balansir(LibvirtClient):
                         success=False,
                         note=str(e),
                     )
-            self.logger.info(f"Список ВМ валиден")
+            self.logger.info("Список ВМ валиден")
             return RpMessage(
                 request_id=internal_request_id,
                 message=CommandMessagesEnum.vm_list_is_correct.value,
@@ -234,7 +234,7 @@ class Balansir(LibvirtClient):
         cpu_core_limit: int,
         cpu_weight: int | None,
     ) -> RpMessage | bool:
-        self.logger.info(f"Старт конфигурации CPU")
+        self.logger.info("Старт конфигурации CPU")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             self.pycgroup.edit_cgroup_pool(
@@ -262,7 +262,7 @@ class Balansir(LibvirtClient):
         create_config: bool = False,
         storage_type: StoragePoolType = StoragePoolType.LOGICAL,
     ) -> RpMessage | bool:
-        self.logger.info(f"Старт конфигурации STORAGE")
+        self.logger.info("Старт конфигурации STORAGE")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if create_config:
             if storage_type == StoragePoolType.LOGICAL:
@@ -294,7 +294,7 @@ class Balansir(LibvirtClient):
         ram_limit: int | float,
         ram_reservation: int | float | None = None,
     ) -> RpMessage | bool:
-        self.logger.info(f"Старт конфигурации RAM")
+        self.logger.info("Старт конфигурации RAM")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             # Преобразование байт в килобайты для cgroup
@@ -343,7 +343,7 @@ class Balansir(LibvirtClient):
         try:
             if isinstance(vms, str):
                 vms = [vms]
-            self.logger.info(f"Старт конфигурации ВМ")
+            self.logger.info("Старт конфигурации ВМ")
 
             # Проверка существования пула через cgroup
             try:
@@ -356,7 +356,7 @@ class Balansir(LibvirtClient):
                     success=False,
                 )
 
-            self.logger.info(f"Проверка отсутствия ВМ в других ресурс пулах")
+            self.logger.info("Проверка отсутствия ВМ в других ресурс пулах")
             if vms:
                 for current_name in vms:
                     vm_on_any_rp = self.read_vm_on_any_virtual_resource_pools(
@@ -396,7 +396,7 @@ class Balansir(LibvirtClient):
             )
 
     def delete_vm_from_virtual_resource_pool(self, name: str, vn_name: str):
-        self.logger.info(f"Старт удаления ВМ из ресурс пула")
+        self.logger.info("Старт удаления ВМ из ресурс пула")
         internal_request_id = f"internal_{str(uuid.uuid4())}"
 
         # Проверка существования пула через cgroup
@@ -436,7 +436,7 @@ class Balansir(LibvirtClient):
             cpu_allocated += pool.cpu_core_limit
 
         self.logger.info(
-            f"Определен общий объем используемых ресурсов ресурс пулами - "
+            "Определен общий объем используемых ресурсов ресурс пулами - "
             f"CPU ядер: '{cpu_allocated}', "
             f"RAM памяти: '{ram_allocated}' байт"
         )
@@ -525,14 +525,14 @@ class Balansir(LibvirtClient):
             )
             if create_storage_config is not True:
                 return create_storage_config
-            self.logger.info(f"STORAGE конфигурация ресурс пула успешно установлена")
+            self.logger.info("STORAGE конфигурация ресурс пула успешно установлена")
 
             create_cpu_config = self.configuration_cpu(
                 create_rp.name, create_rp.cpu_core_limit, create_rp.cpu_weight
             )
             if create_cpu_config is not True:
                 return create_cpu_config
-            self.logger.info(f"CPU конфигурация ресурс пула успешно установлена")
+            self.logger.info("CPU конфигурация ресурс пула успешно установлена")
 
             create_ram_config = self.configuration_ram(
                 create_rp.name,
@@ -541,7 +541,7 @@ class Balansir(LibvirtClient):
             )
             if create_ram_config is not True:
                 return create_ram_config
-            self.logger.info(f"RAM конфигурация ресурс пула успешно установлена")
+            self.logger.info("RAM конфигурация ресурс пула успешно установлена")
 
             self.logger.warning(
                 f"Виртуальный ресурс пул '{create_rp.name}' успешно создан"

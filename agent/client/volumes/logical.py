@@ -37,7 +37,7 @@ class LogicalVolumeManager:
             "lvcreate",
             "-y",
             "-n",
-            logic_volume_name,  # 	Имя создаваемого LV
+            logic_volume_name,  # Имя создаваемого LV
             "-L",
             f"{str(logic_volume_size)}{logic_volume_size_type.value}",  # Размер создаваемого LV и тип размера создаваемого LV
             volume_group_name,  # Имя группы томов, в которой создаем LV

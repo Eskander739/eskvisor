@@ -109,7 +109,7 @@ class PhysicalVolumeManager:
         Returns:
             Вывод команды pvs
         """
-        self.logger.info(f"Получение списка физических томов")
+        self.logger.info("Получение списка физических томов")
         # Базовые аргументы команды
         cmd_args = ["pvs", "--reportformat=json"]
 

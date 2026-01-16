@@ -21,7 +21,6 @@ from agent.client.hypervisor.libvirt.models.general import (
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 
 
-
 class HostForward(BaseModel):
     protocol: str | None = None
     host_port: int
@@ -45,7 +44,9 @@ class NetQemuCommandline(BaseModel):
     ipv4: bool = True
     ipv6: bool = False
     dns: str = "8.8.8.8"
-    hostfwd: HostForward = HostForward(protocol="tcp", host_port=2222, host_ip=None, guest_port=22)
+    hostfwd: HostForward = HostForward(
+        protocol="tcp", host_port=2222, host_ip=None, guest_port=22
+    )
 
     @model_validator(mode="after")
     def validate_disk_type_constraints(cls, values):

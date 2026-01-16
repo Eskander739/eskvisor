@@ -42,7 +42,8 @@ from agent.client.hypervisor.libvirt.models.msg import (
 from agent.client.hypervisor.libvirt.models.vm import (
     VirtualMachine,
     VMCreateRequest,
-    VmUpdateRequest, HostForward,
+    VmUpdateRequest,
+    HostForward,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -553,12 +554,18 @@ class VmManager(LibvirtClient):
         if config.qemu_commandline:
             net_info = self.get_all_hostfwd_and_net_ids()
             all_net_ids = {current_net_info[0] for current_net_info in net_info}
-            all_ip_and_port = {(current_net_info[1].host_ip, current_net_info[1].host_port) for current_net_info in net_info}
+            all_ip_and_port = {
+                (current_net_info[1].host_ip, current_net_info[1].host_port)
+                for current_net_info in net_info
+            }
 
             if config.qemu_commandline.net_id in all_net_ids:
                 config.qemu_commandline.net_id = self.generate_new_net_id
 
-            if (config.qemu_commandline.hostfwd.host_ip, config.qemu_commandline.hostfwd.host_port) in all_ip_and_port:
+            if (
+                config.qemu_commandline.hostfwd.host_ip,
+                config.qemu_commandline.hostfwd.host_port,
+            ) in all_ip_and_port:
                 config.qemu_commandline.host_port = self.generate_new_net_id
 
             cmd_parts.append(config.qemu_commandline.qemu_commandline_string)
@@ -1333,13 +1340,11 @@ class VmManager(LibvirtClient):
 
         patterns = (
             # Стандартный формат: hostfwd=tcp::2222-:22
-            r'hostfwd=(?P<protocol>tcp|udp)::(?P<host_port>\d+)-(?::(?P<host_ip>[^:]+):)?:(?P<guest_port>\d+)',
-
+            r"hostfwd=(?P<protocol>tcp|udp)::(?P<host_port>\d+)-(?::(?P<host_ip>[^:]+):)?:(?P<guest_port>\d+)",
             # С указанием IP хоста: hostfwd=tcp:192.168.1.1:2222-:22
-            r'hostfwd=(?P<protocol>tcp|udp):(?P<host_ip>[^:]+):(?P<host_port>\d+)-:(?P<guest_port>\d+)',
-
+            r"hostfwd=(?P<protocol>tcp|udp):(?P<host_ip>[^:]+):(?P<host_port>\d+)-:(?P<guest_port>\d+)",
             # Без протокола (редко): hostfwd=:2222-:22
-            r'hostfwd=:(?P<host_port>\d+)-:(?P<guest_port>\d+)'
+            r"hostfwd=:(?P<host_port>\d+)-:(?P<guest_port>\d+)",
         )
 
         for pattern in patterns:
@@ -1359,23 +1364,28 @@ class VmManager(LibvirtClient):
     def generate_new_net_id(self):
         return f"net{random.randint(100_000_000, 999_999_999)}"
 
-
-
-
-    def get_all_hostfwd_and_net_ids(self) -> list[tuple[str, HostForward] | tuple[None, None]]:
+    def get_all_hostfwd_and_net_ids(
+        self,
+    ) -> list[tuple[str, HostForward] | tuple[None, None]]:
         hostfwd_and_net_ids_list = []
 
-        all_domains = self.conn.listAllDomains(libvirt.VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                                          libvirt.VIR_CONNECT_LIST_DOMAINS_INACTIVE)
+        all_domains = self.conn.listAllDomains(
+            libvirt.VIR_CONNECT_LIST_DOMAINS_ACTIVE
+            | libvirt.VIR_CONNECT_LIST_DOMAINS_INACTIVE
+        )
 
         for current_domain in all_domains:
             hostfwd_and_net_id = self.get_hostfwd_and_net_id(current_domain)
             if hostfwd_and_net_id[0] is not None or hostfwd_and_net_id[1] is not None:
-                hostfwd_and_net_ids_list.append(self.get_hostfwd_and_net_id(current_domain))
+                hostfwd_and_net_ids_list.append(
+                    self.get_hostfwd_and_net_id(current_domain)
+                )
 
         return hostfwd_and_net_ids_list
 
-    def get_hostfwd_and_net_id(self, vm_name: str | libvirt.virDomain) -> tuple[str, HostForward] | tuple[None, None]:
+    def get_hostfwd_and_net_id(
+        self, vm_name: str | libvirt.virDomain
+    ) -> tuple[str, HostForward] | tuple[None, None]:
         if isinstance(vm_name, libvirt.virDomain):
             domain = vm_name
         elif isinstance(vm_name, str):

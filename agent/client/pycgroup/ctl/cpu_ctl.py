@@ -313,7 +313,7 @@ class CPUController:
             available = max(0.0, limit - usage)
             return round(available, 3)
 
-        except Exception as e:
+        except Exception:
             return None
 
     def get_cpu_usage_percent(self, cgroup_pool: str) -> float | str:

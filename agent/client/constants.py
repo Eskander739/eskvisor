@@ -1,7 +1,5 @@
 from enum import Enum
-from tarfile import DIRTYPE
 
-from geopy.format import DIRECTIONS
 
 DIRECTORIES_FOR_SEARCH = [
     # Основные

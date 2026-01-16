@@ -13,7 +13,7 @@ class LogicVolume(BaseModel):
     is_snapshot: str  # origin Исходный LV (для снапшотов), если пусто - не снапшот
     data_percent: str  # Процент использования данных
     metadata_percent: str  # Процент использования метаданных
-    move_physical_volume: str  #  Physical Volume для перемещения данных, если пусто - данные не перемещаются
+    move_physical_volume: str  # Physical Volume для перемещения данных, если пусто - данные не перемещаются
     mirror_logic: str  # Логическое устройство для зеркалирования, если пусто - не зеркалированный LV
     copy_percent: (
         str  # Процент копирования(для зеркал, RAID), если пусто - не копируется
