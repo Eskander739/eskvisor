@@ -24,7 +24,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
     """
 
     target_dev_list = ["vdb", "vdd"]
-    vm_config_names, request_id = multi_create_stopped_vm
+    vm_config_names = multi_create_stopped_vm
     disk_path = None
     vm_name_to_detach = None
     target_dev_to_detach = None
@@ -57,7 +57,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
 
         for index, disk_attach in enumerate(disk_attach_list):
             attach_disk_result = storage_session.attach_disk(
-                disk_attach, request_id=request_id
+                disk_attach
             )
             if index == 0:
 
@@ -72,8 +72,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
                 )
                 current_vm_disk = storage_session.get_disk_info_by_target_dev(
                     vm_name=disk_attach.vm_name,
-                    target_dev=disk_attach.target_dev,
-                    request_id=request_id,
+                    target_dev=disk_attach.target_dev
                 )
 
                 assert (
@@ -99,8 +98,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
                 )
                 current_vm_disk = storage_session.get_disk_info_by_target_dev(
                     vm_name=disk_attach.vm_name,
-                    target_dev=disk_attach.target_dev,
-                    request_id=request_id,
+                    target_dev=disk_attach.target_dev
                 )
 
                 assert (

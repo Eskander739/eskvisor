@@ -24,7 +24,6 @@ def test_vm_05_change_resource(vm_session):
 
     """
     random_name = None
-    request_id = str(uuid.uuid4())
 
     def kb_to_mb(kb):
         return kb / 1024
@@ -50,16 +49,16 @@ def test_vm_05_change_resource(vm_session):
         assert vm_info.vcpus == vm_template.vcpus
         # ____________________________________Изменение ресурсов ВМ_______________
         edit_vm_info = vm_session.edit_vm(
-            random_name, VmUpdateRequest(vcpus=3), request_id
+            random_name, VmUpdateRequest(vcpus=3)
         )
         assert edit_vm_info.message == CommandMessagesEnum.vm_edit_success.value
         assert edit_vm_info.code == CommandMessagesEnum.vm_edit_success.name
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
-        vm_get_info = vm_session.get_vm_by_name(random_name, request_id)
+        vm_get_info = vm_session.get_vm_by_name(random_name)
         assert vm_get_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name
         assert wait_while_not(
-            lambda: vm_session.get_vm_by_name(random_name, request_id).vm_info.vcpus
+            lambda: vm_session.get_vm_by_name(random_name).vm_info.vcpus
             == 3,
             timeout=30,
         )
@@ -68,7 +67,7 @@ def test_vm_05_change_resource(vm_session):
         # ____________________________________Удаление ВМ(постусловие)____________
         if random_name is not None:
             delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name, request_id=request_id
+                name=random_name
             )
             assert (
                 delete_vm_info.message

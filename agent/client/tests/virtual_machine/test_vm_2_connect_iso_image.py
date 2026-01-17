@@ -35,7 +35,6 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
     Открыть графическую или текстовую консоль ВМ, убедиться, что можно взаимодействовать с гостевой ОС.
     """
     random_name = None
-    request_id = str(uuid.uuid4())
     get_state = vm_session.get_vm_state_by_name
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     virsh_console = virsh_console_session(random_name)
@@ -71,7 +70,7 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
         # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)_
         if random_name is not None:
             delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name, request_id=request_id, delete_disks=False
+                name=random_name, delete_disks=False
             )
             assert (
                 delete_vm_info.message
@@ -81,5 +80,5 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
             assert delete_vm_info.success is True
-            delete_disk = storage_session.delete_disk(path=vm_template.disks[1].path)
+            delete_disk = storage_session.delete_disk(disk_path=vm_template.disks[1].path)
             assert delete_disk is True

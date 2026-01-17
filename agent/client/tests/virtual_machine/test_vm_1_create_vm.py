@@ -19,7 +19,6 @@ def test_vm_01_create_vm(vm_session, vm_state):
     Указать имя, ресурсы (CPU, RAM, диск), сеть. Проверить, что ВМ появляется в списке в состоянии «Выключена».
     """
     random_name = None
-    request_id = str(uuid.uuid4())
 
     def kb_to_mb(kb):
         return kb / 1024
@@ -49,7 +48,7 @@ def test_vm_01_create_vm(vm_session, vm_state):
         # ____________________________________Удаление ВМ(постусловие)____________
         if random_name is not None:
             delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name, request_id=request_id
+                name=random_name
             )
             assert (
                 delete_vm_info.message

@@ -48,7 +48,7 @@ class SnapshotManager(LibvirtClient):
         self.logger = DefaultLogger("SnapshotManager")
 
     def snapshots_by_vm_name(
-        self, vm_name: str, request_id: str = None
+        self, vm_name: str
     ) -> SnapshotMessage:
         """
         Получить все снапшоты виртуальной машины по имени
@@ -56,8 +56,6 @@ class SnapshotManager(LibvirtClient):
         Returns:
             SnapshotMessage с информацией о снапшотах в rp_info
         """
-        if request_id is None:
-            request_id = str(uuid.uuid4())
 
         try:
             virtual_machine = self.conn.lookupByName(vm_name)
@@ -156,7 +154,6 @@ class SnapshotManager(LibvirtClient):
 
             if snapshots_list:
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=True,
                     message=CommandMessagesEnum.snapshot_list_found.value,
                     code=CommandMessagesEnum.snapshot_list_found.name,
@@ -169,7 +166,6 @@ class SnapshotManager(LibvirtClient):
                 )
             else:
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=False,
                     message=CommandMessagesEnum.snapshot_list_error.value,
                     code=CommandMessagesEnum.snapshot_list_error.name,
@@ -181,7 +177,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения списка снапшотов: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_list_error.value,
                 code=CommandMessagesEnum.snapshot_list_error.name,
@@ -189,7 +184,7 @@ class SnapshotManager(LibvirtClient):
             )
 
     def snapshot_by_name(
-        self, vm_name: str, snapshot_name: str, request_id: str
+        self, vm_name: str, snapshot_name: str
     ) -> SnapshotMessage:
         """
         Получить снапшот по имени виртуальной машины и имени снапшота
@@ -256,7 +251,6 @@ class SnapshotManager(LibvirtClient):
                 vm_config=vm_config,
             )
             return SnapshotMessage(
-                request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.vm_successfully_found.value,
                 code=CommandMessagesEnum.snapshot_found.name,
@@ -266,7 +260,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_not_found.value,
                 code=CommandMessagesEnum.snapshot_not_found.name,
@@ -274,7 +267,7 @@ class SnapshotManager(LibvirtClient):
             )
 
     def create_snapshot(
-        self, request: SnapshotCreateRequest, request_id: str
+        self, request: SnapshotCreateRequest
     ) -> SnapshotMessage:
         """
         Создать снапшот виртуальной машины
@@ -286,7 +279,6 @@ class SnapshotManager(LibvirtClient):
             # Проверяем наличие свободного места
             if not self._check_disk_space(request.vm_name):
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=False,
                     message=CommandMessagesEnum.snapshot_insufficient_space.value,
                     code=CommandMessagesEnum.snapshot_insufficient_space.name,
@@ -327,7 +319,7 @@ class SnapshotManager(LibvirtClient):
                     f"Снапшот '{request.snapshot_name}' успешно создан для VM '{request.vm_name}'"
                 )
                 current_shanpshot = self.get_current_snapshot(
-                    request.vm_name, request_id
+                    request.vm_name
                 )
                 current_shanpshot.message = (
                     CommandMessagesEnum.snapshot_successfully_created.value
@@ -338,7 +330,6 @@ class SnapshotManager(LibvirtClient):
                 return current_shanpshot
 
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_create_error.value,
                 code=CommandMessagesEnum.snapshot_create_error.name,
@@ -348,7 +339,6 @@ class SnapshotManager(LibvirtClient):
             error_msg = str(e)
             if "No space left" in error_msg or "disk full" in error_msg.lower():
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=False,
                     message=CommandMessagesEnum.snapshot_insufficient_space.value,
                     code=CommandMessagesEnum.snapshot_insufficient_space.name,
@@ -357,7 +347,6 @@ class SnapshotManager(LibvirtClient):
 
             self.logger.error(f"Ошибка создания снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_create_error.value,
                 code=CommandMessagesEnum.snapshot_create_error.name,
@@ -368,7 +357,6 @@ class SnapshotManager(LibvirtClient):
         self,
         vm_name: str,
         snapshot_name: str,
-        request_id: str,
         remove_children: bool = False,
     ) -> SnapshotMessage:
         """
@@ -394,7 +382,6 @@ class SnapshotManager(LibvirtClient):
                 f"Снапшот '{snapshot_name}' успешно удален для VM '{vm_name}'"
             )
             return SnapshotMessage(
-                request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.snapshot_successfully_deleted.value,
                 code=CommandMessagesEnum.snapshot_successfully_deleted.name,
@@ -408,7 +395,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_delete_error.value,
                 code=CommandMessagesEnum.snapshot_delete_error.name,
@@ -418,7 +404,6 @@ class SnapshotManager(LibvirtClient):
     def delete_all_snapshots_by_vm_name(
         self,
         vm_name: str,
-        request_id: str,
     ) -> SnapshotMessage:
         """
         Удалить снапшотов виртуальной машины
@@ -435,7 +420,6 @@ class SnapshotManager(LibvirtClient):
                     f"Снапшот '{current_snapshot.getName()}' успешно удален для VM '{vm_name}'"
                 )
             return SnapshotMessage(
-                request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.snapshots_successfully_deleted.value,
                 code=CommandMessagesEnum.snapshots_successfully_deleted.name,
@@ -444,7 +428,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_delete_error.value,
                 code=CommandMessagesEnum.snapshot_delete_error.name,
@@ -452,7 +435,7 @@ class SnapshotManager(LibvirtClient):
             )
 
     def revert_to_snapshot(
-        self, vm_name: str, snapshot_name: str, request_id: str
+        self, vm_name: str, snapshot_name: str
     ) -> SnapshotMessage:
         """
         Восстановить виртуальную машину до состояния снапшота
@@ -471,7 +454,6 @@ class SnapshotManager(LibvirtClient):
             )
 
             return SnapshotMessage(
-                request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.snapshot_revert_success.value,
                 code=CommandMessagesEnum.snapshot_revert_success.name,
@@ -480,7 +462,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка восстановления до снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_revert_error.value,
                 code=CommandMessagesEnum.snapshot_revert_error.name,
@@ -488,7 +469,7 @@ class SnapshotManager(LibvirtClient):
             )
 
     def update_snapshot_description(
-        self, vm_name: str, snapshot_name: str, new_description: str, request_id: str
+        self, vm_name: str, snapshot_name: str, new_description: str
     ) -> SnapshotMessage:
         """
         Обновить описание снапшота
@@ -528,7 +509,7 @@ class SnapshotManager(LibvirtClient):
                     f"Описание снапшота '{snapshot_name}' успешно обновлено"
                 )
                 current_snapshot = self.snapshot_by_name(
-                    vm_name, snapshot_name, request_id
+                    vm_name, snapshot_name
                 )
                 current_snapshot.message = (
                     CommandMessagesEnum.snapshot_update_success.value
@@ -537,7 +518,6 @@ class SnapshotManager(LibvirtClient):
                 return current_snapshot
 
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_update_error.value,
                 code=CommandMessagesEnum.snapshot_update_error.name,
@@ -546,7 +526,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка обновления описания снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_update_error.value,
                 code=CommandMessagesEnum.snapshot_update_error.name,
@@ -555,7 +534,6 @@ class SnapshotManager(LibvirtClient):
         except Exception as e:
             self.logger.error(f"Ошибка обработки XML: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_update_error.value,
                 code=CommandMessagesEnum.snapshot_update_error.name,
@@ -588,7 +566,7 @@ class SnapshotManager(LibvirtClient):
             self.logger.debug(f"Не удалось извлечь описание снапшота: {e}")
             return None
 
-    def get_current_snapshot(self, vm_name: str, request_id: str) -> SnapshotMessage:
+    def get_current_snapshot(self, vm_name: str) -> SnapshotMessage:
         """
         Получить текущий активный снапшот виртуальной машины
 
@@ -659,7 +637,6 @@ class SnapshotManager(LibvirtClient):
                     vm_config=vm_config,
                 )
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=True,
                     message=CommandMessagesEnum.snapshot_found.value,
                     code=CommandMessagesEnum.snapshot_found.name,
@@ -667,7 +644,6 @@ class SnapshotManager(LibvirtClient):
                 )
 
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_not_found.value,
                 code=CommandMessagesEnum.snapshot_not_found.name,
@@ -676,7 +652,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения текущего снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_not_found.value,
                 code=CommandMessagesEnum.snapshot_not_found.name,
@@ -871,7 +846,7 @@ class SnapshotManager(LibvirtClient):
             }
 
     def clone_vm_from_snapshot(
-        self, request: SnapshotCloneRequest, request_id: str
+        self, request: SnapshotCloneRequest
     ) -> SnapshotMessage:
         """
         Клонировать ВМ из снапшота
@@ -929,7 +904,6 @@ class SnapshotManager(LibvirtClient):
                                 f"Ошибка копирования диска {old_path}: {e}"
                             )
                             return SnapshotMessage(
-                                request_id=request_id,
                                 success=False,
                                 message=CommandMessagesEnum.snapshot_clone_error.value,
                                 code=CommandMessagesEnum.snapshot_clone_error.name,
@@ -952,7 +926,6 @@ class SnapshotManager(LibvirtClient):
                 # if source_state == libvirt.VIR_DOMAIN_RUNNING:
                 #     new_domain.create()
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=True,
                     message=CommandMessagesEnum.snapshot_clone_success.value,
                     code=CommandMessagesEnum.snapshot_clone_success.name,
@@ -966,7 +939,6 @@ class SnapshotManager(LibvirtClient):
                 )
 
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_clone_error.value,
                 code=CommandMessagesEnum.snapshot_clone_error.name,
@@ -975,7 +947,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка клонирования ВМ из снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_clone_error.value,
                 code=CommandMessagesEnum.snapshot_clone_error.name,
@@ -984,7 +955,6 @@ class SnapshotManager(LibvirtClient):
         except Exception as e:
             self.logger.error(f"Неожиданная ошибка при клонировании ВМ: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_clone_error.value,
                 code=CommandMessagesEnum.snapshot_clone_error.name,
@@ -995,7 +965,6 @@ class SnapshotManager(LibvirtClient):
         self,
         vm_name: str,
         snapshot_names: list[str],
-        request_id: str,
         descriptions: list[str] = None,
     ) -> SnapshotMessage:
         """
@@ -1010,7 +979,6 @@ class SnapshotManager(LibvirtClient):
 
         if len(snapshot_names) != len(descriptions):
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message="Number of snapshot names and descriptions does not match",
                 code="SNAPSHOT_CHAIN_INVALID_PARAMS",
@@ -1039,7 +1007,7 @@ class SnapshotManager(LibvirtClient):
 
                     if snapshot:
                         created_snapshot = self.snapshot_by_name(
-                            vm_name, snapshot_name, request_id
+                            vm_name, snapshot_name
                         )
                         created_snapshots.append(created_snapshot.snapshot_info)
                         self.logger.info(
@@ -1055,7 +1023,6 @@ class SnapshotManager(LibvirtClient):
 
             if errors:
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=False,
                     message=CommandMessagesEnum.snapshot_create_error.value,
                     code=CommandMessagesEnum.snapshot_create_error.name,
@@ -1070,7 +1037,6 @@ class SnapshotManager(LibvirtClient):
                 )
 
             return SnapshotMessage(
-                request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.snapshot_successfully_created.value,
                 code=CommandMessagesEnum.snapshot_successfully_created.name,
@@ -1085,7 +1051,6 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка создания цепочки снапшотов: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_create_error.value,
                 code=CommandMessagesEnum.snapshot_create_error.name,
@@ -1093,7 +1058,7 @@ class SnapshotManager(LibvirtClient):
             )
 
     def create_multiple_vm_snapshots(
-        self, request: MultipleSnapshotsRequest, request_id: str
+        self, request: MultipleSnapshotsRequest
     ) -> SnapshotMessage:
         """
         Создать снапшоты для нескольких ВМ одновременно
@@ -1107,7 +1072,7 @@ class SnapshotManager(LibvirtClient):
 
         for snapshot_request in request.snapshots:
             try:
-                result = self.create_snapshot(snapshot_request, request_id)
+                result = self.create_snapshot(snapshot_request)
                 results.append(result)
 
                 if not result.success:
@@ -1120,7 +1085,6 @@ class SnapshotManager(LibvirtClient):
 
         if errors:
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_create_error.value,
                 code=CommandMessagesEnum.snapshot_create_error.name,
@@ -1134,7 +1098,6 @@ class SnapshotManager(LibvirtClient):
             )
 
         return SnapshotMessage(
-            request_id=request_id,
             success=True,
             message=CommandMessagesEnum.snapshot_successfully_created.value,
             code=CommandMessagesEnum.snapshot_successfully_created.name,
@@ -1144,7 +1107,7 @@ class SnapshotManager(LibvirtClient):
         )
 
     def revert_to_parent_snapshot(
-        self, vm_name: str, snapshot_name: str, request_id: str
+        self, vm_name: str, snapshot_name: str
     ) -> SnapshotMessage:
         """
         Восстановить ВМ до родительского снапшота (откат к более раннему состоянию)
@@ -1173,7 +1136,6 @@ class SnapshotManager(LibvirtClient):
                     )
 
                     return SnapshotMessage(
-                        request_id=request_id,
                         success=True,
                         message=CommandMessagesEnum.snapshot_revert_success.value,
                         code=CommandMessagesEnum.snapshot_revert_success.name,
@@ -1187,7 +1149,6 @@ class SnapshotManager(LibvirtClient):
                     )
                 else:
                     return SnapshotMessage(
-                        request_id=request_id,
                         success=False,
                         message=CommandMessagesEnum.snapshot_not_found.value,
                         code=CommandMessagesEnum.snapshot_not_found.name,
@@ -1196,7 +1157,6 @@ class SnapshotManager(LibvirtClient):
 
             except self.libvirtError as e:
                 return SnapshotMessage(
-                    request_id=request_id,
                     success=False,
                     message=CommandMessagesEnum.snapshot_revert_error.value,
                     code=CommandMessagesEnum.snapshot_revert_error.name,
@@ -1206,14 +1166,13 @@ class SnapshotManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка восстановления до родительского снапшота: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_revert_error.value,
                 code=CommandMessagesEnum.snapshot_revert_error.name,
                 note=str(e),
             )
 
-    def get_snapshot_chain(self, vm_name: str, request_id: str) -> SnapshotMessage:
+    def get_snapshot_chain(self, vm_name: str) -> SnapshotMessage:
         """
         Получить цепочку снапшотов ВМ с детальной информацией
 
@@ -1222,7 +1181,7 @@ class SnapshotManager(LibvirtClient):
         """
         try:
             # Получаем все снапшоты ВМ
-            snapshots_msg = self.snapshots_by_vm_name(vm_name, request_id)
+            snapshots_msg = self.snapshots_by_vm_name(vm_name)
 
             if snapshots_msg.message == CommandMessagesEnum.snapshot_list_error.value:
                 return snapshots_msg
@@ -1242,7 +1201,6 @@ class SnapshotManager(LibvirtClient):
                 chains.append(chain)
 
             return SnapshotMessage(
-                request_id=request_id,
                 success=True,
                 message=CommandMessagesEnum.snapshot_found.value,
                 code=CommandMessagesEnum.snapshot_found.name,
@@ -1259,7 +1217,6 @@ class SnapshotManager(LibvirtClient):
         except Exception as e:
             self.logger.error(f"Ошибка получения цепочки снапшотов: {e}")
             return SnapshotMessage(
-                request_id=request_id,
                 success=False,
                 message=CommandMessagesEnum.snapshot_not_found.value,
                 code=CommandMessagesEnum.snapshot_not_found.name,

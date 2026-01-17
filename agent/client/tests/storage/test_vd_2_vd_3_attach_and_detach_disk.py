@@ -29,7 +29,7 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
     Убедиться, что ВМ видит диск.
     """
 
-    vm_name, request_id = create_stopped_vm
+    vm_name = create_stopped_vm
     target_dev = "vdb"
     disk_path = None
     try:
@@ -62,10 +62,10 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         )
 
         # ____________________________________Подключение диска___________________
-        storage_session.attach_disk(disk_attach, request_id=request_id)
+        storage_session.attach_disk(disk_attach)
 
         vm_disk = storage_session.get_disk_info_by_target_dev(
-            vm_name=vm_name, target_dev=target_dev, request_id=request_id
+            vm_name=vm_name, target_dev=target_dev
         )
         vm_disk = vm_disk.disk_info
 

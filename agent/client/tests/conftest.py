@@ -3,7 +3,6 @@ import os
 import random
 import sys
 import time
-import uuid
 
 import pytest
 from dotenv import load_dotenv
@@ -31,9 +30,9 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VMCreateRequest,
     NetQemuCommandline,
 )
-from agent.client.volumes.group import VolumeGroupManager
-from agent.client.volumes.logical import LogicalVolumeManager
-from agent.client.volumes.physical import PhysicalVolumeManager
+from agent.client.lvm.group import VolumeGroupManager
+from agent.client.lvm.logical import LogicalVolumeManager
+from agent.client.lvm.physical import PhysicalVolumeManager
 from agent.client.stg.nfs import NFSStorage
 from agent.client.tools import wait_while_not
 
@@ -75,8 +74,8 @@ def volume_session():
 def create_nfs_storage_session():
     cli = CLIControl()
     nfs_stg = NFSStorage()
-    nfs_path = f"/srv/nfs/share_{random.randint(100000, 999999)}/"
-    nfs_mount_path = f"/mnt/nfs_{random.randint(100000, 999999)}/"
+    nfs_path = f"/srv/nfs/share_{random.randint(100000, 999999)}"
+    nfs_mount_path = f"/mnt/nfs_{random.randint(100000, 999999)}"
 
     # Создать директории
     nfs_share_mkdir = ["mkdir", "-p", nfs_path]
@@ -107,12 +106,28 @@ def create_nfs_storage_session():
     nfs_local_rmdir = ["rmdir", nfs_mount_path]
     cli.execute(nfs_local_rmdir)
 
+@pytest.fixture(scope="session", autouse=True)
+def delete_all_network_info():
+    cli = CLIControl()
+    yield
+    with NetworkManager() as nm:
+        for network in nm.list_all_networks():
+            if network.name != "default":
+                nm.delete_network(network.name, force=True)
+
+    test_bridge = "virbr-test-ntt"
+    cmd_arg = "ip link show | grep virbr"
+    result = cli.execute(cmd_arg, shell=True, is_text=True)
+    if test_bridge in result:
+        cmd_args_delete_bridge = ["ip", "link", "delete", "virbr-test-ntt"]
+        cli.execute(cmd_args_delete_bridge)
+
+
 
 @pytest.fixture(scope="session")
 def create_stopped_vm():
     with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
-        request_id = str(uuid.uuid4())
         vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()])
         vm_config.name = random_name
         vm_manager.create_vm(vm_config)
@@ -122,15 +137,14 @@ def create_stopped_vm():
             timeout=120,
         )
 
-        yield random_name, request_id
-        vm_manager.delete_vm_with_force(vm_config.name, request_id)
+        yield random_name
+        vm_manager.delete_vm_with_force(vm_config.name)
 
 
 @pytest.fixture(scope="function")
 def create_stopped_vm_func():
     with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
-        request_id = str(uuid.uuid4())
         vm_config = VMCreateRequest(name=random_name, disks=[DiskCreate()])
         vm_config.name = random_name
         vm_manager.create_vm(vm_config)
@@ -140,15 +154,14 @@ def create_stopped_vm_func():
             timeout=120,
         )
 
-        yield random_name, request_id
-        vm_manager.delete_vm_with_force(vm_config.name, request_id)
+        yield random_name
+        vm_manager.delete_vm_with_force(vm_config.name)
 
 
 @pytest.fixture(scope="session")
 def create_running_vm_session():
     with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
-        request_id = str(uuid.uuid4())
         vm_config = VMCreateRequest(
             name=random_name, disks=[DiskCreate()], autostart_vm=True
         )
@@ -160,15 +173,14 @@ def create_running_vm_session():
             timeout=120,
         )
 
-        yield vm_info.vm_info, request_id
-        vm_manager.delete_vm_with_force(vm_config.name, request_id)
+        yield vm_info.vm_info
+        vm_manager.delete_vm_with_force(vm_config.name)
 
 
 @pytest.fixture(scope="session")
 def create_running_vm_session_with_os():
     with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
-        request_id = str(uuid.uuid4())
         vm_template = VMCreateRequest(
             name=random_name,
             autostart_vm=True,
@@ -185,15 +197,14 @@ def create_running_vm_session_with_os():
             timeout=120,
         )
 
-        yield vm_info.vm_info, request_id
-        vm_manager.delete_vm_with_force(vm_info.name, request_id)
+        yield vm_info.vm_info
+        vm_manager.delete_vm_with_force(vm_info.name)
 
 
 @pytest.fixture(scope="function")
 def create_running_vm_func():
     with VmManager() as vm_manager:
         random_name = f"TEST-VM_{random.randint(10000, 99999)}"
-        request_id = str(uuid.uuid4())
         vm_config = VMCreateRequest(
             name=random_name, disks=[DiskCreate()], autostart_vm=True
         )
@@ -205,15 +216,14 @@ def create_running_vm_func():
             timeout=120,
         )
 
-        yield vm_info.vm_info, request_id
-        vm_manager.delete_vm_with_force(vm_config.name, request_id)
+        yield vm_info.vm_info
+        vm_manager.delete_vm_with_force(vm_config.name)
 
 
 @pytest.fixture(scope="session")
 def multi_create_stopped_vm():
     with VmManager() as vm_manager:
         vm_config_names = []
-        request_id = str(uuid.uuid4())
         for _ in range(2):
             current_vm_name = f"TEST-VM_{random.randint(10000, 99999)}"
             new_disk_name = f"disk-{str(random.randint(100000, 999999))}"
@@ -228,10 +238,10 @@ def multi_create_stopped_vm():
                 timeout=120,
             )
             vm_config_names.append(current_vm_name)
-        yield vm_config_names, request_id
+        yield vm_config_names
 
         for vm_config_name in vm_config_names:
-            vm_manager.delete_vm_with_force(vm_config_name, request_id)
+            vm_manager.delete_vm_with_force(vm_config_name)
 
 
 @pytest.fixture(scope="session")

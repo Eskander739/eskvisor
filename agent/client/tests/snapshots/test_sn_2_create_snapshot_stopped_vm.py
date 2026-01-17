@@ -17,24 +17,24 @@ def test_sn_02_create_snapshot_stopped_vm(
 
     Создать снапшот при выключенной ВМ. Убедиться, что снапшот сохраняет состояние дисков и конфигурации.
     """
-    vm_name, request_id = create_stopped_vm_func
+    vm_name = create_stopped_vm_func
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name = "snapshot-" + vm_name
     snapshot_deleted = False
     try:
         # _____________________________Получение информации о ВМ__________________
-        vm_info = vm_session.get_vm_by_name(vm_name, request_id)
+        vm_info = vm_session.get_vm_by_name(vm_name)
         assert vm_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_info.code == CommandMessagesEnum.vm_successfully_found.name
         # _____________________________Проверка отсутствия снапшота_______________
-        get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
+        get_snapshot_info = snapshot_session.get_current_snapshot(vm_name)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # ____________________________Создание снапшота остановленной ВМ_____________
         vm_template = SnapshotCreateRequest(
             vm_name=vm_name, snapshot_name=snapshot_name, description=description
         )
-        create_vm_info = snapshot_session.create_snapshot(vm_template, request_id)
+        create_vm_info = snapshot_session.create_snapshot(vm_template)
         assert (
             create_vm_info.message
             == CommandMessagesEnum.snapshot_successfully_created.value
@@ -60,7 +60,7 @@ def test_sn_02_create_snapshot_stopped_vm(
         assert vm_config.vcpus == vm_info.vm_info.vcpus
 
         # _____________________________Проверка конфигурации дисков_______________
-        vm_disk_info = storage_session.get_disks_by_vm(vm_name, request_id)
+        vm_disk_info = storage_session.get_disks_by_vm(vm_name)
         for current_disk, snapshot_disk in zip(
             sorted(vm_disk_info), sorted(snapshot_info.disks)
         ):
@@ -74,8 +74,7 @@ def test_sn_02_create_snapshot_stopped_vm(
             delete_snapshot_info = snapshot_session.delete_snapshot(
                 vm_name=vm_name,
                 snapshot_name=snapshot_name,
-                remove_children=True,
-                request_id=request_id,
+                remove_children=True
             )
             assert (
                 delete_snapshot_info.message

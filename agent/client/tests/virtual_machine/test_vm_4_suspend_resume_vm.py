@@ -18,7 +18,6 @@ def test_vm_04_suspend_resume_vm(vm_session):
     Приостановить работающую ВМ, затем возобновить. Убедиться, что ВМ продолжает работу с того же места.
     """
     random_name = None
-    request_id = str(uuid.uuid4())
     get_state = vm_session.get_vm_state_by_name
     try:
         # ____________________________________Создание ВМ_________________________
@@ -33,7 +32,7 @@ def test_vm_04_suspend_resume_vm(vm_session):
         assert wait_while_not(lambda: get_state(random_name) == VMState.SHUTOFF.value)
 
         # ____________________________________Запуск ВМ___________________________
-        start_vm_info = vm_session.start_vm(random_name, request_id)
+        start_vm_info = vm_session.start_vm(random_name)
         assert (
             start_vm_info.message == CommandMessagesEnum.vm_successfully_started.value
         )
@@ -41,13 +40,13 @@ def test_vm_04_suspend_resume_vm(vm_session):
 
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         # ____________________________________Остановка ВМ________________________
-        stop_vm_info = vm_session.suspend_vm(random_name, request_id)
+        stop_vm_info = vm_session.suspend_vm(random_name)
         assert stop_vm_info.message == CommandMessagesEnum.vm_successfully_stopped.value
         assert stop_vm_info.code == CommandMessagesEnum.vm_successfully_stopped.name
 
         assert wait_while_not(lambda: get_state(random_name) == VMState.PAUSED.value)
         # ____________________________________Возобновление ВМ____________________
-        resume_vm_info = vm_session.resume_vm(random_name, request_id)
+        resume_vm_info = vm_session.resume_vm(random_name)
         assert (
             resume_vm_info.message == CommandMessagesEnum.vm_successfully_resumed.value
         )
@@ -59,7 +58,7 @@ def test_vm_04_suspend_resume_vm(vm_session):
         # ____________________________________Удаление ВМ(постусловие)____________
         if random_name is not None:
             delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name, request_id=request_id
+                name=random_name
             )
             assert (
                 delete_vm_info.message

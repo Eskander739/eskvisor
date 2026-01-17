@@ -73,7 +73,6 @@ class VMCreateRequest(BaseModel):
 
     # Основные параметры
 
-    request_id: str = str(uuid.uuid4())
     name: str
     install_method: str | None = (
         "import"  # "import", "pxe", "boot", "cdrom", "location"

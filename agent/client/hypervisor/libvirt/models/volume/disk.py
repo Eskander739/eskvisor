@@ -310,7 +310,6 @@ class DiskCreate(BaseModel):
     Модель для создания нового диска
     """
 
-    request_id: str = str(uuid.uuid4())
     name: str = Field(
         f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255
     )

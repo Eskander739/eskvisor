@@ -14,7 +14,6 @@ def test_vn_01_create_isolated_network(network_session):
 
     Указать имя, тип isolated. Проверить, что сеть появляется в списке.
     """
-    request_id = str(uuid.uuid4())
     network_name = None
     try:
         # ____________________________________Создание виртуальной изолированной с
@@ -27,7 +26,7 @@ def test_vn_01_create_isolated_network(network_session):
         )
         network_name = isolated_params.name
         created_network_info = network_session.create_network(
-            isolated_params, request_id
+            isolated_params
         )
         assert (
             created_network_info.message
@@ -46,8 +45,8 @@ def test_vn_01_create_isolated_network(network_session):
     finally:
         # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
-            network_session.delete_network(network_name, request_id, True)
-            v_network = network_session.get_network_info(network_name, request_id)
+            network_session.delete_network(network_name, True)
+            v_network = network_session.get_network_info(network_name)
             assert (
                 v_network.message == CommandMessagesEnum.virtual_network_not_found.value
             )

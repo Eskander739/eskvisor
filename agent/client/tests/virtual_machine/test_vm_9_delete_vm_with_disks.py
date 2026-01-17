@@ -1,5 +1,5 @@
+import os.path
 import random
-import uuid
 
 import pytest
 
@@ -19,7 +19,6 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
     """
     random_name = None
     vm_deleted = False
-    request_id = str(uuid.uuid4())
 
     def kb_to_mb(kb):
         return kb / 1024
@@ -43,14 +42,14 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
         assert vm_info.vcpus == vm_template.vcpus
         assert vm_info.name == vm_template.name
         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
-        disks_by_vm_name = storage_session.get_disks_by_vm(random_name, request_id)
+        disks_by_vm_name = storage_session.get_disks_by_vm(random_name)
         disk_paths = []
         for current_disk in disks_by_vm_name:
             disk_paths.append(current_disk.path)
         assert len(disks_by_vm_name) == 2
         # ____________________________________Удаление ВМ с дисками_______________
         delete_vm_info = vm_session.delete_vm_with_force(
-            name=random_name, request_id=request_id
+            name=random_name
         )
         assert (
             delete_vm_info.message == CommandMessagesEnum.vm_successfully_deleted.value
@@ -58,9 +57,10 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
         assert delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
         assert delete_vm_info.success is True
         for current_disk_path in disk_paths:
-            disks_by_path = storage_session.get_disk_info(
-                path=current_disk_path, request_id=request_id
-            )
+            basename = os.path.basename(current_disk_path)
+            disk_format = vm_session.config.disk_format_by_path(basename)
+            disk_name = basename.replace(disk_format.value, "")
+            disks_by_path = storage_session.get_disk_info(disk_name=disk_name, disk_format=disk_format)
             assert disks_by_path.message == CommandMessagesEnum.disk_not_found.value
             assert disks_by_path.code == CommandMessagesEnum.disk_not_found.name
         vm_deleted = True
@@ -69,7 +69,7 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
         if random_name is not None:
             if not vm_deleted:
                 delete_vm_info = vm_session.delete_vm_with_force(
-                    name=random_name, request_id=request_id
+                    name=random_name
                 )
                 assert (
                     delete_vm_info.message

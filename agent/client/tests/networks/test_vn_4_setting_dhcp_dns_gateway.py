@@ -42,7 +42,6 @@ def test_vn_04_setting_dhcp_dns_gateway(
     Задать диапазон IP, шлюз, DNS. Подключить ВМ, убедиться, что настройки применяются.
     """
 
-    request_id = str(uuid.uuid4())
     get_state = vm_session.get_vm_state_by_name
     vm_created = None
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
@@ -89,14 +88,14 @@ def test_vn_04_setting_dhcp_dns_gateway(
         )
 
         network_name = nat_params.name
-        created_network_info = network_session.create_network(nat_params, request_id)
+        created_network_info = network_session.create_network(nat_params)
         assert (
             created_network_info.message
             == CommandMessagesEnum.virtual_network_successfully_created.value
         )
 
         # _________________________Проверка созданных настроек сети_______________
-        get_network_info = network_session.get_network_info(network_name, request_id)
+        get_network_info = network_session.get_network_info(network_name)
         assert (
             get_network_info.message == CommandMessagesEnum.virtual_network_found.value
         )
@@ -136,7 +135,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
 
         # _________________________Проверка наличия виртуальной сети у ВМ_________
         get_net_vm_info = network_session.get_vm_network_info(
-            vm_template.name, request_id
+            vm_template.name
         )
         assert (
             get_net_vm_info.message
@@ -197,7 +196,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
         # ____________________________________Удаление ВМ(постусловие)____________
         if vm_created:
             delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name, request_id=request_id, delete_disks=False
+                name=random_name, delete_disks=False
             )
             assert (
                 delete_vm_info.message
@@ -207,13 +206,13 @@ def test_vn_04_setting_dhcp_dns_gateway(
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
             assert delete_vm_info.success is True
-            delete_disk = storage_session.delete_disk(path=vm_template.disks[1].path)
+            delete_disk = storage_session.delete_disk(disk_path=vm_template.disks[1].path)
             assert delete_disk is True
 
         # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
-            network_session.delete_network(network_name, request_id, True)
-            v_network = network_session.get_network_info(network_name, request_id)
+            network_session.delete_network(network_name, True)
+            v_network = network_session.get_network_info(network_name)
             assert (
                 v_network.message == CommandMessagesEnum.virtual_network_not_found.value
             )

@@ -149,7 +149,6 @@ class CommandMessagesEnum(Enum):
 
 
 class DefaultMessage(BaseModel):
-    request_id: str
     message: CommandMessagesEnum | str
     code: CommandMessagesEnum | str
 

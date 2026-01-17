@@ -65,7 +65,6 @@ def test_vd_05_convert_disk(storage_session, disk_format, sparse):
         convert_disk_info = storage_session.convert_disk_format(
             source_path=disk_path,
             target_format=disk_format_convert.get(disk_format),
-            request_id=str(uuid.uuid4()),
             sparse=sparse,
         )
         assert (

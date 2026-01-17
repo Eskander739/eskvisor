@@ -19,7 +19,6 @@ def test_vn_02_create_nat_network(network_session):
 
     Создать сеть с NAT и DHCP. Убедиться, что ВМ получают IP-адреса и имеют выход в интернет.
     """
-    request_id = str(uuid.uuid4())
     network_name = None
     try:
         # ____________________________________Создание виртуальной NAT сети_______
@@ -34,7 +33,7 @@ def test_vn_02_create_nat_network(network_session):
             autostart=True,
         )
         network_name = nat_params.name
-        created_network_info = network_session.create_network(nat_params, request_id)
+        created_network_info = network_session.create_network(nat_params)
         assert (
             created_network_info.message
             == CommandMessagesEnum.virtual_network_successfully_created.value
@@ -52,8 +51,8 @@ def test_vn_02_create_nat_network(network_session):
     finally:
         # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
-            network_session.delete_network(network_name, request_id, True)
-            v_network = network_session.get_network_info(network_name, request_id)
+            network_session.delete_network(network_name, True)
+            v_network = network_session.get_network_info(network_name)
             assert (
                 v_network.message == CommandMessagesEnum.virtual_network_not_found.value
             )

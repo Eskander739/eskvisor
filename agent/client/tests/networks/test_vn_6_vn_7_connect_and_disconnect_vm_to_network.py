@@ -39,7 +39,6 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
     Отсоединить ВМ от сети. Проверить, что сетевой интерфейс в ВМ теряет соединение.
     """
 
-    request_id = str(uuid.uuid4())
     get_state = vm_session.get_vm_state_by_name
     vm_created = None
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
@@ -66,7 +65,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         )
 
         network_name = nat_params.name
-        created_network_info = network_session.create_network(nat_params, request_id)
+        created_network_info = network_session.create_network(nat_params)
         assert (
             created_network_info.message
             == CommandMessagesEnum.virtual_network_successfully_created.value
@@ -84,7 +83,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         time.sleep(60)
         # _________________________Проверка наличия виртуальной сети у ВМ_________
         get_net_vm_info = network_session.get_vm_network_info(
-            vm_template.name, request_id
+            vm_template.name
         )
         assert (
             get_net_vm_info.message
@@ -109,7 +108,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         assert network_mac_address in result
         # ____________________________Отключить сетевой интерфейс у ВМ____________
         detach_net_itnerface_info = network_session.detach_vm_network_interface(
-            random_name, network_mac_address, request_id
+            random_name, network_mac_address
         )
         assert (
             detach_net_itnerface_info.message
@@ -124,7 +123,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         assert network_mac_address not in result
         # _________________________Проверка отсутствия виртуальной сети у ВМ______
         get_net_vm_info = network_session.get_vm_network_info(
-            vm_template.name, request_id
+            vm_template.name
         )
         assert (
             get_net_vm_info.message
@@ -140,7 +139,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         # ____________________________________Удаление ВМ(постусловие)____________
         if vm_created:
             delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name, request_id=request_id, delete_disks=False
+                name=random_name, delete_disks=False
             )
             assert (
                 delete_vm_info.message
@@ -150,12 +149,12 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
             assert delete_vm_info.success is True
-            delete_disk = storage_session.delete_disk(path=vm_template.disks[1].path)
+            delete_disk = storage_session.delete_disk(disk_path=vm_template.disks[1].path)
             assert delete_disk is True
         # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
-            network_session.delete_network(network_name, request_id, True)
-            v_network = network_session.get_network_info(network_name, request_id)
+            network_session.delete_network(network_name, True)
+            v_network = network_session.get_network_info(network_name)
             assert (
                 v_network.message == CommandMessagesEnum.virtual_network_not_found.value
             )

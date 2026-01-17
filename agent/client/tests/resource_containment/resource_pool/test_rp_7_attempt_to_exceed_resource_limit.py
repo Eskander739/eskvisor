@@ -25,7 +25,7 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
     Попытаться превысить лимит через нагрузку на ВМ – система должна ограничить.
     """
 
-    vm_info, request_id = create_running_vm_session_with_os
+    vm_info = create_running_vm_session_with_os
     virsh_console = virsh_console_session(vm_info.name)
     random_name = None
     rp_deleted = False

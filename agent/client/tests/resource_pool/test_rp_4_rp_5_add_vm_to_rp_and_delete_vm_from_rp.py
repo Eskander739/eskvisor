@@ -23,7 +23,7 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
     Переместить существующую ВМ в пул. Убедиться, что ВМ учитывается в использовании ресурсов пула.
     Убрать ВМ из пула. Проверить, что ресурсы пула освобождаются.
     """
-    vm_info, request_id = create_running_vm_session
+    vm_info = create_running_vm_session
     random_name = None
     rp_deleted = False
     try:

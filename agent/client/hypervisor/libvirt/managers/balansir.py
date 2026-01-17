@@ -8,13 +8,13 @@ from agent.client.cli import CLIControl
 from agent.client.constants import INVALID_LINUX_CHAR
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.pycgroup.pycgroup import PYCGroup
-from agent.client.volumes.logical import (
+from agent.client.lvm.logical import (
     LogicalVolumeManager,
 )
-from agent.client.volumes.physical import (
+from agent.client.lvm.physical import (
     PhysicalVolumeManager,
 )
-from agent.client.volumes.group import (
+from agent.client.lvm.group import (
     VolumeGroupManager,
 )
 from agent.client.hypervisor.libvirt.managers.storage import StorageManager
@@ -81,7 +81,6 @@ class Balansir(LibvirtClient):
         create_config: bool = False,
     ) -> RpMessage:
         self.logger.info("Старт валидации списка ВМ")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
 
         if create_config:
             resource_pool_config = current_rp
@@ -110,7 +109,6 @@ class Balansir(LibvirtClient):
                         )
                         self.logger.info(err_text)
                         return RpMessage(
-                            request_id=internal_request_id,
                             message=CommandMessagesEnum.rp_create_error.value,
                             code=CommandMessagesEnum.rp_create_error.name,
                             success=False,
@@ -123,7 +121,6 @@ class Balansir(LibvirtClient):
                         )
                         self.logger.info(err_text)
                         return RpMessage(
-                            request_id=internal_request_id,
                             message=CommandMessagesEnum.rp_create_error.value,
                             code=CommandMessagesEnum.rp_create_error.name,
                             success=False,
@@ -132,7 +129,6 @@ class Balansir(LibvirtClient):
                 except Exception as e:
                     self.logger.info(f"ВМ {vm_name} не найдена")
                     return RpMessage(
-                        request_id=internal_request_id,
                         message=CommandMessagesEnum.vm_found_error.value,
                         code=CommandMessagesEnum.vm_found_error.name,
                         success=False,
@@ -140,7 +136,6 @@ class Balansir(LibvirtClient):
                     )
             self.logger.info("Список ВМ валиден")
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.vm_list_is_correct.value,
                 code=CommandMessagesEnum.vm_list_is_correct.name,
                 success=True,
@@ -154,7 +149,6 @@ class Balansir(LibvirtClient):
         vm_reservation_list: list[ResourceReservationVM],
         vms: list[str],
     ):
-        internal_request_id = str(uuid.uuid4())
         current_virtual_resource_pool = self.get_virtual_resource_pool_by_name(name)
         if not current_virtual_resource_pool.success:
             return current_virtual_resource_pool
@@ -176,7 +170,6 @@ class Balansir(LibvirtClient):
                 )
             if current_resource_reservation_vm.name not in vms:
                 return RpMessage(
-                    request_id=internal_request_id,
                     message=CommandMessagesEnum.vm_can_not_reserve_resource_when_vm_not_in_virtual_rp.value,
                     code=CommandMessagesEnum.vm_can_not_reserve_resource_when_vm_not_in_virtual_rp.name,
                     success=False,
@@ -186,7 +179,6 @@ class Balansir(LibvirtClient):
                 > virtual_rp_info.cpu_core_limit
             ):
                 return RpMessage(
-                    request_id=internal_request_id,
                     message=CommandMessagesEnum.vm_can_not_reserve_more_cpu_than_available_on_the_virtual_rp.value,
                     code=CommandMessagesEnum.vm_can_not_reserve_more_cpu_than_available_on_the_virtual_rp.name,
                     success=False,
@@ -196,7 +188,6 @@ class Balansir(LibvirtClient):
                 )
             if current_resource_reservation_vm.ram > virtual_rp_info.ram_limit_bytes:
                 return RpMessage(
-                    request_id=internal_request_id,
                     message=CommandMessagesEnum.vm_can_not_reserve_more_ram_than_available_on_the_virtual_rp.value,
                     code=CommandMessagesEnum.vm_can_not_reserve_more_ram_than_available_on_the_virtual_rp.name,
                     success=False,
@@ -207,7 +198,6 @@ class Balansir(LibvirtClient):
 
             if current_vm.memory_bytes > current_resource_reservation_vm.ram:
                 return RpMessage(
-                    request_id=internal_request_id,
                     message=CommandMessagesEnum.vm_can_not_reserve_less_ram_than_use.value,
                     code=CommandMessagesEnum.vm_can_not_reserve_less_ram_than_use.name,
                     success=False,
@@ -217,7 +207,6 @@ class Balansir(LibvirtClient):
                 )
             if current_vm.vcpus > current_resource_reservation_vm.cpu_core_count:
                 return RpMessage(
-                    request_id=internal_request_id,
                     message=CommandMessagesEnum.vm_can_not_reserve_less_cpu_than_use.value,
                     code=CommandMessagesEnum.vm_can_not_reserve_less_cpu_than_use.name,
                     success=False,
@@ -235,7 +224,6 @@ class Balansir(LibvirtClient):
         cpu_weight: int | None,
     ) -> RpMessage | bool:
         self.logger.info("Старт конфигурации CPU")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             self.pycgroup.edit_cgroup_pool(
                 name=rp_name, cpu_core_limit=cpu_core_limit, cpu_weight=cpu_weight
@@ -247,7 +235,6 @@ class Balansir(LibvirtClient):
         except Exception as e:
             self.logger.error(f"Ошибка конфигурации CPU: {e}")
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_cpu_configuration_error.value,
                 code=CommandMessagesEnum.rp_cpu_configuration_error.name,
                 success=False,
@@ -263,7 +250,6 @@ class Balansir(LibvirtClient):
         storage_type: StoragePoolType = StoragePoolType.LOGICAL,
     ) -> RpMessage | bool:
         self.logger.info("Старт конфигурации STORAGE")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
         if create_config:
             if storage_type == StoragePoolType.LOGICAL:
                 result_create_lv = self.logic_volume_manager.create_thin_pool_volume(
@@ -280,7 +266,6 @@ class Balansir(LibvirtClient):
                         f"Не удалось создать LVM пул {rp_name} в VG {self.system_volume_group_name}: {result_create_lv}"
                     )
                     return RpMessage(
-                        request_id=internal_request_id,
                         message=CommandMessagesEnum.virtual_rp_create_logic_volume_error.value,
                         code=CommandMessagesEnum.virtual_rp_create_logic_volume_error.name,
                         success=False,
@@ -298,7 +283,6 @@ class Balansir(LibvirtClient):
         ram_reservation: int | float | None = None,
     ) -> RpMessage | bool:
         self.logger.info("Старт конфигурации RAM")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             # Преобразование байт в килобайты для cgroup
             ram_limit_kb = ram_limit // 1024
@@ -318,7 +302,6 @@ class Balansir(LibvirtClient):
         except Exception as e:
             self.logger.error(f"Ошибка конфигурации RAM: {e}")
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_ram_configuration_error.value,
                 code=CommandMessagesEnum.rp_ram_configuration_error.name,
                 success=False,
@@ -342,7 +325,6 @@ class Balansir(LibvirtClient):
         vms: str | list[str],
         vm_reservation_list: list[ResourceReservationVM] | None = None,
     ) -> RpMessage | bool:
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
         try:
             if isinstance(vms, str):
                 vms = [vms]
@@ -353,7 +335,6 @@ class Balansir(LibvirtClient):
                 self.pycgroup.get_cgroup_pool(rp_name)
             except Exception:
                 return RpMessage(
-                    request_id=internal_request_id,
                     message=CommandMessagesEnum.rp_virtual_not_found.value,
                     code=CommandMessagesEnum.rp_virtual_not_found.name,
                     success=False,
@@ -367,7 +348,6 @@ class Balansir(LibvirtClient):
                     )
                     if vm_on_any_rp:
                         return RpMessage(
-                            request_id=internal_request_id,
                             message=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.value,
                             code=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.name,
                             success=False,
@@ -391,7 +371,6 @@ class Balansir(LibvirtClient):
 
         except Exception as e:
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_create_error.value,
                 code=CommandMessagesEnum.rp_create_error.name,
                 success=False,
@@ -400,14 +379,12 @@ class Balansir(LibvirtClient):
 
     def delete_vm_from_virtual_resource_pool(self, name: str, vn_name: str):
         self.logger.info("Старт удаления ВМ из ресурс пула")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
 
         # Проверка существования пула через cgroup
         try:
             self.pycgroup.get_cgroup_pool(name)
         except Exception:
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_virtual_not_found.value,
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
@@ -415,7 +392,6 @@ class Balansir(LibvirtClient):
         self.pycgroup.delete_vm_from_pool(name, vn_name)
         self.logger.info(f"ВМ '{name}' из ресурс пула успешно удалена")
         return RpMessage(
-            request_id=internal_request_id,
             message=CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.value,
             code=CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name,
             success=True,
@@ -466,7 +442,6 @@ class Balansir(LibvirtClient):
 
     def create_virtual_resource_pool(self, create_rp: ResourcePoolVirtualCreate):
         self.logger.info(f"Создание виртуального ресурс пула: '{create_rp.name}'")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
 
         if isinstance(create_rp.ram_limit_bytes, float):
             raise ValueError("Байты не могут быть числом с плавающей точкой")
@@ -475,7 +450,6 @@ class Balansir(LibvirtClient):
             create_rp.ram_limit_bytes, create_rp.cpu_core_limit
         ):
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_ram_or_cpu_more_than_on_node.value,
                 code=CommandMessagesEnum.rp_ram_or_cpu_more_than_on_node.name,
                 success=False,
@@ -488,7 +462,6 @@ class Balansir(LibvirtClient):
                 f"Виртуальный ресурс пул '{create_rp.name}' уже существует"
             )
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_already_created.value,
                 code=CommandMessagesEnum.rp_already_created.name,
                 success=False,
@@ -505,7 +478,6 @@ class Balansir(LibvirtClient):
                     )
                     if vm_on_any_rp:
                         return RpMessage(
-                            request_id=internal_request_id,
                             message=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.value,
                             code=CommandMessagesEnum.vm_present_on_any_virtual_resource_pool.name,
                             success=False,
@@ -556,7 +528,6 @@ class Balansir(LibvirtClient):
             )
 
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.virtual_rp_create_success.value,
                 code=CommandMessagesEnum.virtual_rp_create_success.name,
                 success=True,
@@ -564,7 +535,6 @@ class Balansir(LibvirtClient):
         except Exception as e:
             self.pycgroup.delete_cgroup_pool(create_rp.name, force=True)
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_create_error.value,
                 code=CommandMessagesEnum.rp_create_error.name,
                 success=False,
@@ -573,7 +543,6 @@ class Balansir(LibvirtClient):
 
     def edit_virtual_resource_pool(self, edit_rp: ResourcePoolVirtualEdit) -> RpMessage:
         self.logger.info(f"Редактирование виртуального ресурс пула: '{edit_rp.name}'")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
 
         if edit_rp.ram_limit_gb is not None:
             if isinstance(edit_rp.ram_limit_bytes, float):
@@ -585,7 +554,6 @@ class Balansir(LibvirtClient):
         except Exception:
             self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' не найден")
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_virtual_not_found.value,
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
@@ -600,7 +568,6 @@ class Balansir(LibvirtClient):
             current_virtual_rp.ram_limit_bytes, current_virtual_rp.cpu_core_limit
         ):
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_ram_or_cpu_more_than_on_node.value,
                 code=CommandMessagesEnum.rp_ram_or_cpu_more_than_on_node.name,
                 success=False,
@@ -640,7 +607,6 @@ class Balansir(LibvirtClient):
                 not in edit_logic_volume
             ):
                 return RpMessage(
-                    request_id=internal_request_id,
                     message=CommandMessagesEnum.edit_logic_volume_error.value,
                     code=CommandMessagesEnum.edit_logic_volume_error.name,
                     success=True,
@@ -686,7 +652,6 @@ class Balansir(LibvirtClient):
         self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' успешно изменен")
 
         return RpMessage(
-            request_id=internal_request_id,
             message=CommandMessagesEnum.rp_virtual_edit_success.value,
             code=CommandMessagesEnum.rp_virtual_edit_success.name,
             success=True,
@@ -694,7 +659,6 @@ class Balansir(LibvirtClient):
 
     def delete_virtual_resource_pool(self, name: str, force: bool = False):
         self.logger.info(f"Удаление ресурс пула: '{name}'")
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
 
         # Проверка существования пула через cgroup
         try:
@@ -702,7 +666,6 @@ class Balansir(LibvirtClient):
         except Exception:
             self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_virtual_not_found.value,
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
@@ -715,7 +678,6 @@ class Balansir(LibvirtClient):
         current_virtual_rp = current_virtual_rp.rp_info
         if current_virtual_rp.vms is not None and not force:
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_virtual_have_vm_need_use_force_for_delete.value,
                 code=CommandMessagesEnum.rp_virtual_have_vm_need_use_force_for_delete.name,
                 success=False,
@@ -729,7 +691,6 @@ class Balansir(LibvirtClient):
         )
         if current_logic_volume is not None:
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.delete_logic_volume_error.value,
                 code=CommandMessagesEnum.delete_logic_volume_error.name,
                 success=False,
@@ -741,7 +702,6 @@ class Balansir(LibvirtClient):
         except Exception as e:
             self.logger.warning(f"Ошибка удаления cgroup: {e}")
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_virtual_delete_error.value,
                 code=CommandMessagesEnum.rp_virtual_delete_error.name,
                 success=False,
@@ -749,15 +709,12 @@ class Balansir(LibvirtClient):
             )
         self.logger.info(f"Виртуальный ресурс пул '{name}' удален")
         return RpMessage(
-            request_id=internal_request_id,
             message=CommandMessagesEnum.rp_virtual_delete_success.value,
             code=CommandMessagesEnum.rp_virtual_delete_success.name,
             success=True,
         )
 
     def get_virtual_resource_pool_by_name(self, name: str) -> RpMessage:
-        internal_request_id = f"internal_{str(uuid.uuid4())}"
-
         # Получение информации из cgroup
         try:
             cgroup_info = self.pycgroup.get_cgroup_pool(name)
@@ -766,7 +723,6 @@ class Balansir(LibvirtClient):
                 f"Виртуальный ресурс пул '{name}' не найден в cgroup: {e}"
             )
             return RpMessage(
-                request_id=internal_request_id,
                 message=CommandMessagesEnum.rp_virtual_not_found.value,
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
@@ -813,7 +769,6 @@ class Balansir(LibvirtClient):
             logical_volume=name,
         )
         return RpMessage(
-            request_id=internal_request_id,
             message=CommandMessagesEnum.rp_virtual_successfully_found.value,
             code=CommandMessagesEnum.rp_virtual_successfully_found.name,
             success=True,

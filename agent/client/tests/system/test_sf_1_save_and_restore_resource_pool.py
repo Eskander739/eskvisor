@@ -11,7 +11,7 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType
 
 SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
-CURRENT_PATH = Path(__file__).parent.parent.parent / "hypervisor" / "pycgroup" / "state"
+CURRENT_PATH = Path(__file__).parent.parent.parent / "pycgroup" / "state"
 SAVE_SCRIPT = str(CURRENT_PATH / "save.sh")
 RESTORE_SCRIPT = str(CURRENT_PATH / "restore.sh")
 
@@ -96,7 +96,8 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
 
         # ____________________________________Восстановление пула ресурсов через скрипт______________
         cmd_args = ["bash", RESTORE_SCRIPT]
-        cli.execute(cmd_args)
+        result = cli.execute(cmd_args)
+        print("Результат выполнения команды восстановления ресурс пула: ", result)
 
         # ____________________________________Проверка восстановления ресурс пула______________
         pool_info = resource_pool_session.pycgroup.get_cgroup_pool(random_name)

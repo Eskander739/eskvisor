@@ -26,7 +26,7 @@ def test_rp_09_delete_resource_pool_with_vm(
 
     Попытаться удалить пул, содержащий ВМ. Система должна запросить подтверждение или запретить удаление.
     """
-    vm_info, request_id = create_running_vm_func
+    vm_info = create_running_vm_func
     random_name = None
     rp_deleted = False
     try:

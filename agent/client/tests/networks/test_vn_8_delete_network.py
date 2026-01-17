@@ -47,20 +47,19 @@ def test_vn_08_delete_network(network_session, network_model):
 
     Удалить сеть, к которой не подключены ВМ. Проверить, что сеть исчезает из списка.
     """
-    request_id = str(uuid.uuid4())
     network_name = None
     network_deleted = False
     try:
         # ____________________________________Создание виртуальной сети___________
         network_name = network_model.name
-        created_network_info = network_session.create_network(network_model, request_id)
+        created_network_info = network_session.create_network(network_model)
         assert (
             created_network_info.message
             == CommandMessagesEnum.virtual_network_successfully_created.value
         )
         # ____________________________________Удаление виртуальной сети___________
         delete_network_info = network_session.delete_network(
-            network_name, request_id, True
+            network_name, True
         )
         assert (
             delete_network_info.message
@@ -70,7 +69,7 @@ def test_vn_08_delete_network(network_session, network_model):
             delete_network_info.code
             == CommandMessagesEnum.virtual_network_successfully_deleted.name
         )
-        v_network = network_session.get_network_info(network_name, request_id)
+        v_network = network_session.get_network_info(network_name)
         assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
         assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
         network_list = network_session.list_all_networks()
@@ -81,8 +80,8 @@ def test_vn_08_delete_network(network_session, network_model):
     finally:
         # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None and not network_deleted:
-            network_session.delete_network(network_name, request_id, True)
-            v_network = network_session.get_network_info(network_name, request_id)
+            network_session.delete_network(network_name, True)
+            v_network = network_session.get_network_info(network_name)
             assert (
                 v_network.message == CommandMessagesEnum.virtual_network_not_found.value
             )

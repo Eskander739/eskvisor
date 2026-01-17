@@ -30,8 +30,8 @@ from agent.client.hypervisor.libvirt.models.msg import (
     CommandMessagesEnum,
     StorageMessage,
 )
-from agent.client.volumes.group import VolumeGroupManager
-from agent.client.volumes.logical import LogicalVolumeManager
+from agent.client.lvm.group import VolumeGroupManager
+from agent.client.lvm.logical import LogicalVolumeManager
 
 
 load_dotenv()
@@ -49,7 +49,7 @@ class StorageManager(LibvirtClient):
         self.logic_volume_manager = LogicalVolumeManager()
 
     def create_disk(
-        self, disk_create: DiskCreate, request_id: str = str(uuid.uuid4())
+        self, disk_create: DiskCreate
     ) -> Disk | StorageMessage:
         if disk_create.path is None:
             disk_create.path = self.system_disk_path
@@ -58,15 +58,14 @@ class StorageManager(LibvirtClient):
                 f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB"
             )
             if disk_create.resource_pool:
-                return self._create_lv_in_resource_pool(disk_create, request_id)
+                return self._create_lv_in_resource_pool(disk_create)
             else:
                 self.logger.info("Создание файлового диска")
-                return self._create_file_disk(disk_create, request_id)
+                return self._create_file_disk(disk_create)
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
                 code=CommandMessagesEnum.disk_create_error.name,
                 note=str(e),
@@ -74,7 +73,6 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Ошибка: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
                 code=CommandMessagesEnum.disk_create_error.name,
                 note=str(e),
@@ -93,7 +91,7 @@ class StorageManager(LibvirtClient):
         return result
 
     def _create_lv_in_resource_pool(
-        self, disk_create: DiskCreate, request_id: str
+        self, disk_create: DiskCreate
     ) -> StorageMessage:
         current_lv = self.logic_volume_manager.get_volume_by_name(disk_create.name, self.system_volume_group_name)
         if current_lv is None:
@@ -113,7 +111,6 @@ class StorageManager(LibvirtClient):
                     f"Не удалось создать LVM пул {disk_create.resource_pool} в VG {self.system_volume_group_name}: {result_create_lv}"
                 )
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.virtual_rp_create_logic_volume_error.value,
                     code=CommandMessagesEnum.virtual_rp_create_logic_volume_error.name,
                 )
@@ -128,13 +125,12 @@ class StorageManager(LibvirtClient):
             source = f"/dev/{self.system_volume_group_name}/{disk_create.name}"
             self.mount_lv_to_system(source, disk_create.path)
 
-        return self._create_file_disk(disk_create, request_id)
+        return self._create_file_disk(disk_create)
 
-    def _create_file_disk_in_resource_pool(self, disk_create: DiskCreate, request_id: str):
+    def _create_file_disk_in_resource_pool(self, disk_create: DiskCreate):
         try:
             if disk_create.resource_pool is None:
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.rp_virtual_not_found.value,
                     code=CommandMessagesEnum.rp_virtual_not_found.name,
                     note=str("Отсутствует ресурс пул для создания дисков в нем")
@@ -147,12 +143,11 @@ class StorageManager(LibvirtClient):
                 if self.cli.is_exists(disk_path):
                     self.logger.info(f"Файл уже существует: {disk_path}")
                     return StorageMessage(
-                        request_id=request_id,
                         message=CommandMessagesEnum.disk_already_created.value,
                         code=CommandMessagesEnum.disk_already_created.name,
                     )
                 disk_info = self._create_qcow2_disk(
-                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                    disk_path, disk_create.size_gb, disk_create.sparse
                 )
                 disk_type = DiskType.EXTERNAL_DISK if disk_create.resource_pool is None else DiskType.POOL_DISK
                 disk = Disk(
@@ -175,7 +170,6 @@ class StorageManager(LibvirtClient):
                                                                           self.system_volume_group_name)
                 if current_lv is None:
                     return StorageMessage(
-                        request_id=request_id,
                         message=CommandMessagesEnum.disk_create_error.value,
                         code=CommandMessagesEnum.disk_create_error.name,
                     )
@@ -202,7 +196,6 @@ class StorageManager(LibvirtClient):
                                  vm_name=vm_name,
                                  readonly=False)
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.disk_successfully_created.value,
                     code=CommandMessagesEnum.disk_successfully_created.name,
                     disk_info=disk_info
@@ -211,13 +204,12 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Ошибка создания файлового диска: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
                 code=CommandMessagesEnum.disk_create_error.name,
                 note=str(e),
             )
     def _create_file_disk(
-        self, disk_create: DiskCreate, request_id: str
+        self, disk_create: DiskCreate
     ) -> StorageMessage:
         try:
             disk_info = None
@@ -226,22 +218,21 @@ class StorageManager(LibvirtClient):
                 f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB, ресурс пул: '{disk_create.resource_pool}'"
             )
             if disk_create.resource_pool is not None:
-                return self._create_file_disk_in_resource_pool(disk_create, request_id)
+                return self._create_file_disk_in_resource_pool(disk_create)
             else:
                 if self.cli.is_exists(disk_path):
                     self.logger.info(f"Файл уже существует: {disk_path}")
                     return StorageMessage(
-                        request_id=request_id,
                         message=CommandMessagesEnum.disk_already_created.value,
                         code=CommandMessagesEnum.disk_already_created.name,
                     )
             if disk_create.format.value == DiskFormat.QCOW2.value:
                 disk_info = self._create_qcow2_disk(
-                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                    disk_path, disk_create.size_gb, disk_create.sparse
                 )
             elif disk_create.format.value == DiskFormat.RAW.value:
                 disk_info = self._create_raw_disk(
-                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                    disk_path, disk_create.size_gb, disk_create.sparse
                 )
 
             disk_type = DiskType.EXTERNAL_DISK if disk_create.resource_pool is None else DiskType.POOL_DISK
@@ -264,14 +255,13 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Ошибка создания файлового диска: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
                 code=CommandMessagesEnum.disk_create_error.name,
                 note=str(e),
             )
 
     def _create_qcow2_disk(
-        self, disk_path: str, size_gb: float, request_id: str, sparse: bool = True
+        self, disk_path: str, size_gb: float, sparse: bool = True
     ) -> StorageMessage:
 
         sparse_flag = [] if sparse else ["-o", "preallocation=full"]
@@ -286,27 +276,24 @@ class StorageManager(LibvirtClient):
             self.logger.info(f"Результат выполнения команды: {result.stderr}")
             if result.returncode != 0:
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.disk_create_error.value,
                     code=CommandMessagesEnum.disk_create_error.name,
                     stderr=result.stderr,
                     stdout=result.stdout,
                 )
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_successfully_created.value,
                 code=CommandMessagesEnum.disk_successfully_created.name,
             )
         except TimeoutExpired as e:
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
                 code=CommandMessagesEnum.disk_create_error.name,
                 note=str(e),
             )
 
     def _create_raw_disk(
-        self, disk_path: str, size_gb: float, request_id: str, sparse: bool = True
+        self, disk_path: str, size_gb: float, sparse: bool = True
     ) -> StorageMessage:
         """
         Создать RAW диск через qemu-img
@@ -339,7 +326,6 @@ class StorageManager(LibvirtClient):
         if result.returncode != 0:
             self.delete_disk(disk_path=disk_path)
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
                 code=CommandMessagesEnum.disk_create_error.name,
                 stderr=result.stderr,
@@ -350,7 +336,6 @@ class StorageManager(LibvirtClient):
             f"RAW диск создан: {disk_path}, размер: {size_gb}GB, sparse: {sparse}"
         )
         return StorageMessage(
-            request_id=request_id,
             message=CommandMessagesEnum.disk_successfully_created.value,
             code=CommandMessagesEnum.disk_successfully_created.name,
         )
@@ -541,7 +526,7 @@ class StorageManager(LibvirtClient):
             self.logger.exception(f"Ошибка клонирования: {e}")
             return None
 
-    def attach_disk(self, disk_attach: DiskAttach, request_id: str) -> StorageMessage:
+    def attach_disk(self, disk_attach: DiskAttach) -> StorageMessage:
         try:
             disk_path = disk_attach.path + "/" + disk_attach.disk_name + "." + disk_attach.disk_format.value
             self.logger.info(
@@ -567,7 +552,6 @@ class StorageManager(LibvirtClient):
             if get_vm_by_path:
                 self.logger.warning("Диск уже подключен")
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.disk_already_attached_error.value,
                     code=CommandMessagesEnum.disk_already_attached_error.name,
                 )
@@ -622,7 +606,6 @@ class StorageManager(LibvirtClient):
                 f"Диск успешно подключен как {target_dev} (тип: {device_type})"
             )
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_successfully_attached.value,
                 code=CommandMessagesEnum.disk_successfully_attached.name,
             )
@@ -630,7 +613,6 @@ class StorageManager(LibvirtClient):
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка подключения: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_attach_libvirt_error.value,
                 code=CommandMessagesEnum.disk_attach_libvirt_error.name,
                 note=str(e),
@@ -638,21 +620,20 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Неожиданная ошибка: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_attach_unexpected_error.value,
                 code=CommandMessagesEnum.disk_attach_unexpected_error.name,
                 note=str(e),
             )
 
-    def get_storage_used(self, vm_name: str, request_id: str) -> int:
+    def get_storage_used(self, vm_name: str) -> int:
         used_storage = 0
-        all_disks = self.get_disks_by_vm(vm_name, request_id)
+        all_disks = self.get_disks_by_vm(vm_name)
         for disk_elem in all_disks:
             used_storage += disk_elem.allocation_bytes
 
         return used_storage
 
-    def get_disks_by_vm(self, vm_name: str, request_id: str) -> list[Disk]:
+    def get_disks_by_vm(self, vm_name: str) -> list[Disk]:
         """
         Получить все диски, подключенные к указанной ВМ
         """
@@ -671,7 +652,7 @@ class StorageManager(LibvirtClient):
                 if target_dev:
                     try:
                         disk = self.get_disk_info_by_target_dev(
-                            vm_name, target_dev, request_id
+                            vm_name, target_dev
                         )
                         disk = disk.disk_info
                         all_disks.append(disk)
@@ -689,7 +670,7 @@ class StorageManager(LibvirtClient):
             return []
 
     def get_disk_info_by_target_dev(
-        self, vm_name: str, target_dev: str, request_id: str
+        self, vm_name: str, target_dev: str
     ) -> StorageMessage:
         """
         Получить информацию о диске по target_dev в конкретной ВМ
@@ -713,7 +694,6 @@ class StorageManager(LibvirtClient):
 
             if disk_element is None:
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.disk_not_found_by_target_dev.value,
                     code=CommandMessagesEnum.disk_not_found_by_target_dev.name,
                 )
@@ -825,7 +805,6 @@ class StorageManager(LibvirtClient):
 
             self.logger.info(f"Информация о диске {target_dev} получена: {disk_name}")
             storage_message = StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_founded_by_target_dev.value,
                 code=CommandMessagesEnum.disk_founded_by_target_dev.name,
             )
@@ -900,7 +879,6 @@ class StorageManager(LibvirtClient):
         self,
         source_path: str,
         target_format: DiskFormat,
-        request_id: str,
         sparse: bool = True,
         target_path: str | None = None,
     ) -> StorageMessage | bool:
@@ -940,14 +918,12 @@ class StorageManager(LibvirtClient):
             if result.returncode != 0:
                 self.logger.error(f"Ошибка при конвертации: {result.stderr}")
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.disk_convert_error.value,
                     code=CommandMessagesEnum.disk_convert_error.name,
                 )
 
             self.logger.info("Конвертация успешно завершена")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_convert_successfully.value,
                 code=CommandMessagesEnum.disk_convert_successfully.name,
                 target_path=target_path,
@@ -956,7 +932,6 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Ошибка при конвертации диска: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_convert_error.value,
                 code=CommandMessagesEnum.disk_convert_error.name,
                 note=str(e),
@@ -1037,7 +1012,6 @@ class StorageManager(LibvirtClient):
         path: str | None = None,
         disk_format: DiskFormat = DiskFormat.QCOW2,
         is_pool: bool = False,
-        request_id: str = str(uuid.uuid4()),
     ) -> Disk | StorageMessage:
         if path is None:
             path = self.system_disk_path
@@ -1049,13 +1023,11 @@ class StorageManager(LibvirtClient):
                         disk_info = self._get_file_disk_info(disk_path)
                         if disk_info is None or isinstance(disk_info, str):
                             return StorageMessage(
-                                request_id=request_id,
                                 message=CommandMessagesEnum.disk_not_found.value,
                                 code=CommandMessagesEnum.disk_not_found.name,
                                 note=disk_info,
                             )
                         return StorageMessage(
-                            request_id=request_id,
                             message=CommandMessagesEnum.disk_founded.value,
                             code=CommandMessagesEnum.disk_founded.name,
                             disk_info=disk_info,
@@ -1084,7 +1056,6 @@ class StorageManager(LibvirtClient):
                                      vm_name=vm_name,
                                      readonly=False)
                     return StorageMessage(
-                        request_id=request_id,
                         message=CommandMessagesEnum.disk_founded.value,
                         code=CommandMessagesEnum.disk_founded.name,
                         disk_info=disk_info,
@@ -1094,25 +1065,21 @@ class StorageManager(LibvirtClient):
                     disk_info = self._get_file_disk_info(disk_path)
                     if disk_info is None or isinstance(disk_info, str):
                         return StorageMessage(
-                            request_id=request_id,
                             message=CommandMessagesEnum.disk_not_found.value,
                             code=CommandMessagesEnum.disk_not_found.name,
                             note=disk_info,
                         )
                     return StorageMessage(
-                        request_id=request_id,
                         message=CommandMessagesEnum.disk_founded.value,
                         code=CommandMessagesEnum.disk_founded.name,
                         disk_info=disk_info,
                     )
                 return StorageMessage(
-                    request_id=request_id,
                     message=CommandMessagesEnum.disk_not_found.value,
                     code=CommandMessagesEnum.disk_not_found.name,
                 )
 
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_not_found.value,
                 code=CommandMessagesEnum.disk_not_found.name,
             )
@@ -1120,7 +1087,6 @@ class StorageManager(LibvirtClient):
         except (libvirt.libvirtError, FileNotFoundError) as e:
             self.logger.error(f"Ошибка получения информации: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_not_found_libvirt_error.value,
                 code=CommandMessagesEnum.disk_not_found_libvirt_error.name,
                 note=str(e),
@@ -1128,7 +1094,6 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Неожиданная ошибка: {e}")
             return StorageMessage(
-                request_id=request_id,
                 message=CommandMessagesEnum.disk_not_found_unexpected_error.value,
                 code=CommandMessagesEnum.disk_not_found_unexpected_error.name,
                 note=str(e),

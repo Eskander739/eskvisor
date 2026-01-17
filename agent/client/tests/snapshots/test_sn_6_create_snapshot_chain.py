@@ -16,18 +16,18 @@ def test_sn_06_create_snapshot_chain(
 
     Создать несколько снапшотов один за другим. Проверить, что дерево снапшотов отражает правильную последовательность.
     """
-    vm_name, request_id = create_stopped_vm_func
+    vm_name = create_stopped_vm_func
     description = f"snapshot-description-{uuid.uuid4()}"
     snapshot_name_first = "snapshot-" + vm_name + str(uuid.uuid4())
     snapshot_name_second = "snapshot-" + vm_name + str(uuid.uuid4())
     snapshot_name_third = "snapshot-" + vm_name + str(uuid.uuid4())
     try:
         # _____________________________Получение информации о ВМ__________________
-        vm_info = vm_session.get_vm_by_name(vm_name, request_id)
+        vm_info = vm_session.get_vm_by_name(vm_name)
         assert vm_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_info.code == CommandMessagesEnum.vm_successfully_found.name
         # _____________________________Проверка отсутствия снапшота_______________
-        get_snapshot_info = snapshot_session.get_current_snapshot(vm_name, request_id)
+        get_snapshot_info = snapshot_session.get_current_snapshot(vm_name)
         assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # ____________________________Создание снапшота остановленной ВМ_____________
@@ -40,7 +40,7 @@ def test_sn_06_create_snapshot_chain(
             vm_template = SnapshotCreateRequest(
                 vm_name=vm_name, snapshot_name=snapshot_name, description=description
             )
-            create_vm_info = snapshot_session.create_snapshot(vm_template, request_id)
+            create_vm_info = snapshot_session.create_snapshot(vm_template)
             assert (
                 create_vm_info.message
                 == CommandMessagesEnum.snapshot_successfully_created.value
@@ -59,7 +59,7 @@ def test_sn_06_create_snapshot_chain(
             assert snapshot_info.size_bytes > 0
 
         # _______________________________Проверка цепочки снапшотов ВМ_________________
-        snaphot_chain = snapshot_session.get_snapshot_chain(vm_name, request_id)
+        snaphot_chain = snapshot_session.get_snapshot_chain(vm_name)
         assert snaphot_chain.snapshot_info.chain_depth == 3
         first_snap, second_snap, third_snap = snaphot_chain.snapshot_info.chains.pop()
         assert first_snap.parent is None
@@ -71,8 +71,7 @@ def test_sn_06_create_snapshot_chain(
         for snapshot_name in (snapshot_name_first, snapshot_name_second):
             delete_snapshot_info = snapshot_session.delete_snapshot(
                 vm_name=vm_name,
-                snapshot_name=snapshot_name,
-                request_id=request_id,
+                snapshot_name=snapshot_name
             )
             assert (
                 delete_snapshot_info.message
