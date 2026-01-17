@@ -58,7 +58,7 @@ class StorageManager(LibvirtClient):
                 f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB"
             )
             if disk_create.resource_pool:
-                return self._create_file_disk_in_resource_pool(disk_create, request_id)
+                return self._create_lv_in_resource_pool(disk_create, request_id)
             else:
                 self.logger.info("Создание файлового диска")
                 return self._create_file_disk(disk_create, request_id)
@@ -80,53 +80,142 @@ class StorageManager(LibvirtClient):
                 note=str(e),
             )
 
-    def _create_file_disk_in_resource_pool(
+    def mount_lv_to_system(self, source: str, point: str):
+        # Монтируем LV в файловую систему нашей OS
+        cmd_args = [
+            "mount",
+            source,
+            point,
+        ]
+        result = self.cli.execute(cmd_args)
+        self.logger.info(f"Результат монтирования диска: '{result}'")
+
+        return result
+
+    def _create_lv_in_resource_pool(
         self, disk_create: DiskCreate, request_id: str
     ) -> StorageMessage:
-        result_create_lv = self.logic_volume_manager.create_volume_in_thin_pool(
-            logic_volume_name=disk_create.name,
-            logic_volume_size=disk_create.size_gb,
-            volume_group_name=self.system_volume_group_name,
-            logic_tp_volume_name=disk_create.resource_pool,
-            sparse=disk_create.sparse
-        )
-        if (
-            f'Logical volume "{disk_create.resource_pool}" created'
-            not in result_create_lv
-            and "Thin pool" in result_create_lv
-        ):
-            self.logger.error(
-                f"Не удалось создать LVM пул {disk_create.resource_pool} в VG {self.system_volume_group_name}: {result_create_lv}"
+        current_lv = self.logic_volume_manager.get_volume_by_name(disk_create.name, self.system_volume_group_name)
+        if current_lv is None:
+            result_create_lv = self.logic_volume_manager.create_volume_in_thin_pool(
+                logic_volume_name=disk_create.name,
+                logic_volume_size=disk_create.size_gb,
+                volume_group_name=self.system_volume_group_name,
+                logic_tp_volume_name=disk_create.resource_pool,
+                sparse=disk_create.sparse
             )
-            return StorageMessage(
-                request_id=request_id,
-                message=CommandMessagesEnum.virtual_rp_create_logic_volume_error.value,
-                code=CommandMessagesEnum.virtual_rp_create_logic_volume_error.name,
-            )
+            if (
+                    f'Logical volume "{disk_create.resource_pool}" created'
+                    not in result_create_lv
+                    and "Thin pool" in result_create_lv
+            ):
+                self.logger.error(
+                    f"Не удалось создать LVM пул {disk_create.resource_pool} в VG {self.system_volume_group_name}: {result_create_lv}"
+                )
+                return StorageMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.virtual_rp_create_logic_volume_error.value,
+                    code=CommandMessagesEnum.virtual_rp_create_logic_volume_error.name,
+                )
         if disk_create.format.value == DiskFormat.QCOW2.value:
             disk_create.path = disk_create.path + "/" + disk_create.resource_pool + "/" + disk_create.name
-            # Форматируем наш LV под файловую систему для QCOW2
-            cmd_args = [
-                "mkfs.ext4",
-                f"/dev/{self.system_volume_group_name}/{disk_create.name}",
-            ]
-            result = self.cli.execute(cmd_args)
-            self.logger.info(f"Результат изменения файловой системы LV: '{result}'")
+            self.logic_volume_manager.convert_file_system_from_raw_to_ext4(disk_create.name, self.system_volume_group_name)
 
             # Создаем директорию для точки монтирования
             result = self.cli.mkdir(disk_create.path)
             self.logger.info(f"Результат создания директории для точки монтирования: '{result}'")
-            # Монтируем LV в файловую систему нашей OS
-            cmd_args = [
-                "mount",
-                f"/dev/{self.system_volume_group_name}/{disk_create.name}",
-                disk_create.path,
-            ]
-            result = self.cli.execute(cmd_args)
-            self.logger.info(f"Результат монтирования диска: '{result}'")
+
+            source = f"/dev/{self.system_volume_group_name}/{disk_create.name}"
+            self.mount_lv_to_system(source, disk_create.path)
 
         return self._create_file_disk(disk_create, request_id)
 
+    def _create_file_disk_in_resource_pool(self, disk_create: DiskCreate, request_id: str):
+        try:
+            if disk_create.resource_pool is None:
+                return StorageMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.rp_virtual_not_found.value,
+                    code=CommandMessagesEnum.rp_virtual_not_found.name,
+                    note=str("Отсутствует ресурс пул для создания дисков в нем")
+                )
+            disk_path = f"{disk_create.path}/{disk_create.name}.{disk_create.format.value}"
+            self.logger.info(
+                f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB, ресурс пул: '{disk_create.resource_pool}'"
+            )
+            if disk_create.format.value == DiskFormat.QCOW2.value:
+                if self.cli.is_exists(disk_path):
+                    self.logger.info(f"Файл уже существует: {disk_path}")
+                    return StorageMessage(
+                        request_id=request_id,
+                        message=CommandMessagesEnum.disk_already_created.value,
+                        code=CommandMessagesEnum.disk_already_created.name,
+                    )
+                disk_info = self._create_qcow2_disk(
+                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                )
+                disk_type = DiskType.EXTERNAL_DISK if disk_create.resource_pool is None else DiskType.POOL_DISK
+                disk = Disk(
+                    name=disk_create.name,
+                    path=disk_path,
+                    file_path_exists=True,
+                    type=disk_type,
+                    format=disk_create.format,
+                    capacity_bytes=disk_create.size_bytes,
+                    allocation_bytes=disk_create.size_bytes,
+                    status=DiskStatus.DETACHED,
+                    pool=disk_create.resource_pool
+                )
+                disk_info.disk_info = disk
+
+                self.logger.info(f"Файловый диск создан: {disk.name}")
+                return disk_info
+            elif disk_create.format.value == DiskFormat.RAW.value:
+                current_lv = self.logic_volume_manager.get_volume_by_name(disk_create.name,
+                                                                          self.system_volume_group_name)
+                if current_lv is None:
+                    return StorageMessage(
+                        request_id=request_id,
+                        message=CommandMessagesEnum.disk_create_error.value,
+                        code=CommandMessagesEnum.disk_create_error.name,
+                    )
+                self.logger.info(f"Для RAW диска был создан LV {current_lv.logic_volume_path}")
+                vm_name = None
+                if self._is_disk_in_use(current_lv.logic_volume_path):
+                    vm_name = self._find_vm_by_disk_path(current_lv.logic_volume_path)
+                    if vm_name:
+                        status = DiskStatus.ATTACHED
+                    else:
+                        status = DiskStatus.DETACHED
+                else:
+                    status = DiskStatus.DETACHED
+
+                disk_info = Disk(name=current_lv.logic_volume_name,
+                                 path=current_lv.logic_volume_path,
+                                 file_path_exists=True,
+                                 status=status,
+                                 type=DiskType.POOL_DISK,
+                                 format=DiskFormat.RAW,
+                                 capacity_bytes=current_lv.volume_size,
+                                 pool=current_lv.logic_volume_pool,
+                                 allocation_bytes=current_lv.volume_size - current_lv.available_volume_size,
+                                 vm_name=vm_name,
+                                 readonly=False)
+                return StorageMessage(
+                    request_id=request_id,
+                    message=CommandMessagesEnum.disk_successfully_created.value,
+                    code=CommandMessagesEnum.disk_successfully_created.name,
+                    disk_info=disk_info
+                )
+
+        except Exception as e:
+            self.logger.exception(f"Ошибка создания файлового диска: {e}")
+            return StorageMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.disk_create_error.value,
+                code=CommandMessagesEnum.disk_create_error.name,
+                note=str(e),
+            )
     def _create_file_disk(
         self, disk_create: DiskCreate, request_id: str
     ) -> StorageMessage:
@@ -137,53 +226,7 @@ class StorageManager(LibvirtClient):
                 f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB, ресурс пул: '{disk_create.resource_pool}'"
             )
             if disk_create.resource_pool is not None:
-                if disk_create.format.value == DiskFormat.QCOW2.value:
-                    if self.cli.is_exists(disk_path):
-                        self.logger.info(f"Файл уже существует: {disk_path}")
-                        return StorageMessage(
-                            request_id=request_id,
-                            message=CommandMessagesEnum.disk_already_created.value,
-                            code=CommandMessagesEnum.disk_already_created.name,
-                        )
-                    disk_info = self._create_qcow2_disk(
-                        disk_path, disk_create.size_gb, request_id, disk_create.sparse
-                    )
-                elif disk_create.format.value == DiskFormat.RAW.value:
-                    current_lv = self.logic_volume_manager.get_volume_by_name(disk_create.name, self.system_volume_group_name)
-                    if current_lv is None:
-                        return StorageMessage(
-                            request_id=request_id,
-                            message=CommandMessagesEnum.disk_create_error.value,
-                            code=CommandMessagesEnum.disk_create_error.name,
-                        )
-                    self.logger.info(f"Для RAW диска был создан LV {current_lv.logic_volume_path}")
-                    vm_name = None
-                    if self._is_disk_in_use(current_lv.logic_volume_path):
-                        vm_name = self._find_vm_by_disk_path(current_lv.logic_volume_path)
-                        if vm_name:
-                            status = DiskStatus.ATTACHED
-                        else:
-                            status = DiskStatus.DETACHED
-                    else:
-                        status = DiskStatus.DETACHED
-
-                    disk_info = Disk(name=current_lv.logic_volume_name,
-                                     path=current_lv.logic_volume_path,
-                                     file_path_exists=True,
-                                     status=status,
-                                     type=DiskType.POOL_DISK,
-                                     format=DiskFormat.RAW,
-                                     capacity_bytes=current_lv.volume_size,
-                                     pool=current_lv.logic_volume_pool,
-                                     allocation_bytes=current_lv.volume_size - current_lv.available_volume_size,
-                                     vm_name=vm_name,
-                                     readonly=False)
-                    return StorageMessage(
-                        request_id=request_id,
-                        message=CommandMessagesEnum.disk_successfully_created.value,
-                        code=CommandMessagesEnum.disk_successfully_created.name,
-                        disk_info=disk_info
-                    )
+                return self._create_file_disk_in_resource_pool(disk_create, request_id)
             else:
                 if self.cli.is_exists(disk_path):
                     self.logger.info(f"Файл уже существует: {disk_path}")
@@ -192,23 +235,21 @@ class StorageManager(LibvirtClient):
                         message=CommandMessagesEnum.disk_already_created.value,
                         code=CommandMessagesEnum.disk_already_created.name,
                     )
-
             if disk_create.format.value == DiskFormat.QCOW2.value:
-                if disk_create.resource_pool is None:
-                    disk_info = self._create_qcow2_disk(
-                        disk_path, disk_create.size_gb, request_id, disk_create.sparse
-                    )
+                disk_info = self._create_qcow2_disk(
+                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                )
             elif disk_create.format.value == DiskFormat.RAW.value:
-                if disk_create.resource_pool is None:
-                    disk_info = self._create_raw_disk(
-                        disk_path, disk_create.size_gb, request_id, disk_create.sparse
-                    )
+                disk_info = self._create_raw_disk(
+                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                )
 
+            disk_type = DiskType.EXTERNAL_DISK if disk_create.resource_pool is None else DiskType.POOL_DISK
             disk = Disk(
                 name=disk_create.name,
                 path=disk_path,
                 file_path_exists=True,
-                type=DiskType.EXTERNAL_DISK,
+                type=disk_type,
                 format=disk_create.format,
                 capacity_bytes=disk_create.size_bytes,
                 allocation_bytes=disk_create.size_bytes,
@@ -293,7 +334,7 @@ class StorageManager(LibvirtClient):
                 f"{size_gb}G",
             ]
 
-        self.logger.debug(f"Создание RAW диска: {' '.join(cmd)}")
+        self.logger.info(f"Создание RAW диска: {' '.join(cmd)}")
         result = self.cli.execute(cmd, return_proc=True)
         if result.returncode != 0:
             self.delete_disk(disk_path=disk_path)
@@ -448,7 +489,7 @@ class StorageManager(LibvirtClient):
                     self.logger.info(f"Увеличение размера до {new_size_gb}GB")
                     cmd = ["qemu-img", "resize", disk_path, f"{new_size_gb}G"]
 
-                    self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
+                    self.logger.info(f"Выполнение команды: {' '.join(cmd)}")
                     result = self.cli.execute(cmd, return_proc=True)
                     if result.returncode != 0:
                         raise Exception(f"Ошибка qemu-img: {result.stderr}")
@@ -486,7 +527,7 @@ class StorageManager(LibvirtClient):
                     source_path,
                     target_path,
                 ]
-                self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
+                self.logger.info(f"Выполнение команды: {' '.join(cmd)}")
 
                 result = self.cli.execute(cmd, return_proc=True)
                 if result.returncode != 0:
@@ -720,7 +761,7 @@ class StorageManager(LibvirtClient):
                     try:
                         bus_type = BusType(bus_str)
                     except ValueError:
-                        self.logger.debug(f"Неизвестный тип шины: {bus_str}")
+                        self.logger.info(f"Неизвестный тип шины: {bus_str}")
 
             # Извлекаем режим кэширования
             cache_mode = None
@@ -730,7 +771,7 @@ class StorageManager(LibvirtClient):
                     try:
                         cache_mode = CacheMode(cache_str)
                     except ValueError:
-                        self.logger.debug(f"Неизвестный режим кэширования: {cache_str}")
+                        self.logger.info(f"Неизвестный режим кэширования: {cache_str}")
 
             # Извлекаем дополнительные параметры
             device_type = disk_element.get("device", "disk")
@@ -748,7 +789,7 @@ class StorageManager(LibvirtClient):
                         if "backing-file" in info and info["backing-file"]:
                             backing_file = info["backing-file"]
                 except Exception as e:
-                    self.logger.debug(f"Не удалось получить метаданные QCOW2: {e}")
+                    self.logger.info(f"Не удалось получить метаданные QCOW2: {e}")
 
             # Создаем объект Disk
             disk = Disk(
@@ -893,7 +934,7 @@ class StorageManager(LibvirtClient):
             self.logger.info(
                 f"Конвертация диска: {source_path} -> {target_path} ({target_format.value})"
             )
-            self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
+            self.logger.info(f"Выполнение команды: {' '.join(cmd)}")
 
             result = self.cli.execute(cmd, return_proc=True)
             if result.returncode != 0:

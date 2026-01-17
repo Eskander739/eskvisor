@@ -301,7 +301,6 @@ class LogicalVolumeManager:
         logic_volumes_list = []
 
         for logic_volume in result:
-            print("logic_volume: ", logic_volume)
             volume_size = self.convert_storage_size_to_bytes(
                 logic_volume.get("lv_size")
             )
@@ -337,7 +336,21 @@ class LogicalVolumeManager:
 
         return logic_volumes_list
 
-    def convert_storage_size_to_bytes(self, size_str: str) -> int:
+    def convert_file_system_from_raw_to_ext4(self, logic_volume_name: str, volume_group_name: str) -> bool:
+        # Форматируем наш LV под файловую систему для QCOW2
+        cmd_args = [
+            "mkfs.ext4",
+            f"/dev/{volume_group_name}/{logic_volume_name}",
+        ]
+        result = self.cli.execute(cmd_args, return_proc=True)
+        if result.returncode == 0:
+            self.logger.info(f"Результат изменения файловой системы LV '{result.stdout}'")
+            return True
+        self.logger.info(f"Результат изменения файловой системы LV '{result.stderr}'")
+        return False
+
+    @staticmethod
+    def convert_storage_size_to_bytes(size_str: str) -> int:
         """
         Конвертирует строку с размером хранилища в байты
 

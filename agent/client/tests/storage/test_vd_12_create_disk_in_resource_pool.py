@@ -18,7 +18,7 @@ SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
 
 @pytest.mark.tags("VD‑12", "Создание виртуального диска в ресурс пуле")
 @pytest.mark.parametrize("disk_format", (DiskFormat.QCOW2, DiskFormat.RAW))
-def test_vd_12_create_disk_to_resource_pool(
+def test_vd_12_create_disk_in_resource_pool(
     storage_session,
     resource_pool_session,
     create_resource_pool_session,
