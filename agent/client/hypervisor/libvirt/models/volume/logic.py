@@ -4,12 +4,13 @@ from pydantic import BaseModel, computed_field
 
 
 class LogicVolume(BaseModel):
+    logic_volume_path: str
     logic_volume_name: str
     volume_group_name: str
     attributes: str  # Атрибуты логического тома
     volume_size: int  # Общий размер логического тома в байтах
-    available_volume_size: int | float  # Сколько доступно для использования
-    logic_volume_pool: str  # Имя thin pool (для тонких LV), если пусто - обычный LV (не thin-provisioned)
+    available_volume_size: int  # Сколько доступно для использования в байтах
+    logic_volume_pool: str  # Имя thin pool (для тонких LV), если пусто - обычный LV (не thin-provisioned) - проставляется если мы создаем thin(для дисков) внутри thin_pool(ресурс пул)
     is_snapshot: str  # origin Исходный LV (для снапшотов), если пусто - не снапшот
     data_percent: str  # Процент использования данных
     metadata_percent: str  # Процент использования метаданных

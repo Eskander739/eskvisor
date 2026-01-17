@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, computed_field
 
 
 class DiskFormat(Enum):
@@ -125,8 +125,7 @@ class DiskStatus(Enum):
 
 
 class DiskType(Enum):
-    VM_ATTACHED = "vm_attached"  # Диск подключен к виртуальной машине
-    POOL_DISK = "pool_disk"  # Диск находится в пуле хранилищ libvirt
+    POOL_DISK = "pool_disk"  # Диск находится в пуле хранилищ
     ORPHANED = "orphaned"  # Диск найден в ФС, но не в пуле и не подключен
     SNAPSHOT = "snapshot"  # Снапшот диска
     TEMPLATE = "template"  # Шаблонный/образцовый диск
@@ -218,14 +217,13 @@ class Disk(BaseModel):
         """Проверка условно обязательных полей в зависимости от типа"""
         disk_type = values.type
 
-        if disk_type == DiskType.VM_ATTACHED:
+        if values.status == DiskStatus.ATTACHED:
             if not values.vm_name:
                 raise ValueError("Для типа vm_attached обязательно указать vm_name")
-            if not values.status:
-                # Устанавливаем статус по умолчанию для vm_attached
-                values.status = DiskStatus.ATTACHED
+        if not values.status:
+            values.status = DiskStatus.ATTACHED
 
-        elif disk_type == DiskType.POOL_DISK:
+        if disk_type == DiskType.POOL_DISK:
             if not values.pool:
                 raise ValueError("Для типа pool_disk обязательно указать pool")
 
@@ -286,16 +284,6 @@ class Disk(BaseModel):
             return self.allocation_bytes < self.capacity_bytes
         return False
 
-    @field_validator("path")
-    def validate_path(cls, v):
-        path = Path(v)
-        # Если это новый диск (есть size_gb), проверяем директорию
-        # Если это существующий диск, проверяем наличие файла
-        if path.exists():
-            if not path.is_file():
-                raise ValueError(f"Путь {v} существует, но не является файлом")
-        return str(path)
-
     @field_validator("bus_type")
     def validate_bus(cls, v):
         BusType(v)
@@ -326,7 +314,7 @@ class DiskCreate(BaseModel):
     name: str = Field(
         f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255
     )
-    path: str | None = "/home/eska/.local/share/libvirt/images/"
+    path: str | None = None
     size_gb: float = Field(1, gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(None, max_length=500)
@@ -339,33 +327,21 @@ class DiskCreate(BaseModel):
     readonly: bool = False
     shareable: bool = False
     serial: str | None = None
+    resource_pool: str | None = None
     # RAW с sparse=True - должен создавать разреженный файл (sparse file)
     # RAW с sparse=False - должен создавать полный файл, заполненный нулями
 
-    @model_validator(mode="after")
-    def validate_query(self) -> Self:
-        """Валидация запроса"""
-        self.name = self.name.split(".").pop(0)
-        if self.path is not None:
-            if self.format.value not in self.path and self.name not in self.path:
-                current_format = disk_format_by_path(self.path)
-                if current_format.value == self.format.value:
-                    self.path = str(
-                        Path(self.path) / f"{self.name}.{self.format.value}"
-                    )
-                elif current_format.value == DiskFormat.UNKNOWN.value:
-                    self.path = str(
-                        Path(self.path) / f"{self.name}.{self.format.value}"
-                    )
-                else:
-                    if current_format.value in (
-                        DiskFormat.ISO.value,
-                        DiskFormat.IMG.value,
-                    ):
-                        self.disk_type = DiskType.CDROM
-                    self.format = current_format
-        return self
+    # @model_validator(mode="after")
+    # def validate_query(self) -> Self:
+    #     """Валидация запроса"""
+    #
+    #     return self
 
+
+    @computed_field
+    @property
+    def size_bytes(self) -> int:
+        return int(self.size_gb * (1024**3))
 
 # Модель для обновления диска
 class DiskUpdate(BaseModel):
@@ -383,7 +359,9 @@ class DiskAttach(BaseModel):
     """Модель для подключения диска к виртуальной машине"""
 
     vm_name: str = Field(..., description="Имя виртуальной машины")
-    path: str | None = None
+    path: str
+    disk_name: str
+    disk_format: DiskFormat
     target_dev: str = Field(default="vdb")
     bus_type: BusType = Field(default=BusType.VIRTIO)
     cache_mode: CacheMode | str = Field(default=CacheMode.WRITEBACK)

@@ -20,9 +20,13 @@ from agent.client.hypervisor.libvirt.managers.virsh import (
 )
 from agent.client.hypervisor.libvirt.managers.vm import VmManager
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
+from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
+from agent.client.hypervisor.libvirt.models.volume.balansir import (
+    ResourcePoolVirtualCreate,
+)
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
-from agent.client.hypervisor.libvirt.models.general import VMState
+from agent.client.hypervisor.libvirt.models.general import VMState, StoragePoolType
 from agent.client.hypervisor.libvirt.models.vm import (
     VMCreateRequest,
     NetQemuCommandline,
@@ -228,6 +232,37 @@ def multi_create_stopped_vm():
 
         for vm_config_name in vm_config_names:
             vm_manager.delete_vm_with_force(vm_config_name, request_id)
+
+
+@pytest.fixture(scope="session")
+def create_resource_pool_session():
+    random_name = f"resource_pool_{random.randint(10000, 99999)}"
+    with Balansir() as rp_manager:
+        rp_template = ResourcePoolVirtualCreate(
+            name=random_name,
+            cpu_core_limit=2,
+            ram_limit_gb=0.2,
+            storage_limit=2,
+            storage_type=StoragePoolType.LOGICAL,
+        )
+        create_rp_info = rp_manager.create_virtual_resource_pool(rp_template)
+        assert (
+            create_rp_info.message
+            == CommandMessagesEnum.virtual_rp_create_success.value
+        ), create_rp_info.note
+        assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name
+
+        yield random_name
+
+        delete_rp_info = rp_manager.delete_virtual_resource_pool(random_name, True)
+        assert delete_rp_info.message in (
+            CommandMessagesEnum.rp_virtual_delete_success.value,
+            CommandMessagesEnum.rp_virtual_not_found.value,
+        ), delete_rp_info.note
+        assert delete_rp_info.code in (
+            CommandMessagesEnum.rp_virtual_delete_success.name,
+            CommandMessagesEnum.rp_virtual_not_found.name,
+        )
 
 
 @pytest.fixture(scope="session")

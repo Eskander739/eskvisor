@@ -56,13 +56,13 @@ class CLIControl:
             return True
         return False
 
-    def mkdir(self, cgroup_path: str):
-        cmd_args = ["mkdir", cgroup_path]
+    def mkdir(self, path: str):
+        cmd_args = ["mkdir", "-p", path]
         result = self.execute(cmd_args)
         return result
 
-    def rmdir(self, cgroup_path: str):
-        cmd_args = ["rmdir", cgroup_path]
+    def rmdir(self, path: str):
+        cmd_args = ["rmdir", path]
         result = self.execute(cmd_args)
         return result
 
@@ -181,12 +181,18 @@ class CLIControl:
         password="root",
         timeout: int = 10,
         return_proc: bool = False,
+        shell: bool = False,
+        is_text: bool = False,
     ):
-        # Формируем команду
-        if isinstance(command, str):
-            command = command.split()
+        if not is_text:
+            if isinstance(command, str):
+                command = command.split()
 
-        cmd = ["sudo", "-S", "-u", user] + command
+        if is_text:
+            cmd = f"sudo -S -u {user} " + command
+        else:
+            cmd = ["sudo", "-S", "-u", user] + command
+
         self.logger.info(f"Выполнение команды: '{cmd}'")
         # Выполняем
         proc = subprocess.Popen(
@@ -194,6 +200,7 @@ class CLIControl:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            shell=shell,
             text=True,
         )
 

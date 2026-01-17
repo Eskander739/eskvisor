@@ -30,6 +30,9 @@ sudo systemctl enable nfs-server
 sudo systemctl start nfs-server
 sudo systemctl enable libvirtd
 
+sudo mkdir /eskvisor/storages/
+sudo chmod 777 /eskvisor/storages/
+
 # Проверьте статус (должен быть "active (running)")
 sudo systemctl status libvirtd
 

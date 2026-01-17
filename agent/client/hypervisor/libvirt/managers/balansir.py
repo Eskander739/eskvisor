@@ -26,7 +26,7 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualEdit,
     ResourceReservationVM,
 )
-from agent.client.hypervisor.libvirt.models.volume.logic_volume import (
+from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,
 )
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType
@@ -266,13 +266,16 @@ class Balansir(LibvirtClient):
         internal_request_id = f"internal_{str(uuid.uuid4())}"
         if create_config:
             if storage_type == StoragePoolType.LOGICAL:
-                result_create_lv = self.logic_volume_manager.create_volume(
+                result_create_lv = self.logic_volume_manager.create_thin_pool_volume(
                     logic_volume_name=rp_name,
                     logic_volume_size=storage_limit,
                     volume_group_name=self.system_volume_group_name,
                     logic_volume_size_type=volume_size_type,
                 )
-                if f'Logical volume "{rp_name}" created' not in result_create_lv:
+                if (
+                    f'Logical volume "{rp_name}" created' not in result_create_lv
+                    and "Thin pool" not in result_create_lv
+                ):
                     self.logger.error(
                         f"Не удалось создать LVM пул {rp_name} в VG {self.system_volume_group_name}: {result_create_lv}"
                     )

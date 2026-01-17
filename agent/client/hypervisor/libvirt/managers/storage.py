@@ -8,6 +8,7 @@ from datetime import datetime
 from subprocess import TimeoutExpired
 
 import libvirt
+from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
@@ -29,6 +30,11 @@ from agent.client.hypervisor.libvirt.models.msg import (
     CommandMessagesEnum,
     StorageMessage,
 )
+from agent.client.volumes.group import VolumeGroupManager
+from agent.client.volumes.logical import LogicalVolumeManager
+
+
+load_dotenv()
 
 
 class StorageManager(LibvirtClient):
@@ -37,17 +43,25 @@ class StorageManager(LibvirtClient):
         self.logger = logging.getLogger(__name__)
         self.libvirt_config = LibvirtConfig()
         self.cli = CLIControl()
+        self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
+        self.system_disk_path = os.environ.get("SYSTEM_DISK_PATH")
+        self.volume_group_manager = VolumeGroupManager()
+        self.logic_volume_manager = LogicalVolumeManager()
 
     def create_disk(
         self, disk_create: DiskCreate, request_id: str = str(uuid.uuid4())
     ) -> Disk | StorageMessage:
+        if disk_create.path is None:
+            disk_create.path = self.system_disk_path
         try:
             self.logger.info(
                 f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB"
             )
-
-            self.logger.debug("Создание файлового диска")
-            return self._create_file_disk(disk_create, request_id)
+            if disk_create.resource_pool:
+                return self._create_file_disk_in_resource_pool(disk_create, request_id)
+            else:
+                self.logger.info("Создание файлового диска")
+                return self._create_file_disk(disk_create, request_id)
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt: {e}")
@@ -66,61 +80,145 @@ class StorageManager(LibvirtClient):
                 note=str(e),
             )
 
+    def _create_file_disk_in_resource_pool(
+        self, disk_create: DiskCreate, request_id: str
+    ) -> StorageMessage:
+        result_create_lv = self.logic_volume_manager.create_volume_in_thin_pool(
+            logic_volume_name=disk_create.name,
+            logic_volume_size=disk_create.size_gb,
+            volume_group_name=self.system_volume_group_name,
+            logic_tp_volume_name=disk_create.resource_pool,
+            sparse=disk_create.sparse
+        )
+        if (
+            f'Logical volume "{disk_create.resource_pool}" created'
+            not in result_create_lv
+            and "Thin pool" in result_create_lv
+        ):
+            self.logger.error(
+                f"Не удалось создать LVM пул {disk_create.resource_pool} в VG {self.system_volume_group_name}: {result_create_lv}"
+            )
+            return StorageMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.virtual_rp_create_logic_volume_error.value,
+                code=CommandMessagesEnum.virtual_rp_create_logic_volume_error.name,
+            )
+        if disk_create.format.value == DiskFormat.QCOW2.value:
+            disk_create.path = disk_create.path + "/" + disk_create.resource_pool + "/" + disk_create.name
+            # Форматируем наш LV под файловую систему для QCOW2
+            cmd_args = [
+                "mkfs.ext4",
+                f"/dev/{self.system_volume_group_name}/{disk_create.name}",
+            ]
+            result = self.cli.execute(cmd_args)
+            self.logger.info(f"Результат изменения файловой системы LV: '{result}'")
+
+            # Создаем директорию для точки монтирования
+            result = self.cli.mkdir(disk_create.path)
+            self.logger.info(f"Результат создания директории для точки монтирования: '{result}'")
+            # Монтируем LV в файловую систему нашей OS
+            cmd_args = [
+                "mount",
+                f"/dev/{self.system_volume_group_name}/{disk_create.name}",
+                disk_create.path,
+            ]
+            result = self.cli.execute(cmd_args)
+            self.logger.info(f"Результат монтирования диска: '{result}'")
+
+        return self._create_file_disk(disk_create, request_id)
+
     def _create_file_disk(
         self, disk_create: DiskCreate, request_id: str
     ) -> StorageMessage:
         try:
-            create_qcow2_info = None
-            create_raw_info = None
-            disk_path = self._get_disk_path(disk_create)
-            disk_dir = os.path.dirname(disk_path)
+            disk_info = None
+            disk_path = f"{disk_create.path}/{disk_create.name}.{disk_create.format.value}"
             self.logger.info(
-                f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB"
+                f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB, ресурс пул: '{disk_create.resource_pool}'"
             )
-            if not self.cli.is_directory(disk_dir):
-                self.logger.info(f"Файл уже существует: {disk_path}")
-                return StorageMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.disk_already_created.value,
-                    code=CommandMessagesEnum.disk_already_created.name,
-                )
+            if disk_create.resource_pool is not None:
+                if disk_create.format.value == DiskFormat.QCOW2.value:
+                    if self.cli.is_exists(disk_path):
+                        self.logger.info(f"Файл уже существует: {disk_path}")
+                        return StorageMessage(
+                            request_id=request_id,
+                            message=CommandMessagesEnum.disk_already_created.value,
+                            code=CommandMessagesEnum.disk_already_created.name,
+                        )
+                    disk_info = self._create_qcow2_disk(
+                        disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                    )
+                elif disk_create.format.value == DiskFormat.RAW.value:
+                    current_lv = self.logic_volume_manager.get_volume_by_name(disk_create.name, self.system_volume_group_name)
+                    if current_lv is None:
+                        return StorageMessage(
+                            request_id=request_id,
+                            message=CommandMessagesEnum.disk_create_error.value,
+                            code=CommandMessagesEnum.disk_create_error.name,
+                        )
+                    self.logger.info(f"Для RAW диска был создан LV {current_lv.logic_volume_path}")
+                    vm_name = None
+                    if self._is_disk_in_use(current_lv.logic_volume_path):
+                        vm_name = self._find_vm_by_disk_path(current_lv.logic_volume_path)
+                        if vm_name:
+                            status = DiskStatus.ATTACHED
+                        else:
+                            status = DiskStatus.DETACHED
+                    else:
+                        status = DiskStatus.DETACHED
 
-            size_bytes = int(disk_create.size_gb * 1024 * 1024 * 1024)
-            disk_format = (
-                disk_create.format.value
-                if isinstance(disk_create.format, DiskFormat)
-                else disk_create.format
-            )
-            if disk_format == DiskFormat.QCOW2.value:
-                create_qcow2_info = self._create_qcow2_disk(
-                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
-                )
-                if disk_create.name:
-                    self._add_qcow2_metadata(disk_path, disk_create.name)
+                    disk_info = Disk(name=current_lv.logic_volume_name,
+                                     path=current_lv.logic_volume_path,
+                                     file_path_exists=True,
+                                     status=status,
+                                     type=DiskType.POOL_DISK,
+                                     format=DiskFormat.RAW,
+                                     capacity_bytes=current_lv.volume_size,
+                                     pool=current_lv.logic_volume_pool,
+                                     allocation_bytes=current_lv.volume_size - current_lv.available_volume_size,
+                                     vm_name=vm_name,
+                                     readonly=False)
+                    return StorageMessage(
+                        request_id=request_id,
+                        message=CommandMessagesEnum.disk_successfully_created.value,
+                        code=CommandMessagesEnum.disk_successfully_created.name,
+                        disk_info=disk_info
+                    )
             else:
-                create_raw_info = self._create_raw_disk(
-                    disk_path, disk_create.size_gb, request_id, disk_create.sparse
-                )
-                if disk_create.name:
-                    self._create_metadata_file(disk_path, disk_create)
+                if self.cli.is_exists(disk_path):
+                    self.logger.info(f"Файл уже существует: {disk_path}")
+                    return StorageMessage(
+                        request_id=request_id,
+                        message=CommandMessagesEnum.disk_already_created.value,
+                        code=CommandMessagesEnum.disk_already_created.name,
+                    )
+
+            if disk_create.format.value == DiskFormat.QCOW2.value:
+                if disk_create.resource_pool is None:
+                    disk_info = self._create_qcow2_disk(
+                        disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                    )
+            elif disk_create.format.value == DiskFormat.RAW.value:
+                if disk_create.resource_pool is None:
+                    disk_info = self._create_raw_disk(
+                        disk_path, disk_create.size_gb, request_id, disk_create.sparse
+                    )
 
             disk = Disk(
-                name=disk_create.name or os.path.basename(disk_path),
+                name=disk_create.name,
                 path=disk_path,
                 file_path_exists=True,
                 type=DiskType.EXTERNAL_DISK,
                 format=disk_create.format,
-                capacity_bytes=size_bytes,
-                allocation_bytes=size_bytes,
+                capacity_bytes=disk_create.size_bytes,
+                allocation_bytes=disk_create.size_bytes,
                 status=DiskStatus.DETACHED,
+                pool=disk_create.resource_pool
             )
-            storage_message = (
-                create_qcow2_info if create_qcow2_info else create_raw_info
-            )
-            storage_message.disk_info = disk
+            disk_info.disk_info = disk
 
             self.logger.info(f"Файловый диск создан: {disk.name}")
-            return storage_message
+            return disk_info
 
         except Exception as e:
             self.logger.exception(f"Ошибка создания файлового диска: {e}")
@@ -130,33 +228,6 @@ class StorageManager(LibvirtClient):
                 code=CommandMessagesEnum.disk_create_error.name,
                 note=str(e),
             )
-
-    def _get_disk_path(self, disk_create: DiskCreate) -> str:
-        if disk_create.path:
-            path = disk_create.path
-            if not os.path.basename(path):
-                extension = f".{disk_create.format.value}"
-                filename = (
-                    f"{disk_create.name}{extension}"
-                    if disk_create.name
-                    else f"disk-{uuid.uuid4().hex[:8]}{extension}"
-                )
-                path = os.path.join(path, filename)
-            return path
-
-        if disk_create.name:
-            extension = f".{disk_create.format.value}"
-            filename = (
-                f"{disk_create.name}{extension}"
-                if not disk_create.name.endswith(extension)
-                else disk_create.name
-            )
-            return os.path.join(self.libvirt_config.default_storage_dir, filename)
-
-        return os.path.join(
-            self.libvirt_config.default_storage_dir,
-            f"disk-{uuid.uuid4().hex[:8]}.{disk_create.format.value}",
-        )
 
     def _create_qcow2_disk(
         self, disk_path: str, size_gb: float, request_id: str, sparse: bool = True
@@ -171,7 +242,7 @@ class StorageManager(LibvirtClient):
         try:
             self.logger.info(f"Выполнение команды: {' '.join(cmd)}")
             result = self.cli.execute(cmd, return_proc=True)
-            self.logger.info(f"Результат выполнения команды: {result}")
+            self.logger.info(f"Результат выполнения команды: {result.stderr}")
             if result.returncode != 0:
                 return StorageMessage(
                     request_id=request_id,
@@ -192,28 +263,6 @@ class StorageManager(LibvirtClient):
                 code=CommandMessagesEnum.disk_create_error.name,
                 note=str(e),
             )
-
-    def _add_qcow2_metadata(self, disk_path: str, disk_name: str):
-
-        try:
-            metadata_cmd = [
-                "qemu-img",
-                "amend",
-                "-f",
-                "qcow2",
-                "-o",
-                f"name={disk_name}",
-                disk_path,
-            ]
-
-            self.logger.debug(f"Добавление метаданных: {' '.join(metadata_cmd)}")
-            result = self.cli.execute(metadata_cmd, return_proc=True)
-            if result.returncode == 0:
-                self.logger.info(f"Добавлены метаданные диска: имя={disk_name}")
-            else:
-                self.logger.warning(f"Не удалось добавить метаданные: {result.stderr}")
-        except Exception as e:
-            self.logger.warning(f"Ошибка при добавлении метаданных: {e}")
 
     def _create_raw_disk(
         self, disk_path: str, size_gb: float, request_id: str, sparse: bool = True
@@ -247,7 +296,7 @@ class StorageManager(LibvirtClient):
         self.logger.debug(f"Создание RAW диска: {' '.join(cmd)}")
         result = self.cli.execute(cmd, return_proc=True)
         if result.returncode != 0:
-            self.delete_disk(path=disk_path)
+            self.delete_disk(disk_path=disk_path)
             return StorageMessage(
                 request_id=request_id,
                 message=CommandMessagesEnum.disk_create_error.value,
@@ -265,77 +314,71 @@ class StorageManager(LibvirtClient):
             code=CommandMessagesEnum.disk_successfully_created.name,
         )
 
-    def _create_metadata_file(self, disk_path: str, disk_create: DiskCreate):
-        try:
-            metadata_path = f"{disk_path}.meta"
-            metadata_content = f"name={disk_create.name}\nformat={disk_create.format.value}\nsize_gb={disk_create.size_gb}"
+    def delete_pool_disk_qcow2(self, disk_name: str):
+        # Получить монтированную точку
+        cmd_arg = f"df --output=source,target | grep {disk_name} | awk " + "'{print $2}'"
+        disk_path = self.cli.execute(cmd_arg, shell=True, is_text=True).split("\n")[0]
+        self.logger.info(f"Результат получения точки монтирования: {disk_path} по имени диска: {disk_name}")
 
-            with open(metadata_path, "w") as meta_file:
-                meta_file.write(metadata_content)
+        # Отмонтировать
+        umount_cmd_args = ["umount", disk_path]
+        result = self.cli.execute(umount_cmd_args, return_proc=True)
+        self.logger.info(f"Результат отмонтирования точки: {result}")
+        if result.returncode != 0:
+            return False
 
-            self.logger.info(f"Создан файл метаданных: {metadata_path}")
-        except Exception as e:
-            self.logger.warning(f"Не удалось создать файл метаданных: {e}")
+        # Удалить lv
+        current_lv = self.logic_volume_manager.get_volume_by_name(disk_name, self.system_volume_group_name)
+        if current_lv is None:
+            return False
+        self.logic_volume_manager.delete_logical_volume(disk_name, self.system_volume_group_name)
+        current_lv = self.logic_volume_manager.get_volume_by_name(disk_name, self.system_volume_group_name)
+        if current_lv is not None:
+            return False
 
-    def _fill_pool_raw_disk_with_zeros(self, vol, size_bytes: int):
-        try:
-            stream = self.conn.newStream()
-            vol.upload(stream, 0, size_bytes, 0)
+        # Удалить путь
+        self.cli.execute(["rm", "-r", disk_path])
+        if self.cli.is_exists(disk_path):
+            self.logger.warning(f"Файл диска {disk_path} не удален")
+            return False
 
-            chunk_size = 1024 * 1024
-            zero_data = b"\0" * chunk_size
+        return True
 
-            for offset in range(0, size_bytes, chunk_size):
-                if offset + chunk_size > size_bytes:
-                    zero_data = b"\0" * (size_bytes - offset)
-                stream.send(zero_data)
+    def delete_pool_disk_raw(self, disk_name: str):
+        current_lv = self.logic_volume_manager.get_volume_by_name(disk_name, self.system_volume_group_name)
+        if current_lv is None:
+            return False
+        self.logic_volume_manager.delete_logical_volume(disk_name, self.system_volume_group_name)
+        current_lv = self.logic_volume_manager.get_volume_by_name(disk_name, self.system_volume_group_name)
+        if current_lv is not None:
+            return False
 
-            stream.finish()
-        except Exception as e:
-            self.logger.warning(f"Не удалось заполнить диск нулями: {e}")
+        return True
 
     def delete_disk(
         self,
-        pool_name: str | None = None,
-        disk_name: str | None = None,
-        path: str | None = None,
+        disk_path: str | None = None,
     ) -> bool:
         try:
+            if self.system_disk_path == disk_path:
+                raise ValueError("Нельзя удалять системную папку")
             self.logger.info(
-                f"Удаление диска: pool={pool_name}, disk={disk_name}, path={path}"
+                f"Удаление диска '{disk_path}'"
             )
+            if not self.cli.is_exists(disk_path):
+                self.logger.warning(f"Файл {disk_path} не существует")
+                return False
 
-            if pool_name and disk_name:
-                pool = self.conn.storagePoolLookupByName(pool_name)
-                vol = pool.storageVolLookupByName(disk_name)
+            if self._is_disk_in_use(disk_path):
+                self.logger.warning(f"Диск {disk_path} используется")
+                return False
 
-                if self._is_disk_in_use(vol.path()):
-                    self.logger.warning(f"Диск {disk_name} используется")
-                    return False
-
-                vol.delete(0)
-                self.logger.info(f"Диск {disk_name} удален из пула")
-                return True
-
-            elif path:
-                if not self.cli.is_exists(path):
-                    self.logger.warning(f"Файл {path} не существует")
-                    return False
-
-                if self._is_disk_in_use(path):
-                    self.logger.warning(f"Диск {path} используется")
-                    return False
-
-                self.cli.execute(["rm", "-r", path])
-
-                metadata_path = f"{path}.meta"
-                if self.cli.is_exists(metadata_path):
-                    self.cli.execute(["rm", "-r", metadata_path])
-
-                self.logger.info(f"Файл диска {path} удален")
-                return True
-
-            return False
+            self.cli.execute(["rm", "-r", disk_path])
+            if self.cli.is_exists(disk_path):
+                self.logger.warning(f"Файл диска {disk_path} не удален")
+                return False
+            self.logger.info(f"Файл диска {disk_path} удален")
+            return True
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt: {e}")
@@ -347,19 +390,17 @@ class StorageManager(LibvirtClient):
     def extend_disk(
         self,
         new_size_gb: int,
-        path: str | None = None,
-        pool_name: str | None = None,
-        disk_name: str | None = None,
+        path: str,
+        disk_name: str,
+        disk_format: DiskFormat,
     ):
         """
         Расширение размера диска
         """
 
         try:
-            if pool_name and disk_name:
-                return self._edit_pool_disk(pool_name, disk_name, new_size_gb)
-            elif path:
-                return self._edit_file_disk(path, new_size_gb)
+            if path:
+                return self._edit_file_disk(disk_name, path, disk_format, new_size_gb)
             else:
                 return None
 
@@ -397,57 +438,39 @@ class StorageManager(LibvirtClient):
         #     self.logger.exception(f"Ошибка: {e}")
         #     return None
 
-    def _edit_pool_disk(
-        self, pool_name: str, disk_name: str, new_size_gb: int
-    ) -> Disk | None:
+    def _edit_file_disk(self, disk_name: str, path: str, disk_format: DiskFormat, new_size_gb: int) -> Disk | None:
         try:
-            pool = self.conn.storagePoolLookupByName(pool_name)
-            vol = pool.storageVolLookupByName(disk_name)
-            vol_info = vol.info()
-            current_size_gb = vol_info[1] / (1024**3)
-
-            if new_size_gb > current_size_gb:
-                new_size_bytes = int(new_size_gb * 1024 * 1024 * 1024)
-                vol.resize(new_size_bytes, 0)
-                self.logger.info(f"Размер изменен на {new_size_gb}GB")
-
-            return self.get_disk_info(pool_name, disk_name)
-
-        except libvirt.libvirtError as e:
-            self.logger.error(f"Ошибка изменения пулового диска: {e}")
-            return None
-
-    def _edit_file_disk(self, path: str, new_size_gb: int) -> Disk | None:
-        try:
+            disk_path = f"{path}/{disk_name}.{disk_format.value}"
             if new_size_gb is not None:
-                current_size_bytes = self.get_disk_size(path)
+                current_size_bytes = self.get_disk_size(disk_path)
                 current_size_gb = round(current_size_bytes / (1024**3), 2)
                 if new_size_gb > current_size_gb:
                     self.logger.info(f"Увеличение размера до {new_size_gb}GB")
-                    cmd = ["qemu-img", "resize", path, f"{new_size_gb}G"]
+                    cmd = ["qemu-img", "resize", disk_path, f"{new_size_gb}G"]
 
                     self.logger.debug(f"Выполнение команды: {' '.join(cmd)}")
                     result = self.cli.execute(cmd, return_proc=True)
                     if result.returncode != 0:
                         raise Exception(f"Ошибка qemu-img: {result.stderr}")
 
-            return self.get_disk_info(path=path)
+            return self.get_disk_info(disk_name, disk_path, disk_format)
 
         except Exception as e:
             self.logger.exception(f"Ошибка изменения файлового диска: {e}")
             return None
 
     def clone_disk(
-        self, source_path: str, target_path: str, target_name: str = None
+        self, disk_name: str, path: str, disk_format: DiskFormat, target_name: str
     ) -> Disk | None:
         try:
-            self.logger.info(f"Клонирование диска: {source_path} -> {target_path}")
+            self.logger.info(f"Клонирование диска: {disk_name}.{disk_format.value} -> {target_name}.{disk_format.value}")
 
-            source_disk = self.get_disk_info(path=source_path)
+            source_disk = self.get_disk_info(disk_name=disk_name, path=path, disk_format=disk_format)
             source_disk = source_disk.disk_info
             if not source_disk:
                 return None
-
+            source_path = f"{path}/{disk_name}.{disk_format.value}"
+            target_path = f"{path}/{target_name}.{disk_format.value}"
             target_dir = os.path.dirname(target_path)
             if not self.cli.is_exists(target_dir):
                 self.cli.mkdir(target_dir)
@@ -471,20 +494,7 @@ class StorageManager(LibvirtClient):
             else:
                 shutil.copy2(source_path, target_path)
 
-            target_name = target_name or source_disk.name
-            if source_disk.format == DiskFormat.QCOW2:
-                self._add_qcow2_metadata(target_path, target_name)
-            elif source_disk.format == DiskFormat.RAW:
-                self._create_metadata_file(
-                    target_path,
-                    DiskCreate(
-                        name=target_name,
-                        format=source_disk.format,
-                        size_gb=source_disk.get_effective_size_gb(),
-                    ),
-                )
-
-            return self.get_disk_info(path=target_path)
+            return self.get_disk_info(disk_name=target_name, path=path, disk_format=disk_format)
 
         except Exception as e:
             self.logger.exception(f"Ошибка клонирования: {e}")
@@ -492,15 +502,14 @@ class StorageManager(LibvirtClient):
 
     def attach_disk(self, disk_attach: DiskAttach, request_id: str) -> StorageMessage:
         try:
+            disk_path = disk_attach.path + "/" + disk_attach.disk_name + "." + disk_attach.disk_format.value
             self.logger.info(
-                f"Подключение диска {disk_attach.path} к ВМ {disk_attach.vm_name}"
+                f"Подключение диска {disk_path} к ВМ {disk_attach.vm_name}"
             )
 
             vm = self.conn.lookupByName(disk_attach.vm_name)
 
-            # Определяем тип устройства на основе расширения файла
-            device_format = self.libvirt_config.disk_format_by_path(disk_attach.path)
-            if device_format.value in (DiskFormat.ISO.value, DiskFormat.IMG.value):
+            if disk_attach.disk_format.value in (DiskFormat.ISO.value, DiskFormat.IMG.value):
                 device_type = "cdrom"
                 # Для CDROM обычно используется readonly
                 if not hasattr(disk_attach, "readonly") or disk_attach.readonly is None:
@@ -513,7 +522,7 @@ class StorageManager(LibvirtClient):
                     disk_attach.readonly if hasattr(disk_attach, "readonly") else False
                 )
 
-            get_vm_by_path = self._find_vm_by_disk_path(disk_attach.path)
+            get_vm_by_path = self._find_vm_by_disk_path(disk_path)
             if get_vm_by_path:
                 self.logger.warning("Диск уже подключен")
                 return StorageMessage(
@@ -522,7 +531,7 @@ class StorageManager(LibvirtClient):
                     code=CommandMessagesEnum.disk_already_attached_error.name,
                 )
 
-            disk_info = self.get_disk_info(path=disk_attach.path)
+            disk_info = self.get_disk_info(path=disk_attach.path, disk_name=disk_attach.disk_name, disk_format=disk_attach.disk_format)
             if disk_info.code != CommandMessagesEnum.disk_founded.name:
                 return disk_info
             disk_info = disk_info.disk_info
@@ -542,7 +551,7 @@ class StorageManager(LibvirtClient):
                 disk_xml = f"""
                 <disk type='file' device='cdrom'>
                     <driver name='qemu' type='raw' cache='{cache_mode}'/>
-                    <source file='{disk_attach.path}'/>
+                    <source file='{disk_path}'/>
                     <target dev='{target_dev}' bus='{bus_type.value}'/>
                     <readonly/>
                 </disk>
@@ -551,7 +560,7 @@ class StorageManager(LibvirtClient):
                 disk_xml = f"""
                 <disk type='file' device='disk'>
                     <driver name='qemu' type='{disk_info.format.value}' cache='{cache_mode}'/>
-                    <source file='{disk_attach.path}'/>
+                    <source file='{disk_path}'/>
                     <target dev='{target_dev}' bus='{bus_type.value}'/>
                     {"<readonly/>" if readonly else ""}
                 </disk>
@@ -701,7 +710,7 @@ class StorageManager(LibvirtClient):
                 allocation_bytes = capacity_bytes
 
             # Определяем тип диска
-            disk_type = DiskType.VM_ATTACHED
+            disk_type = DiskType.EXTERNAL_DISK
 
             # Извлекаем тип шины
             bus_type = None
@@ -797,18 +806,10 @@ class StorageManager(LibvirtClient):
 
             vm = self.conn.lookupByName(detach_disk.vm_name)
             xml_desc = vm.XMLDesc()
-
-            disk_xmls = []
-            for line in xml_desc.split("\n"):
-                if detach_disk.target_dev in line:
-                    start_idx = xml_desc.find(line) - 176
-                    end_idx = xml_desc.find("</disk>", start_idx) + 7
-                    disk_xml = xml_desc[start_idx:end_idx]
-                    disk_xmls.append(disk_xml)
-
-            for current_disk in disk_xmls:
-                if detach_disk.target_dev in current_disk:
-                    disk_xml = current_disk
+            root = ET.fromstring(xml_desc)
+            for current_disk in root.find("devices").findall("disk"):
+                if current_disk.find("target").get("dev") == detach_disk.target_dev:
+                    disk_xml = ET.tostring(current_disk, encoding='unicode')
                     break
             else:
                 raise ValueError(
@@ -842,7 +843,6 @@ class StorageManager(LibvirtClient):
     def list_disks(self, query: DiskQuery | None = None) -> list[Disk]:
         all_disks = []
         try:
-            # disks.extend(self._get_pool_disks(query))
             all_disks.extend(self._get_file_disks(query))
             all_disks.extend(self._get_attached_disks(query))
 
@@ -921,8 +921,6 @@ class StorageManager(LibvirtClient):
                 note=str(e),
             )
 
-    # Вспомогательные методы
-
     def _is_disk_in_use(self, disk_path: str) -> bool:
         try:
             vm_ids = self.conn.listDomainsID()
@@ -948,14 +946,6 @@ class StorageManager(LibvirtClient):
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка проверки использования: {e}")
-            return False
-
-    def _is_disk_attached_to_vm(self, disk_path: str, vm_name: str) -> bool:
-        try:
-            vm = self.conn.lookupByName(vm_name)
-            xml_desc = vm.XMLDesc()
-            return disk_path in xml_desc
-        except libvirt.libvirtError:
             return False
 
     def _find_free_disk_device(self, vm, bus_type: BusType = BusType.VIRTIO) -> str:
@@ -1002,15 +992,65 @@ class StorageManager(LibvirtClient):
 
     def get_disk_info(
         self,
-        pool_name: str | None = None,
-        disk_name: str | None = None,
+        disk_name: str,
         path: str | None = None,
+        disk_format: DiskFormat = DiskFormat.QCOW2,
+        is_pool: bool = False,
         request_id: str = str(uuid.uuid4()),
     ) -> Disk | StorageMessage:
+        if path is None:
+            path = self.system_disk_path
         try:
-            if path:
-                if self.cli.is_exists(path):
-                    disk_info = self._get_file_disk_info(path)
+            disk_path = path + "/" + disk_name + "." + disk_format.value
+            if is_pool:
+                if disk_format.value == DiskFormat.QCOW2.value:
+                    if self.cli.is_exists(disk_path):
+                        disk_info = self._get_file_disk_info(disk_path)
+                        if disk_info is None or isinstance(disk_info, str):
+                            return StorageMessage(
+                                request_id=request_id,
+                                message=CommandMessagesEnum.disk_not_found.value,
+                                code=CommandMessagesEnum.disk_not_found.name,
+                                note=disk_info,
+                            )
+                        return StorageMessage(
+                            request_id=request_id,
+                            message=CommandMessagesEnum.disk_founded.value,
+                            code=CommandMessagesEnum.disk_founded.name,
+                            disk_info=disk_info,
+                        )
+                else:
+                    current_lv = self.logic_volume_manager.get_volume_by_name(disk_name, self.system_volume_group_name)
+                    vm_name = None
+                    if self._is_disk_in_use(current_lv.logic_volume_path):
+                        vm_name = self._find_vm_by_disk_path(path)
+                        if vm_name:
+                            status = DiskStatus.ATTACHED
+                        else:
+                            status = DiskStatus.DETACHED
+                    else:
+                        status = DiskStatus.DETACHED
+
+                    disk_info = Disk(name=current_lv.logic_volume_name,
+                                     path=current_lv.logic_volume_path,
+                                     file_path_exists=True,
+                                     status=status,
+                                     type=DiskType.POOL_DISK,
+                                     format=DiskFormat.RAW,
+                                     capacity_bytes=current_lv.volume_size,
+                                     pool=current_lv.logic_volume_pool,
+                                     allocation_bytes=current_lv.volume_size - current_lv.available_volume_size,
+                                     vm_name=vm_name,
+                                     readonly=False)
+                    return StorageMessage(
+                        request_id=request_id,
+                        message=CommandMessagesEnum.disk_founded.value,
+                        code=CommandMessagesEnum.disk_founded.name,
+                        disk_info=disk_info,
+                    )
+            else:
+                if self.cli.is_exists(disk_path):
+                    disk_info = self._get_file_disk_info(disk_path)
                     if disk_info is None or isinstance(disk_info, str):
                         return StorageMessage(
                             request_id=request_id,
@@ -1029,14 +1069,12 @@ class StorageManager(LibvirtClient):
                     message=CommandMessagesEnum.disk_not_found.value,
                     code=CommandMessagesEnum.disk_not_found.name,
                 )
-            elif pool_name and disk_name:
-                return self._get_pool_disk_info(pool_name, disk_name)
-            else:
-                return StorageMessage(
-                    request_id=request_id,
-                    message=CommandMessagesEnum.disk_not_found.value,
-                    code=CommandMessagesEnum.disk_not_found.name,
-                )
+
+            return StorageMessage(
+                request_id=request_id,
+                message=CommandMessagesEnum.disk_not_found.value,
+                code=CommandMessagesEnum.disk_not_found.name,
+            )
 
         except (libvirt.libvirtError, FileNotFoundError) as e:
             self.logger.error(f"Ошибка получения информации: {e}")
@@ -1077,8 +1115,8 @@ class StorageManager(LibvirtClient):
         else:
             raise ValueError(f"Неизвестный тип размера: {size_type}")
 
-    def get_disk_virtual_size(self, path: str) -> int:  # Возвращает размер в байтах
-        cmd = ["qemu-img", "info", path]
+    def get_disk_virtual_size(self, disk_path: str) -> int:  # Возвращает размер в байтах
+        cmd = ["qemu-img", "info", disk_path]
         result = self.cli.execute(cmd, return_proc=True)
 
         if result.returncode != 0:
@@ -1097,47 +1135,36 @@ class StorageManager(LibvirtClient):
         size_data = float(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
         return self.convert_to_bytes_simple(size_data, size_type)
 
-    def _get_file_disk_info(self, path: str) -> Disk | str:
+    def _get_file_disk_info(self, disk_path: str) -> Disk | str:
         try:
-            file_path_exists = self.cli.is_exists(path)
+            file_path_exists = self.cli.is_exists(disk_path)
             disk_format = DiskFormat.UNKNOWN
 
             # Определяем формат по расширению
-            if path.endswith(".qcow2"):
+            if disk_path.endswith(".qcow2"):
                 disk_format = DiskFormat.QCOW2
-            elif path.endswith((".raw", ".img")):
+            elif disk_path.endswith((".raw", ".img")):
                 disk_format = DiskFormat.RAW
-            elif path.endswith(".iso"):
+            elif disk_path.endswith(".iso"):
                 disk_format = DiskFormat.ISO
-            elif path.endswith(".vmdk"):
+            elif disk_path.endswith(".vmdk"):
                 disk_format = DiskFormat.VMDK
-            elif path.endswith(".vdi"):
+            elif disk_path.endswith(".vdi"):
                 disk_format = DiskFormat.VDI
-            elif path.endswith(".vhd") or path.endswith(".vhdx"):
+            elif disk_path.endswith(".vhd") or disk_path.endswith(".vhdx"):
                 disk_format = DiskFormat.VHDX
 
-            size_bytes = self.get_disk_size(path) if file_path_exists else 0
+            size_bytes = self.get_disk_size(disk_path) if file_path_exists else 0
 
-            disk_name = os.path.basename(path)
-
-            metadata_path = f"{path}.meta"
-            if self.cli.is_exists(metadata_path):
-                try:
-                    with open(metadata_path, "r") as f:
-                        for line in f:
-                            if line.startswith("name="):
-                                disk_name = line.strip().split("=", 1)[1]
-                                break
-                except Exception:
-                    pass
+            disk_name = os.path.basename(disk_path).split(".").pop(0)
+            disk_dir = os.path.dirname(disk_path)
 
             disk_type = DiskType.EXTERNAL_DISK
             vm_name = None
 
-            if self._is_disk_in_use(path):
-                vm_name = self._find_vm_by_disk_path(path)
+            if self._is_disk_in_use(disk_path):
+                vm_name = self._find_vm_by_disk_path(disk_path)
                 if vm_name:
-                    disk_type = DiskType.VM_ATTACHED
                     status = DiskStatus.ATTACHED
                 else:
                     status = DiskStatus.DETACHED
@@ -1145,11 +1172,11 @@ class StorageManager(LibvirtClient):
                 status = DiskStatus.DETACHED
 
             # Определяем, является ли диск CDROM
-            readonly = path.lower().endswith(".iso")  # ISO файлы по умолчанию readonly
+            readonly = disk_path.lower().endswith(".iso")  # ISO файлы по умолчанию readonly
 
             disk = Disk(
                 name=disk_name,
-                path=path,
+                path=disk_dir,
                 file_path_exists=file_path_exists,
                 type=disk_type,
                 format=disk_format,
@@ -1165,48 +1192,6 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Ошибка получения файловой информации: {e}")
             return str(e)
-
-    def _get_pool_disk_info(self, pool_name: str, disk_name: str) -> Disk | None:
-        try:
-            pool = self.conn.storagePoolLookupByName(pool_name)
-            vol = pool.storageVolLookupByName(disk_name)
-
-            vol_info = vol.info()
-            vol_xml = vol.XMLDesc()
-
-            disk_format = DiskFormat.UNKNOWN
-            if "type='qcow2'" in vol_xml:
-                disk_format = DiskFormat.QCOW2
-            elif "type='raw'" in vol_xml:
-                disk_format = DiskFormat.RAW
-
-            disk_path = vol.path()
-            if self._is_disk_in_use(disk_path):
-                vm_name = self._find_vm_by_disk_path(disk_path)
-                disk_type = DiskType.VM_ATTACHED
-                status = DiskStatus.ATTACHED
-            else:
-                disk_type = DiskType.POOL_DISK
-                status = DiskStatus.DETACHED
-                vm_name = None
-
-            disk = Disk(
-                name=disk_name,
-                path=disk_path,
-                type=disk_type,
-                format=disk_format,
-                capacity_bytes=vol_info[1],
-                allocation_bytes=vol_info[2],
-                pool=pool_name,
-                status=status,
-                vm_name=vm_name,
-            )
-
-            return disk
-
-        except libvirt.libvirtError as e:
-            self.logger.error(f"Ошибка получения пуловой информации: {e}")
-            return None
 
     def _find_vm_by_disk_path(self, disk_path: str) -> str | None:
         try:
@@ -1234,45 +1219,6 @@ class StorageManager(LibvirtClient):
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка поиска ВМ: {e}")
             return None
-
-    def _get_pool_disks(self, query: DiskQuery | None) -> list[Disk]:
-        all_disks = []
-        try:
-            if query and query.pool:
-                try:
-                    pools = [self.conn.storagePoolLookupByName(query.pool)]
-                except libvirt.libvirtError:
-                    pools = []
-            else:
-                pools = self.conn.listAllStoragePools()
-
-            for pool in pools:
-                try:
-                    pool_info = pool.info()
-                    if pool_info[0] != libvirt.VIR_STORAGE_POOL_RUNNING:
-                        try:
-                            pool.create(0)
-                        except BaseException:
-                            continue
-
-                    volumes = pool.listAllVolumes()
-                    for vol in volumes:
-                        try:
-                            disk = self._volume_to_disk(vol, pool.name())
-                            if disk:
-                                all_disks.append(disk)
-                        except libvirt.libvirtError:
-                            continue
-
-                except libvirt.libvirtError:
-                    continue
-
-        except libvirt.libvirtError as e:
-            self.logger.error(f"Ошибка получения пуловых дисков: {e}")
-        except Exception as e:
-            self.logger.exception(f"Неожиданная ошибка: {e}")
-
-        return all_disks
 
     def _get_file_disks(self, query: DiskQuery | None) -> list[Disk]:
         all_disks = []
@@ -1439,7 +1385,7 @@ class StorageManager(LibvirtClient):
                 name=os.path.basename(disk_path),
                 path=disk_path,
                 file_path_exists=self.cli.is_exists(disk_path),
-                type=DiskType.VM_ATTACHED,
+                type=DiskType.EXTERNAL_DISK,
                 format=disk_format,
                 capacity_bytes=size_bytes,
                 allocation_bytes=size_bytes,
@@ -1455,33 +1401,6 @@ class StorageManager(LibvirtClient):
             return None
 
     @staticmethod
-    def _volume_to_disk(vol, pool_name: str) -> Disk | None:
-        try:
-            vol_info = vol.info()
-            vol_xml = vol.XMLDesc()
-
-            disk_format = DiskFormat.UNKNOWN
-            if "type='qcow2'" in vol_xml:
-                disk_format = DiskFormat.QCOW2
-            elif "type='raw'" in vol_xml:
-                disk_format = DiskFormat.RAW
-
-            disk = Disk(
-                name=vol.name(),
-                path=vol.path(),
-                type=DiskType.POOL_DISK,
-                format=disk_format,
-                capacity_bytes=vol_info[1],
-                allocation_bytes=vol_info[2],
-                pool=pool_name,
-                status=DiskStatus.DETACHED,
-            )
-
-            return disk
-        except libvirt.libvirtError:
-            return None
-
-    @staticmethod
     def _remove_duplicate_disks(all_disks: list[Disk]) -> list[Disk]:
         unique_disks = {}
         for disk in all_disks:
@@ -1492,7 +1411,7 @@ class StorageManager(LibvirtClient):
                 if disk.vm_name and not existing.vm_name:
                     existing.vm_name = disk.vm_name
                     existing.status = DiskStatus.ATTACHED
-                    existing.type = DiskType.VM_ATTACHED
+                    existing.type = DiskType.EXTERNAL_DISK
                 if disk.pool and not existing.pool:
                     existing.pool = disk.pool
                     existing.type = DiskType.POOL_DISK
@@ -1551,7 +1470,7 @@ if __name__ == "__main__":
     5. Конвертация формата диска
     """
 
-    with StorageManager().with_default_user() as manager:
+    with StorageManager() as manager:
         # Создание диска в пуле
         # disk_create = DiskCreate(
         #     name="test_disk",

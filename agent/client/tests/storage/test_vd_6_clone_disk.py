@@ -28,7 +28,6 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
         # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)
         cloned_disk_name = f"disk-test-cloned-{random_name}"
-        cloned_disk_file_name = f"disk-test-cloned-{random_name}.{disk_format.value}"
         attach_disk_create = DiskCreate(
             name=f"disk-test-{random_name}",
             size_gb=0.2,
@@ -36,14 +35,14 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
             sparse=sparse,
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk is not None, "Ошибка: диск для подключения не создан"
-        vm_disk_start = storage_session.get_disk_info(path=attach_disk_create.path)
+        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
+        assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
+        vm_disk_start = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=attach_disk_create.format)
         vm_disk_start = vm_disk_start.disk_info
-        first_disk_path = vm_disk_start.path
+        first_disk_path = vm_disk_start.path + "/" + attach_disk_create.name + "." + attach_disk_create.format.value
 
         assert vm_disk_start.status.value == DiskStatus.DETACHED.value
-        current_disk_name = vm_disk_start.name.split(".").pop(0)
-        assert current_disk_name == attach_disk_create.name
+        assert vm_disk_start.name == attach_disk_create.name
         assert vm_disk_start.format == disk_format
         if not sparse:
             assert (
@@ -56,23 +55,21 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
         assert vm_disk_start.path == attach_disk_create.path
 
         # ____________________________________Клонирование диска диска____________
-        target_path = vm_disk_start.path.replace(
-            f"{attach_disk_create.name}.{attach_disk_create.format.value}",
-            cloned_disk_file_name,
-        )
-        storage_session.clone_disk(
-            source_path=vm_disk_start.path,
-            target_path=target_path,
-            target_name=cloned_disk_name,
-        )
-        vm_disk = storage_session.get_disk_info(path=target_path)
+        storage_session.clone_disk(disk_name=attach_disk_create.name,
+                                   path=vm_disk_start.path,
+                                   disk_format=vm_disk_start.format,
+                                   target_name=cloned_disk_name,
+                                   )
+        vm_disk = storage_session.get_disk_info(disk_name=cloned_disk_name, disk_format=attach_disk_create.format)
         vm_disk = vm_disk.disk_info
-        cloned_disk_path = vm_disk.path
+        cloned_disk_path = vm_disk.path + "/" + vm_disk.name + "." + vm_disk.format.value
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.format.value == disk_format.value
         assert vm_disk.type.value == DiskType.EXTERNAL_DISK.value
         assert vm_disk.file_path_exists is True
+        assert vm_disk.name == cloned_disk_name
+
         if not sparse:
             assert (
                 round(vm_disk_start.capacity_bytes / (1024**3), 2)
@@ -80,21 +77,11 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
             )
         else:
             assert round(vm_disk_start.capacity_bytes / (1024**3), 2) < 0.1
-        assert vm_disk.path == target_path
-
-        current_disk_name = vm_disk.name.split(".").pop(0)
-        assert current_disk_name == cloned_disk_name
     finally:
-
         # ____________________________________Удаление дисков(постусловие)________
-
         if first_disk_path is not None:
-            storage_session.delete_disk(path=first_disk_path)
-            vm_disk = storage_session.get_disk_info(path=first_disk_path)
-            assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
-            assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
+            delete_disk_info = storage_session.delete_disk(disk_path=first_disk_path)
+            assert delete_disk_info is True
         if cloned_disk_path is not None:
-            storage_session.delete_disk(path=cloned_disk_path)
-            vm_disk = storage_session.get_disk_info(path=cloned_disk_path)
-            assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
-            assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
+            delete_disk_info = storage_session.delete_disk(disk_path=cloned_disk_path)
+            assert delete_disk_info is True

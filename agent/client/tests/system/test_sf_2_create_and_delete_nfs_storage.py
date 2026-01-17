@@ -1,4 +1,5 @@
 import random
+import time
 
 import pytest
 
@@ -26,6 +27,7 @@ def test_sf_02_create_and_delete_nfs_storage(
     удалить диски, убедиться чтобы диски удалены, удалить хранилище, убедиться что хранилище удалено
     """
     disk_path = None
+    time.sleep(5)
     try:
         # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)

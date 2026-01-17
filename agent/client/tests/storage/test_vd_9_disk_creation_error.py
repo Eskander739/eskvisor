@@ -31,6 +31,6 @@ def test_vd_09_disk_creation_error(storage_session, disk_format):
     else:
         assert attach_disk.disk_info.path in attach_disk.stderr
         assert ERROR_MSG.format(disk_format.value) in attach_disk.stderr
-    vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+    vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=attach_disk_create.format)
     assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
     assert vm_disk.code == CommandMessagesEnum.disk_not_found.name

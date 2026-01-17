@@ -24,6 +24,7 @@ from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtual,
 )
+from agent.client.hypervisor.libvirt.models.volume.logic import LogicVolume
 
 
 class CommandMessagesEnum(Enum):
@@ -184,7 +185,7 @@ class VmMessage(DefaultMessage):
 class StorageMessage(DefaultMessage):
     target_path: str | None = None
     note: str | None = None
-    disk_info: Disk | None = None
+    disk_info: Disk | LogicVolume | None = None
     stdout: str | None = None
     stderr: str | None = None
 

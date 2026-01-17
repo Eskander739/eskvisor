@@ -31,28 +31,27 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
     try:
         # ____________________________________Создание диска______________________
         attach_disk_create = DiskCreate(
-            name=f"disk-test-{RANDOM_NAME}.qcow2",
+            name=f"disk-test-{RANDOM_NAME}",
             size_gb=0.2,
             format=DiskFormat.QCOW2,
             sparse=True,
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk is not None, "Ошибка: диск для подключения не создан"
+        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
+        assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
 
-        vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=attach_disk_create.format)
         vm_disk = vm_disk.disk_info
-        disk_path = vm_disk.path
+        disk_path = vm_disk.path + "/" + attach_disk_create.name + "." + attach_disk_create.format.value
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
-        current_disk_name = vm_disk.name.split(".").pop(0)
-        assert current_disk_name == attach_disk_create.name
+        assert vm_disk.name == attach_disk_create.name
         assert attach_disk_create.format == DiskFormat.QCOW2
-
         disk_attach_list = []
         for vm_config_name, target_dev in zip(vm_config_names, target_dev_list):
             disk_attach_list.append(
                 DiskAttach(
-                    vm_name=vm_config_name, path=vm_disk.path, target_dev=target_dev
+                    vm_name=vm_config_name, disk_name=attach_disk_create.name, path=vm_disk.path, disk_format=attach_disk_create.format, target_dev=target_dev
                 )
             )
 
@@ -119,15 +118,14 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
             DiskDetach(vm_name=vm_name_to_detach, target_dev=target_dev_to_detach)
         )
 
-        vm_disk = storage_session.get_disk_info(path=attach_disk_create.path)
+        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=attach_disk_create.format)
         vm_disk = vm_disk.disk_info
-
         assert vm_disk.status.value == DiskStatus.DETACHED.value
 
     finally:
         # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:
-            storage_session.delete_disk(path=disk_path)
-            vm_disk = storage_session.get_disk_info(path=disk_path)
-            assert vm_disk.message == CommandMessagesEnum.disk_not_found.value
-            assert vm_disk.code == CommandMessagesEnum.disk_not_found.name
+            delete_disk_info = storage_session.delete_disk(disk_path=disk_path)
+            assert delete_disk_info is True
+
+

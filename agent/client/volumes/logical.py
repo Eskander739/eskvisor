@@ -3,7 +3,7 @@ import os
 import re
 
 from agent.client.cli import CLIControl
-from agent.client.hypervisor.libvirt.models.volume.logic_volume import (
+from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,
     LogicVolume,
 )
@@ -20,13 +20,107 @@ class LogicalVolumeManager:
         self.cli = CLIControl()
         self.logger = DefaultLogger("LogicalVolumeManager")
 
-    def create_volume(
+    def __create_logical_volume(
+        self,
+        logic_volume_name: str,
+        logic_volume_size: int | float,
+        volume_group_name: str,
+        logic_tp_volume_name: str | None = None,
+        logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
+        thin_pool: bool = True,  # для ресурса пулов(можно внутри такого logic volume создавать другие logic volume
+        sparse: bool = False,
+    ):
+        if thin_pool and logic_tp_volume_name is not None:
+            raise ValueError("Нельзя создать LV thin pool внутри thin pool")
+
+        if not thin_pool and logic_tp_volume_name is None:
+            raise ValueError("Нельзя создать не LV thin pool или не LV thin")
+
+        if logic_tp_volume_name is not None:
+            current_thin_pool = self.get_volume_by_name(
+                logic_tp_volume_name, volume_group_name
+            )
+            if current_thin_pool is None:
+                raise ValueError("Не найден LV thin pool")
+
+            logic_volume_path = (
+                f"/dev/{volume_group_name}/{logic_tp_volume_name}/{logic_volume_name}"
+            )
+        else:
+            logic_volume_path = f"/dev/{volume_group_name}/{logic_volume_name}"
+
+        if os.path.exists(logic_volume_path):
+            self.logger.info(f"Логический том уже существует: {logic_volume_path}")
+            return f'Logical volume "{logic_volume_name}" created(logic volume exists)'
+
+        vg_path = (
+            f"{volume_group_name}/{logic_tp_volume_name}"
+            if logic_tp_volume_name
+            else volume_group_name
+        )
+        is_thin_pool = "-L" if thin_pool else "-V"
+        cmd_args = [
+            "lvcreate",
+            "-y",
+            "-n",
+            logic_volume_name,  # Имя создаваемого LV
+            is_thin_pool,
+            f"{str(logic_volume_size)}{logic_volume_size_type.value}",  # Размер создаваемого LV и тип размера создаваемого LV
+            vg_path,  # Имя группы томов, в которой создаем LV
+        ]
+        if sparse and thin_pool:
+            cmd_args.append("--zero=n")
+        if thin_pool:
+            cmd_args.append("--thinpool")
+            cmd_args.append(logic_volume_name)
+        else:
+            cmd_args.append("--thin")
+
+        self.logger.info(f"Создание логического тома командой: {cmd_args} ")
+
+        result = self.cli.execute(cmd_args)
+        self.logger.info(f"Результат создания логического тома: {result}")
+        return result
+
+    def create_volume_in_thin_pool(  # создаем хранилище для диска(создаваемое хранилище и будет самим диском)
+        self,
+        logic_volume_name: str,
+        logic_volume_size: int | float,
+        volume_group_name: str,
+        logic_tp_volume_name: str,
+        logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
+        sparse: bool = False
+    ):
+        return self.__create_logical_volume(
+            logic_volume_name,
+            logic_volume_size,
+            volume_group_name,
+            logic_tp_volume_name,
+            logic_volume_size_type,
+            False,
+            sparse
+        )
+
+    def create_thin_pool_volume(  # создаем хранилище для ресурса пула
         self,
         logic_volume_name: str,
         logic_volume_size: int | float,
         volume_group_name: str,
         logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
-        thin_pool: bool = True,  # для ресурса пулов(можно внутри такого logic volume создавать другие logic volume)
+    ):
+        return self.__create_logical_volume(
+            logic_volume_name,
+            logic_volume_size,
+            volume_group_name,
+            logic_volume_size_type=logic_volume_size_type,
+        )
+
+    def create_just_volume(
+        self,
+        logic_volume_name: str,
+        logic_volume_size: int | float,
+        volume_group_name: str,
+        logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
     ):
 
         logic_volume_path = f"/dev/{volume_group_name}/{logic_volume_name}"
@@ -42,9 +136,6 @@ class LogicalVolumeManager:
             f"{str(logic_volume_size)}{logic_volume_size_type.value}",  # Размер создаваемого LV и тип размера создаваемого LV
             volume_group_name,  # Имя группы томов, в которой создаем LV
         ]
-        if thin_pool:
-            cmd_args.append("--thin")
-        self.logger.info(f"Создание логического тома командой: {cmd_args}")
 
         result = self.cli.execute(cmd_args)
         self.logger.info(f"Результат создания логического тома: {result}")
@@ -210,17 +301,22 @@ class LogicalVolumeManager:
         logic_volumes_list = []
 
         for logic_volume in result:
+            print("logic_volume: ", logic_volume)
             volume_size = self.convert_storage_size_to_bytes(
                 logic_volume.get("lv_size")
             )
             data_percent = logic_volume.get("data_percent")
             used_volume_size = (
-                volume_size * float(data_percent.replace(",", ".")) / 100
+                int(volume_size * float(data_percent.replace(",", ".")) / 100)
                 if data_percent
                 else 0
             )
+            logic_volume_path = (
+                f'/dev/{logic_volume.get("vg_name")}/{logic_volume.get("lv_name")}'
+            )
             logic_volumes_list.append(
                 LogicVolume(
+                    logic_volume_path=logic_volume_path,
                     logic_volume_name=logic_volume.get("lv_name"),
                     volume_group_name=logic_volume.get("vg_name"),
                     attributes=logic_volume.get("lv_attr"),
@@ -303,11 +399,15 @@ class LogicalVolumeManager:
 if __name__ == "__main__":
     manager = LogicalVolumeManager()
     # manager.create_volume("ESKA", 1.5, "vg_eskvisor_01")
-    manager.delete_all_volume("vg_eskvisor_01")
+    # manager.delete_all_volume("vg_eskvisor_01")
+    # manager.create_thin_pool_volume("erjgjegj", 1, "vg_eskvisor_01") # создаем ресурс пул
+    # manager.create_volume_in_thin_pool("ghhgjkhjkhkl", 1, "vg_eskvisor_01", "erjgjegj")# создаем диск внутри ресурс пула
     for pv in manager.get_volume_list():
         print("-" * 50)
         print("ИМЯ ЛОГИЧЕСКОГО ТОМА: ", pv.logic_volume_name)
+        print("СОЗДАН ЛИ ВНУТРИ РЕСУРС ПУЛА: ", pv.logic_volume_pool)
         print("ИМЯ ГРУППЫ ТОМА: ", pv.volume_group_name)
+        print("ПУТЬ: ", pv.logic_volume_path)
         print("АТРИБУТЫ ТОМА: ", pv.attributes)
         print("РАЗМЕР ЛОГИЧЕСКОГО ТОМА В БАЙТАХ: ", pv.volume_size)
         print("РАЗМЕР ЛОГИЧЕСКОГО ТОМА В ГБ: ", pv.volume_size_gb)

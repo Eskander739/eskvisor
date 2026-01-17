@@ -1709,7 +1709,7 @@ class VmManager(LibvirtClient):
                             self.logger.info(f"ISO файл удален: {disk_path}")
                         else:
                             # Для обычных дисков используем StorageManager
-                            self.storage_manager.delete_disk(path=disk_path)
+                            self.storage_manager.delete_disk(disk_path=disk_path)
                             self.logger.info(
                                 f"Диск удален через StorageManager: {disk_path}"
                             )

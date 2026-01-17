@@ -1,6 +1,6 @@
 from pydantic import BaseModel, computed_field, model_validator
 
-from agent.client.hypervisor.libvirt.models.volume.logic_volume import (
+from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,
 )
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType

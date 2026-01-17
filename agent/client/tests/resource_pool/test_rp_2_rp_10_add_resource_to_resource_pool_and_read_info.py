@@ -7,7 +7,7 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
     ResourcePoolVirtualEdit,
 )
-from agent.client.hypervisor.libvirt.models.volume.logic_volume import (
+from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,
 )
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType

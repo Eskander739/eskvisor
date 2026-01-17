@@ -1,8 +1,11 @@
 import json
+import random
+import time
 
 from agent.client.cli import CLIControl
-from agent.client.hypervisor.libvirt.models.volume.physical_volume import PhysicalVolume
+from agent.client.hypervisor.libvirt.models.volume.physical import PhysicalVolume
 from agent.client.logger_config import DefaultLogger
+from agent.client.stg.nfs import NFSStorage
 
 
 class PhysicalVolumeManager:
@@ -174,19 +177,57 @@ class PhysicalVolumeManager:
 
 
 if __name__ == "__main__":
-    manager = PhysicalVolumeManager()
-    for pv in manager.get_volume_list():
-        print("-" * 50)
-        print("ИМЯ ФИЗИЧЕСКОГО ТОМА: ", pv.physical_name)
-        print("ИМЯ VOLUME ГРУППЫ: ", pv.volume_name)
-        print("АТРИБУТЫ ФИЗИЧЕСКОГО ТОМА: ", pv.attributes)
-        print("ФОРМАТ ФИЗИЧЕСКОГО ТОМА: ", pv.format)
-        print("РАЗМЕР ФИЗИЧЕСКОГО ТОМА: ", pv.physical_size)
-        print("СВОБОДНОЕ ПРОСТРАНСТВО ФИЗИЧЕСКОГО ТОМА: ", pv.physical_free)
-    data = manager.get_physical_volume_by_name("/dev/nvme0n1p5")
-    print("-" * 50)
-    print("ИМЯ ФИЗИЧЕСКОГО ТОМА: ", data.physical_name)
-    print("ИМЯ VOLUME ГРУППЫ: ", data.volume_name)
-    print("ФОРМАТ ФИЗИЧЕСКОГО ТОМА: ", data.format)
-    print("РАЗМЕР ФИЗИЧЕСКОГО ТОМА: ", data.physical_size)
-    print("СВОБОДНОЕ ПРОСТРАНСТВО ФИЗИЧЕСКОГО ТОМА: ", data.physical_free)
+    cli = CLIControl()
+    disk_name = "disk-test-60780"
+    cmd_arg = f"df --output=source,target | grep {disk_name} | awk " + "'{print $2}'"
+    result = cli.execute(cmd_arg, shell=True, is_text=True).split("\n")[0]
+    print("result: ", result)
+    # nfs_stg = NFSStorage()
+    # nfs_path = f"/srv/nfs/share_{random.randint(100000, 999999)}/"
+    # nfs_mount_path = f"/mnt/nfs_{random.randint(100000, 999999)}/"
+    #
+    # # Создать директории
+    # nfs_share_mkdir = ["mkdir", "-p", nfs_path]
+    # cli.execute(nfs_share_mkdir)
+    #
+    # # Настроить экспорт
+    # setting_export = [nfs_path, "127.0.0.1(rw,sync,no_subtree_check)"]
+    # cli.execute(setting_export)
+    #
+    # # Применить
+    # apply_setting = ["exportfs", "-a"]
+    # cli.execute(apply_setting)
+    #
+    # # Монтировать локально
+    # mkdir_local = ["mkdir", "-p", nfs_mount_path]
+    # cli.execute(mkdir_local)
+    # time.sleep(1)
+    # result = nfs_stg.mount(f"127.0.0.1:{nfs_path}", nfs_mount_path)
+    # print(result)
+    # yield nfs_mount_path
+
+    # Отмонтировать принудительно
+    # nfs_stg.unmount(nfs_mount_path)
+    #
+    # # Удаление локальных директории хранилища
+    # nfs_local_rmdir = ["rmdir", nfs_path]
+    # cli.execute(nfs_local_rmdir)
+    #
+    # nfs_local_rmdir = ["rmdir", nfs_mount_path]
+    # cli.execute(nfs_local_rmdir)
+    # manager = PhysicalVolumeManager()
+    # for pv in manager.get_volume_list():
+    #     print("-" * 50)
+    #     print("ИМЯ ФИЗИЧЕСКОГО ТОМА: ", pv.physical_name)
+    #     print("ИМЯ VOLUME ГРУППЫ: ", pv.volume_name)
+    #     print("АТРИБУТЫ ФИЗИЧЕСКОГО ТОМА: ", pv.attributes)
+    #     print("ФОРМАТ ФИЗИЧЕСКОГО ТОМА: ", pv.format)
+    #     print("РАЗМЕР ФИЗИЧЕСКОГО ТОМА: ", pv.physical_size)
+    #     print("СВОБОДНОЕ ПРОСТРАНСТВО ФИЗИЧЕСКОГО ТОМА: ", pv.physical_free)
+    # data = manager.get_physical_volume_by_name("/dev/nvme0n1p5")
+    # print("-" * 50)
+    # print("ИМЯ ФИЗИЧЕСКОГО ТОМА: ", data.physical_name)
+    # print("ИМЯ VOLUME ГРУППЫ: ", data.volume_name)
+    # print("ФОРМАТ ФИЗИЧЕСКОГО ТОМА: ", data.format)
+    # print("РАЗМЕР ФИЗИЧЕСКОГО ТОМА: ", data.physical_size)
+    # print("СВОБОДНОЕ ПРОСТРАНСТВО ФИЗИЧЕСКОГО ТОМА: ", data.physical_free)
