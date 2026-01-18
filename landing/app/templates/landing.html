@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>eskvisor - промышленная платформа виртуализации</title>
+    <title>Eskvisor - Промышленная платформа виртуализации для бизнеса</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -39,10 +39,8 @@
             color: var(--light);
             background: var(--black);
             overflow-x: hidden;
-            position: relative;
         }
 
-        /* Анимированный фон */
         .background-animation {
             position: fixed;
             width: 100%;
@@ -54,69 +52,6 @@
                         radial-gradient(circle at 80% 70%, rgba(220, 38, 38, 0.02) 0%, transparent 50%);
         }
 
-        /* Плавающие красные элементы - скрыть на мобильных для производительности */
-        .floating-red {
-            position: absolute;
-            border-radius: 50%;
-            background: var(--red);
-            opacity: 0.05;
-            filter: blur(40px);
-            animation: float-red 20s infinite ease-in-out;
-            z-index: -1;
-        }
-
-        @media (max-width: 768px) {
-            .floating-red {
-                display: none;
-            }
-        }
-
-        .floating-red:nth-child(1) {
-            width: 400px;
-            height: 400px;
-            top: -200px;
-            right: -200px;
-            animation-delay: 0s;
-        }
-
-        .floating-red:nth-child(2) {
-            width: 300px;
-            height: 300px;
-            bottom: -150px;
-            left: -100px;
-            animation-delay: 7s;
-        }
-
-        .floating-red:nth-child(3) {
-            width: 200px;
-            height: 200px;
-            top: 50%;
-            left: 10%;
-            animation-delay: 14s;
-        }
-
-        @keyframes float-red {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-40px) rotate(180deg); }
-        }
-
-        /* Красные линии */
-        .red-line {
-            position: absolute;
-            width: 100%;
-            height: 2px;
-            background: var(--red);
-            opacity: 0.1;
-            z-index: -1;
-        }
-
-        @media (max-width: 768px) {
-            .red-line {
-                display: none;
-            }
-        }
-
-        /* Текст и заголовки */
         h1, h2, h3, h4 {
             font-weight: 800;
             line-height: 1.1;
@@ -132,16 +67,11 @@
         }
 
         @media (max-width: 992px) {
-            h1 {
-                font-size: 2.8rem;
-            }
+            h1 { font-size: 2.8rem; }
         }
 
         @media (max-width: 576px) {
-            h1 {
-                font-size: 2.2rem;
-                margin-bottom: 1.5rem;
-            }
+            h1 { font-size: 2.2rem; }
         }
 
         h1 span {
@@ -168,18 +98,6 @@
             display: inline-block;
         }
 
-        @media (max-width: 992px) {
-            h2 {
-                font-size: 2.2rem;
-            }
-        }
-
-        @media (max-width: 576px) {
-            h2 {
-                font-size: 1.8rem;
-            }
-        }
-
         h2::after {
             content: '';
             position: absolute;
@@ -190,52 +108,10 @@
             background: var(--red);
         }
 
-        h3 {
-            font-size: 2rem;
-            color: var(--white);
-        }
-
-        @media (max-width: 576px) {
-            h3 {
-                font-size: 1.5rem;
-            }
-        }
-
-        h4 {
-            font-size: 1.5rem;
-            color: var(--white);
-        }
-
-        @media (max-width: 576px) {
-            h4 {
-                font-size: 1.2rem;
-            }
-        }
-
-        .text-red {
-            color: var(--red);
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        .text-center h2::after {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
         p {
             font-size: 1.125rem;
             color: #a3a3a3;
             margin-bottom: 1.5rem;
-        }
-
-        @media (max-width: 576px) {
-            p {
-                font-size: 1rem;
-                line-height: 1.6;
-            }
         }
 
         .container {
@@ -245,36 +121,11 @@
             padding: 0 2rem;
         }
 
-        @media (max-width: 768px) {
-            .container {
-                padding: 0 1.5rem;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .container {
-                padding: 0 1rem;
-            }
-        }
-
         section {
             padding: 6rem 0;
             position: relative;
         }
 
-        @media (max-width: 768px) {
-            section {
-                padding: 4rem 0;
-            }
-        }
-
-        @media (max-width: 576px) {
-            section {
-                padding: 3rem 0;
-            }
-        }
-
-        /* Кнопки */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -294,28 +145,6 @@
             overflow: hidden;
             z-index: 1;
             box-shadow: var(--shadow-red);
-        }
-
-        @media (max-width: 576px) {
-            .btn {
-                padding: 0.875rem 1.5rem;
-                font-size: 1rem;
-                width: 100%;
-                justify-content: center;
-            }
-        }
-
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--red-dark-gradient);
-            z-index: -1;
-            opacity: 0;
-            transition: var(--transition);
         }
 
         .btn:hover {
@@ -345,13 +174,6 @@
             z-index: 1000;
             padding: 1.5rem 0;
             border-bottom: 1px solid rgba(220, 38, 38, 0.2);
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        @media (max-width: 768px) {
-            header {
-                padding: 1rem 0;
-            }
         }
 
         nav {
@@ -367,119 +189,8 @@
             text-decoration: none;
         }
 
-        @media (max-width: 768px) {
-            .logo {
-                font-size: 1.8rem;
-            }
-        }
-
         .logo span {
             color: var(--red);
-        }
-
-        .nav-links {
-            display: flex;
-            list-style: none;
-            gap: 2.5rem;
-        }
-
-        @media (max-width: 768px) {
-            .nav-links {
-                display: none;
-                position: fixed;
-                top: 70px;
-                left: 0;
-                right: 0;
-                background: var(--darker);
-                flex-direction: column;
-                padding: 2rem;
-                gap: 1.5rem;
-                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-                z-index: 1000;
-                border-bottom: 2px solid var(--red);
-                animation: slideDown 0.3s ease;
-            }
-
-            .nav-links.active {
-                display: flex;
-            }
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .nav-links a {
-            text-decoration: none;
-            color: var(--light);
-            font-weight: 600;
-            position: relative;
-            padding: 0.5rem 0;
-            transition: var(--transition);
-        }
-
-        @media (max-width: 768px) {
-            .nav-links a {
-                padding: 0.75rem 0;
-                text-align: center;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            }
-
-            .nav-links a:last-child {
-                border-bottom: none;
-            }
-        }
-
-        .nav-links a::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--red);
-            transition: var(--transition);
-        }
-
-        .nav-links a:hover {
-            color: var(--red);
-        }
-
-        .nav-links a:hover::after {
-            width: 100%;
-        }
-
-        /* Мобильное меню кнопка */
-        .mobile-menu-btn {
-            display: none;
-            background: var(--red-gradient);
-            color: white;
-            border: none;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            font-size: 1.5rem;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        @media (max-width: 768px) {
-            .mobile-menu-btn {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-        }
-
-        .mobile-menu-btn:hover {
-            transform: scale(1.05);
         }
 
         /* Герой секция */
@@ -488,21 +199,6 @@
             padding-bottom: 6rem;
             background: linear-gradient(180deg, var(--black) 0%, var(--darker) 100%);
             position: relative;
-            overflow: hidden;
-        }
-
-        @media (max-width: 768px) {
-            .hero {
-                padding-top: 9rem;
-                padding-bottom: 4rem;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .hero {
-                padding-top: 8rem;
-                padding-bottom: 3rem;
-            }
         }
 
         .hero-content {
@@ -532,14 +228,6 @@
             border: 1px solid rgba(220, 38, 38, 0.3);
         }
 
-        @media (max-width: 576px) {
-            .hero-badge {
-                font-size: 0.9rem;
-                padding: 0.4rem 1rem;
-                margin-bottom: 1.5rem;
-            }
-        }
-
         .hero-visual {
             position: relative;
         }
@@ -554,22 +242,9 @@
             transition: var(--transition);
         }
 
-        @media (max-width: 992px) {
-            .dashboard-preview {
-                transform: none;
-                margin-top: 2rem;
-            }
-        }
-
         .dashboard-preview:hover {
             transform: perspective(1000px) rotateY(-5deg);
             border-color: var(--red);
-        }
-
-        @media (max-width: 992px) {
-            .dashboard-preview:hover {
-                transform: translateY(-5px);
-            }
         }
 
         .dashboard-header {
@@ -579,12 +254,6 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--gray);
-        }
-
-        @media (max-width: 576px) {
-            .dashboard-header {
-                padding: 1rem;
-            }
         }
 
         .dashboard-status {
@@ -613,14 +282,6 @@
             gap: 1.5rem;
         }
 
-        @media (max-width: 576px) {
-            .dashboard-metrics {
-                grid-template-columns: 1fr;
-                padding: 1.5rem;
-                gap: 1rem;
-            }
-        }
-
         .metric {
             background: var(--gray-dark);
             padding: 1.5rem;
@@ -628,23 +289,11 @@
             border-left: 4px solid var(--red);
         }
 
-        @media (max-width: 576px) {
-            .metric {
-                padding: 1.25rem;
-            }
-        }
-
         .metric .value {
             font-size: 1.3rem;
             font-weight: 800;
             color: var(--red);
             margin-bottom: 0.4rem;
-        }
-
-        @media (max-width: 576px) {
-            .metric .value {
-                font-size: 1.1rem;
-            }
         }
 
         /* Особенности */
@@ -660,14 +309,6 @@
             margin-top: 3rem;
         }
 
-        @media (max-width: 576px) {
-            .features-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-                margin-top: 2rem;
-            }
-        }
-
         .feature-card {
             background: var(--gray-dark);
             border-radius: var(--radius);
@@ -678,38 +319,10 @@
             overflow: hidden;
         }
 
-        @media (max-width: 576px) {
-            .feature-card {
-                padding: 2rem 1.5rem;
-            }
-        }
-
-        .feature-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: var(--red);
-            transform: scaleY(0);
-            transition: var(--transition);
-        }
-
         .feature-card:hover {
             transform: translateY(-10px);
             border-color: var(--red);
             box-shadow: var(--shadow-red);
-        }
-
-        @media (max-width: 768px) {
-            .feature-card:hover {
-                transform: translateY(-5px);
-            }
-        }
-
-        .feature-card:hover::before {
-            transform: scaleY(1);
         }
 
         .feature-icon {
@@ -725,73 +338,27 @@
             color: var(--white);
         }
 
-        @media (max-width: 576px) {
-            .feature-icon {
-                width: 60px;
-                height: 60px;
-                font-size: 1.5rem;
-                margin-bottom: 1.25rem;
-            }
-        }
-
-        .ha-section {
+        /* Бизнес-преимущества */
+        .business-benefits {
             background: linear-gradient(180deg, var(--darker) 0%, var(--black) 100%);
-            position: relative;
         }
 
-        .ha-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: var(--red);
-            opacity: 0.2;
-        }
-
-        .ha-features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-top: 3rem;
-        }
-
-        @media (max-width: 576px) {
-            .ha-features {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-                margin-top: 2rem;
-            }
-        }
-
-        .ha-card {
+        .benefit-card {
             background: var(--gray-dark);
             border-radius: var(--radius);
             padding: 2.5rem;
             border: 2px solid transparent;
             border-image: linear-gradient(45deg, var(--red), var(--red-dark)) 1;
             transition: var(--transition);
+            height: 100%;
         }
 
-        @media (max-width: 576px) {
-            .ha-card {
-                padding: 2rem 1.5rem;
-            }
-        }
-
-        .ha-card:hover {
+        .benefit-card:hover {
             transform: translateY(-10px);
             box-shadow: var(--shadow-red);
         }
 
-        @media (max-width: 768px) {
-            .ha-card:hover {
-                transform: translateY(-5px);
-            }
-        }
-
-        .ha-icon {
+        .benefit-icon {
             width: 60px;
             height: 60px;
             background: var(--red-gradient);
@@ -804,102 +371,76 @@
             color: var(--white);
         }
 
-        @media (max-width: 576px) {
-            .ha-icon {
-                width: 50px;
-                height: 50px;
-                font-size: 1.25rem;
-                margin-bottom: 1.25rem;
-            }
+        .benefit-stats {
+            background: var(--gray-dark);
+            border-radius: var(--radius);
+            padding: 2rem;
+            display: inline-block;
+            border: 1px solid var(--gray);
+            width: 100%;
+            max-width: 800px;
+            margin: 3rem auto 0;
         }
 
-        /* Форма заявки */
-        .request-section {
+        .stats-inner {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .stat-item {
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--red);
+            line-height: 1;
+        }
+
+        .stat-label {
+            color: #a3a3a3;
+            margin-top: 0.5rem;
+        }
+
+        /* Для кого */
+        .for-who {
             background: var(--darker);
-            position: relative;
         }
 
-        .form-container {
+        .audience-container {
             max-width: 800px;
             margin: 3rem auto 0;
             background: var(--gray-dark);
             border-radius: var(--radius-lg);
-            padding: 3rem;
+            padding: 2.5rem;
             border: 1px solid var(--gray);
-            box-shadow: var(--shadow);
         }
 
-        @media (max-width: 768px) {
-            .form-container {
-                padding: 2rem;
-                margin-top: 2rem;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .form-container {
-                padding: 1.5rem;
-            }
-        }
-
-        .form-row {
+        .audience-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 2rem;
-            margin-bottom: 2rem;
         }
 
-        @media (max-width: 768px) {
-            .form-row {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-                margin-bottom: 1.5rem;
-            }
+        .audience-badges {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
         }
 
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        @media (max-width: 576px) {
-            .form-group {
-                margin-bottom: 1.25rem;
-            }
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--light);
-            font-weight: 600;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 1rem;
-            background: var(--darker);
-            border: 1px solid var(--gray);
+        .badge {
+            background: rgba(220, 38, 38, 0.1);
+            color: var(--red);
+            padding: 0.5rem 1rem;
             border-radius: var(--radius);
-            color: var(--light);
-            font-size: 1rem;
-            transition: var(--transition);
-        }
-
-        @media (max-width: 576px) {
-            .form-control {
-                padding: 0.875rem;
-            }
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: var(--red);
-            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
-        }
-
-        textarea.form-control {
-            min-height: 150px;
-            resize: vertical;
+            font-size: 0.9rem;
         }
 
         /* Контакты */
@@ -915,14 +456,6 @@
             margin-top: 3rem;
         }
 
-        @media (max-width: 576px) {
-            .contacts-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-                margin-top: 2rem;
-            }
-        }
-
         .contact-card {
             background: var(--gray-dark);
             border-radius: var(--radius);
@@ -931,21 +464,9 @@
             transition: var(--transition);
         }
 
-        @media (max-width: 576px) {
-            .contact-card {
-                padding: 2rem 1.5rem;
-            }
-        }
-
         .contact-card:hover {
             border-color: var(--red);
             transform: translateY(-5px);
-        }
-
-        @media (max-width: 768px) {
-            .contact-card:hover {
-                transform: translateY(-3px);
-            }
         }
 
         .contact-icon {
@@ -961,29 +482,6 @@
             color: var(--white);
         }
 
-        @media (max-width: 576px) {
-            .contact-icon {
-                width: 45px;
-                height: 45px;
-                font-size: 1.1rem;
-                margin-bottom: 1.25rem;
-            }
-        }
-
-        .contact-details {
-            margin-top: 1rem;
-        }
-
-        .contact-details p {
-            margin-bottom: 0.5rem;
-            color: #a3a3a3;
-        }
-
-        .contact-details strong {
-            color: var(--light);
-            font-weight: 600;
-        }
-
         /* Футер */
         footer {
             background: var(--darker);
@@ -991,344 +489,49 @@
             border-top: 1px solid var(--gray);
         }
 
-        @media (max-width: 768px) {
-            footer {
-                padding: 3rem 0 1.5rem;
-            }
-        }
-
-        .footer-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            flex-wrap: wrap;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        @media (max-width: 768px) {
-            .footer-content {
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-                gap: 2rem;
-            }
-        }
-
-        .footer-links {
-            display: flex;
-            gap: 2rem;
-            list-style: none;
-        }
-
-        @media (max-width: 768px) {
-            .footer-links {
-                flex-direction: column;
-                gap: 1rem;
-            }
-        }
-
-        .footer-links a {
-            color: #a3a3a3;
-            text-decoration: none;
-            transition: var(--transition);
-        }
-
-        .footer-links a:hover {
-            color: var(--red);
-        }
-
-        .copyright {
+        .text-center {
             text-align: center;
-            padding-top: 2rem;
-            border-top: 1px solid var(--gray);
-            color: #737373;
-            font-size: 0.9rem;
         }
 
-        @media (max-width: 576px) {
-            .copyright {
-                font-size: 0.8rem;
-                padding-top: 1.5rem;
-            }
+        .text-center h2::after {
+            left: 50%;
+            transform: translateX(-50%);
         }
 
-        /* Анимации появления */
-        .fade-in {
-            opacity: 0;
-            transform: translateY(30px);
-            transition: opacity 0.6s ease, transform 0.6s ease;
-        }
-
-        .fade-in.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* Стили для статистики в секции Балансиръ */
-        .stats-container {
-            background: var(--gray-dark);
-            border-radius: var(--radius);
-            padding: 2rem;
-            display: inline-block;
-            border: 1px solid var(--gray);
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
+        /* Адаптивность */
         @media (max-width: 768px) {
-            .stats-container {
-                padding: 1.5rem;
-            }
-        }
-
-        .stats-inner {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-            justify-content: center;
+            section { padding: 4rem 0; }
+            .container { padding: 0 1.5rem; }
+            .hero { padding-top: 9rem; padding-bottom: 4rem; }
+            .dashboard-metrics { grid-template-columns: 1fr; }
+            .audience-grid { grid-template-columns: 1fr; }
+            .stats-inner { gap: 1.5rem; }
+            .stat-item { min-width: 100%; }
         }
 
         @media (max-width: 576px) {
-            .stats-inner {
-                gap: 1.5rem;
-            }
-        }
-
-        .stat-item {
-            text-align: center;
-            flex: 1;
-            min-width: 150px;
-        }
-
-        @media (max-width: 576px) {
-            .stat-item {
-                min-width: 100%;
-            }
-        }
-
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: var(--red);
-            line-height: 1;
-        }
-
-        @media (max-width: 576px) {
-            .stat-value {
-                font-size: 2rem;
-            }
-        }
-
-        .stat-label {
-            color: #a3a3a3;
-            margin-top: 0.5rem;
-        }
-
-        .stat-divider {
-            height: 50px;
-            width: 2px;
-            background: var(--gray);
-        }
-
-        @media (max-width: 768px) {
-            .stat-divider {
-                height: 2px;
-                width: 50px;
-            }
-        }
-
-        /* Стили для конфигуратора */
-        .config-container {
-            max-width: 800px;
-            margin: 3rem auto 0;
-            background: var(--gray-dark);
-            border-radius: var(--radius-lg);
-            padding: 2.5rem;
-            border: 1px solid var(--gray);
-        }
-
-        @media (max-width: 768px) {
-            .config-container {
-                padding: 2rem;
-                margin-top: 2rem;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .config-container {
-                padding: 1.5rem;
-            }
-        }
-
-        .config-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-        }
-
-        @media (max-width: 768px) {
-            .config-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-        }
-
-        .config-item {
-            margin-bottom: 1.5rem;
-        }
-
-        .config-badges {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            margin-top: 0.5rem;
-        }
-
-        .badge {
-            background: rgba(220, 38, 38, 0.1);
-            color: var(--red);
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius);
-            font-size: 0.9rem;
-        }
-
-        @media (max-width: 576px) {
-            .badge {
-                padding: 0.4rem 0.75rem;
-                font-size: 0.8rem;
-            }
-        }
-
-        /* Стили для кнопок в герое */
-        .hero-buttons {
-            display: flex;
-            gap: 1rem;
-            margin-top: 2.5rem;
-            flex-wrap: wrap;
-        }
-
-        @media (max-width: 576px) {
-            .hero-buttons {
-                flex-direction: column;
-                margin-top: 2rem;
-                gap: 1rem;
-            }
-        }
-
-        .features-list {
-            margin-top: 2rem;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1.5rem;
-        }
-
-        @media (max-width: 576px) {
-            .features-list {
-                gap: 1rem;
-                margin-top: 1.5rem;
-            }
-        }
-
-        .feature-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        @media (max-width: 576px) {
-            .feature-item {
-                width: 100%;
-            }
-        }
-
-        /* Дополнительные медиа-запросы для очень маленьких экранов */
-        @media (max-width: 360px) {
-            h1 {
-                font-size: 1.8rem;
-            }
-
-            h2 {
-                font-size: 1.5rem;
-            }
-
-            h3 {
-                font-size: 1.3rem;
-            }
-
-            .container {
-                padding: 0 0.75rem;
-            }
-
-            .btn {
-                padding: 0.75rem 1.25rem;
-                font-size: 0.9rem;
-            }
-        }
-
-        /* Улучшение для устройств с поддержкой hover */
-        @media (hover: hover) and (pointer: fine) {
-            .btn:hover {
-                transform: translateY(-5px);
-            }
-
-            .feature-card:hover {
-                transform: translateY(-10px);
-            }
-
-            .ha-card:hover {
-                transform: translateY(-10px);
-            }
-
-            .contact-card:hover {
-                transform: translateY(-5px);
-            }
-        }
-
-        /* Улучшение для устройств без поддержки hover (мобильные) */
-        @media (hover: none) and (pointer: coarse) {
-            .btn:active {
-                transform: scale(0.98);
-            }
-
-            .feature-card:active {
-                transform: translateY(-3px);
-            }
-
-            .ha-card:active {
-                transform: translateY(-3px);
-            }
-
-            .contact-card:active {
-                transform: translateY(-3px);
-            }
+            section { padding: 3rem 0; }
+            .container { padding: 0 1rem; }
+            .hero { padding-top: 8rem; padding-bottom: 3rem; }
+            .btn { width: 100%; justify-content: center; }
+            .feature-card, .benefit-card, .contact-card { padding: 2rem 1.5rem; }
         }
     </style>
 </head>
 <body>
-    <!-- Фон и анимации -->
+    <!-- Фон -->
     <div class="background-animation"></div>
-    <div class="floating-red"></div>
-    <div class="floating-red"></div>
-    <div class="floating-red"></div>
-    <div class="red-line" style="top: 50%;"></div>
 
     <!-- Навигация -->
     <header>
         <div class="container">
             <nav>
                 <a href="#" class="logo">esk<span>visor</span></a>
-                <button class="mobile-menu-btn" id="mobileMenuBtn">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <ul class="nav-links" id="navLinks">
-                    <li><a href="#features">Функционал</a></li>
-                    <li><a href="#ha-plus">Балансиръ</a></li>
-                    <li><a href="#configurator">Конфигуратор</a></li>
-                    <li><a href="#contacts">Контакты</a></li>
-                </ul>
+                <div style="display: flex; gap: 2rem;">
+                    <a href="#benefits" style="color: var(--light); text-decoration: none; font-weight: 600;">Преимущества</a>
+                    <a href="#for-who" style="color: var(--light); text-decoration: none; font-weight: 600;">Для кого</a>
+                    <a href="#contacts" style="color: var(--light); text-decoration: none; font-weight: 600;">Контакты</a>
+                </div>
             </nav>
         </div>
     </header>
@@ -1340,40 +543,20 @@
                 <div>
                     <div class="hero-badge">
                         <i class="fas fa-code-branch"></i>
-                        <span>Оригинальный код без OpenSource-заимствований</span>
+                        <span>Когда технологии работают на бизнес, а не наоборот</span>
                     </div>
 
                     <h1>Промышленная платформа виртуализации <span>с полным контролем ресурсов</span></h1>
 
-                    <p style="font-size: 1.25rem;">Eskvisor — оригинальная система управления виртуальной инфраструктурой на базе <strong>libvirt (KVM+QEMU)</strong>, полностью разработанная с нуля.</p>
+                    <p style="font-size: 1.25rem; font-weight: 500;">Eskvisor — оригинальная система управления виртуальной инфраструктурой. <strong>Полный контроль</strong> без зависимостей от OpenSource, <strong>гарантия ресурсов</strong> через технологию "Балансиръ", <strong>экономия до 30%</strong> на оборудовании.</p>
 
-                    <div class="hero-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); margin-top: 1rem;">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Готовность: 78% (технический прототип), 65% (коммерческий MVP)</span>
-                    </div>
-
-                    <div class="hero-buttons">
-                        <a href="mailto:eskander5765@yandex.ru?subject=Запрос на демо Eskvisor&body=Здравствуйте! Интересует демонстрация платформы Eskvisor." class="btn">
+                    <div class="hero-buttons" style="display: flex; gap: 1rem; margin-top: 2.5rem; flex-wrap: wrap;">
+                        <a href="mailto:eskander5765@yandex.ru?subject=Демо Eskvisor&body=Здравствуйте! Интересует демонстрация Eskvisor." class="btn">
                             <i class="fas fa-rocket"></i> Запросить демо
                         </a>
-                        <a href="#ha-plus" class="btn btn-outline">
-                            <i class="fas fa-play-circle"></i> Технология Балансиръ
+                        <a href="#benefits" class="btn btn-outline">
+                            <i class="fas fa-chart-line"></i> Бизнес-преимущества
                         </a>
-                    </div>
-
-                    <div class="features-list">
-                        <div class="feature-item">
-                            <i class="fas fa-check-circle" style="color: var(--red);"></i>
-                            <span>Собственная кодовая база</span>
-                        </div>
-                        <div class="feature-item">
-                            <i class="fas fa-check-circle" style="color: var(--red);"></i>
-                            <span>Контроль на уровне ядра Linux</span>
-                        </div>
-                        <div class="feature-item">
-                            <i class="fas fa-check-circle" style="color: var(--red);"></i>
-                            <span>Полный жизненный цикл ВМ</span>
-                        </div>
                     </div>
                 </div>
 
@@ -1381,29 +564,29 @@
                     <div class="dashboard-preview">
                         <div class="dashboard-header">
                             <div>
-                                <h4 style="color: var(--white); margin: 0;">Реальные преимущества уже сегодня</h4>
+                                <h4 style="color: var(--white); margin: 0;">Ключевые бизнес-преимущества</h4>
                             </div>
                             <div class="dashboard-status">
                                 <div class="status-dot"></div>
-                                <span style="color: var(--red); font-weight: 600;">рабочий прототип</span>
+                                <span style="color: var(--red); font-weight: 600;">работает сейчас</span>
                             </div>
                         </div>
                         <div class="dashboard-metrics">
                             <div class="metric">
-                                <div class="value">Суверенность на деле</div>
-                                <div style="color: #a3a3a3;">Код написан с нуля без OpenSource-заимствований. Архитектура защищена лицензией, регистрация в Роспатенте в процессе</div>
+                                <div class="value">Суверенность</div>
+                                <div style="color: #a3a3a3;">Код написан с нуля. Никаких лицензионных рисков от OpenSource</div>
                             </div>
                             <div class="metric">
-                                <div class="value">Полный контроль за ВМ</div>
-                                <div style="color: #a3a3a3;">Управление ВМ, сетями, хранилищами и снапшотами через единый API. Работает на базе libvirt/KVM</div>
+                                <div class="value">Экономия 30%</div>
+                                <div style="color: #a3a3a3;">Плотная консолидация ВМ без потери производительности</div>
                             </div>
                             <div class="metric">
-                                <div class="value">Балансиръ — готовая технология</div>
-                                <div style="color: #a3a3a3;">Система ресурсных пулов с контролем CPU/RAM через cgroups v2. Работает уже сегодня</div>
+                                <div class="value">Балансиръ готов</div>
+                                <div style="color: #a3a3a3;">Контроль CPU/RAM через cgroups v2. Работает сегодня</div>
                             </div>
                             <div class="metric">
                                 <div class="value">Персональное внедрение</div>
-                                <div style="color: #a3a3a3;">Для первых клиентов — установка и настройка за наш счет. Поддержка 24/7 от разработчиков</div>
+                                <div style="color: #a3a3a3;">Для первых клиентов — установка и настройка за наш счет</div>
                             </div>
                         </div>
                     </div>
@@ -1412,187 +595,123 @@
         </div>
     </section>
 
-    <!-- Основной функционал -->
-    <section id="features" class="features">
+    <!-- Бизнес-преимущества -->
+    <section id="benefits" class="business-benefits">
         <div class="container">
             <div class="text-center">
-                <h2>Рабочий функционал сегодня</h2>
-                <p>Эти модули уже полностью готовы и протестированы</p>
+                <h2>Бизнес-преимущества Eskvisor</h2>
+                <p>Почему коммерческие организации выбирают нашу платформу</p>
             </div>
 
             <div class="features-grid">
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">
-                        <i class="fas fa-server"></i>
+                <div class="benefit-card">
+                    <div class="benefit-icon">
+                        <i class="fas fa-shield-alt"></i>
                     </div>
-                    <h3>Управление виртуальными машинами</h3>
-                    <p><strong>Работает сейчас:</strong> Создание, запуск, остановка, удаление ВМ через virt-install и libvirt API. Редактирование конфигураций, клонирование, полный жизненный цикл.</p>
-                    <div class="config-badges" style="margin-top: 1rem;">
-                        <span class="badge">libvirt/KVM</span>
-                        <span class="badge">virt-install</span>
-                        <span class="badge">Hotplug</span>
-                    </div>
+                    <h3>Полная технологическая суверенность</h3>
+                    <p>Код написан с нуля, без OpenSource-заимствований. Это означает:</p>
+                    <ul style="color: #a3a3a3; padding-left: 1.5rem; margin-top: 1rem;">
+                        <li>Нет лицензионных рисков (GPL, Apache, MIT)</li>
+                        <li>Возможность полного аудита кода</li>
+                        <li>Защита интеллектуальной собственности</li>
+                        <li>Идеально для банков, госсектора, требовательных корпораций</li>
+                    </ul>
                 </div>
 
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">
-                        <i class="fas fa-hdd"></i>
-                    </div>
-                    <h3>Управление хранилищами</h3>
-                    <p><strong>Работает сейчас:</strong> Создание дисков (QCOW2, RAW, ISO), подключение/отключение к ВМ, LVM интеграция, конвертация форматов, мониторинг использования.</p>
-                    <div class="config-badges" style="margin-top: 1rem;">
-                        <span class="badge">QCOW2/RAW</span>
-                        <span class="badge">LVM</span>
-                        <span class="badge">qemu-img</span>
-                    </div>
-                </div>
-
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">
-                        <i class="fas fa-network-wired"></i>
-                    </div>
-                    <h3>Виртуальные сети</h3>
-                    <p><strong>Работает сейчас:</strong> NAT, bridge, isolated сети. DHCP, DNS, маршрутизация. Мониторинг подключенных ВМ, безопасное удаление.</p>
-                    <div class="config-badges" style="margin-top: 1rem;">
-                        <span class="badge">NAT/Bridge</span>
-                        <span class="badge">DHCP/DNS</span>
-                        <span class="badge">Изоляция</span>
-                    </div>
-                </div>
-
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">
-                        <i class="fas fa-camera"></i>
-                    </div>
-                    <h3>Снапшоты и восстановление</h3>
-                    <p><strong>Работает сейчас:</strong> Создание цепочек снапшотов, восстановление ВМ, клонирование из снапшота, управление метаданными, мониторинг размеров.</p>
-                    <div class="config-badges" style="margin-top: 1rem;">
-                        <span class="badge">Цепочки</span>
-                        <span class="badge">Клонирование</span>
-                        <span class="badge">Восстановление</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section id="ha-plus" class="ha-section">
-        <div class="container">
-            <div class="text-center">
-                <h2>Технология Балансиръ — работает сегодня</h2>
-                <p>Система виртуальных ресурсных пулов с контролем на уровне ядра Linux</p>
-            </div>
-
-            <div class="ha-features">
-                <div class="ha-card fade-in">
-                    <div class="ha-icon">
-                        <i class="fas fa-code"></i>
-                    </div>
-                    <h3>Оригинальная разработка</h3>
-                    <p><strong>Код написан с нуля</strong> — никаких OpenSource-заимствований. Полная прозрачность и возможность аудита кода для требовательных клиентов.</p>
-                    <div class="config-badges" style="margin-top: 1rem;">
-                        <span class="badge">Собственная архитектура</span>
-                        <span class="badge">Аудит кода</span>
-                    </div>
-                </div>
-
-                <div class="ha-card fade-in">
-                    <div class="ha-icon">
-                        <i class="fas fa-bolt"></i>
-                    </div>
-                    <h3>Контроль ресурсов через cgroups v2</h3>
-                    <p><strong>Работает сейчас:</strong> Мгновенное ограничение CPU/RAM на уровне ядра Linux (1-5 мс). Предотвращение перерасхода ресурсов, гарантия доступности критических ВМ.</p>
-                    <div class="config-badges" style="margin-top: 1rem;">
-                        <span class="badge">cgroups v2</span>
-                        <span class="badge">Ядро Linux</span>
-                        <span class="badge">1-5 мс</span>
-                    </div>
-                </div>
-
-                <div class="ha-card fade-in">
-                    <div class="ha-icon">
+                <div class="benefit-card">
+                    <div class="benefit-icon">
                         <i class="fas fa-chart-line"></i>
                     </div>
-                    <h3>Бизнес-логика + системный контроль</h3>
-                    <p><strong>Уникальное преимущество:</strong> Сочетание высокоуровневого контроля (пулы ресурсов, резервирование) с низкоуровневым ограничением через ядро. Предотвращение логических ошибок.</p>
-                    <div class="config-badges" style="margin-top: 1rem;">
-                        <span class="badge">Двойной контроль</span>
-                        <span class="badge">Логика + ядро</span>
-                    </div>
+                    <h3>Экономия до 30% на оборудовании</h3>
+                    <p>Технология "Балансиръ" предотвращает перерасход ресурсов:</p>
+                    <ul style="color: #a3a3a3; padding-left: 1.5rem; margin-top: 1rem;">
+                        <li>Более плотная консолидация ВМ на сервере</li>
+                        <li>Гарантия ресурсов для критически важных ВМ</li>
+                        <li>Предсказуемая производительность для клиентов хостинга</li>
+                        <li>Снижение CAPEX на закупку нового оборудования</li>
+                    </ul>
                 </div>
-            </div>
 
-            <div style="text-align: center; margin-top: 4rem;">
-                <div class="stats-container">
-                    <div class="stats-inner">
-                        <div class="stat-item">
-                            <div class="stat-value">100%</div>
-                            <div class="stat-label">Контроль перерасхода</div>
-                        </div>
-                        <div class="stat-divider"></div>
-                        <div class="stat-item">
-                            <div class="stat-value">1-5 мс</div>
-                            <div class="stat-label">Время применения лимитов</div>
-                        </div>
-                        <div class="stat-divider"></div>
-                        <div class="stat-item">
-                            <div class="stat-value">0%</div>
-                            <div class="stat-label">Зависимость от OpenSource</div>
-                        </div>
+                <div class="benefit-card">
+                    <div class="benefit-icon">
+                        <i class="fas fa-bolt"></i>
                     </div>
+                    <h3>Готовое решение "здесь и сейчас"</h3>
+                    <p>Не "будущая разработка", а рабочий продукт:</p>
+                    <ul style="color: #a3a3a3; padding-left: 1.5rem; margin-top: 1rem;">
+                        <li>Технология "Балансиръ" уже работает (cgroups v2)</li>
+                        <li>78% готовности как технический прототип</li>
+                        <li>Полный жизненный цикл ВМ: создание, управление, снапшоты</li>
+                        <li>Готово к пилотному внедрению в течение 1-2 недель</li>
+                    </ul>
+                </div>
+
+                <div class="benefit-card">
+                    <div class="benefit-icon">
+                        <i class="fas fa-handshake"></i>
+                    </div>
+                    <h3>Быстрое внедрение и персонализация</h3>
+                    <p>Для первых клиентов — особые условия:</p>
+                    <ul style="color: #a3a3a3; padding-left: 1.5rem; margin-top: 1rem;">
+                        <li>Установка и настройка за наш счет</li>
+                        <li>Поддержка 24/7 напрямую от разработчика</li>
+                        <li>Адаптация под ваши бизнес-процессы</li>
+                        <li>White-label решение для хостинг-провайдеров</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Для кого -->
-    <section id="configurator" class="features">
+    <section id="for-who" class="for-who">
         <div class="container">
             <div class="text-center">
-                <h2>Для кого Eskvisor уже сегодня?</h2>
-                <p>Первые клиенты получат максимальное внимание и индивидуальные условия</p>
+                <h2>Для кого Eskvisor создает выгоду уже сегодня?</h2>
+                <p>Первые клиенты получают максимальное внимание и особые условия</p>
             </div>
 
-            <div class="config-container">
-                <div class="config-grid">
+            <div class="audience-container">
+                <div class="audience-grid">
                     <div>
-                        <h4 style="margin-bottom: 1.5rem; color: var(--red);"><i class="fas fa-building"></i> Бизнес-сегмент</h4>
+                        <h4 style="margin-bottom: 1.5rem; color: var(--red);"><i class="fas fa-building"></i> Бизнес-сегменты</h4>
 
-                        <div class="config-item">
-                            <div style="color: var(--light); margin-bottom: 0.5rem;">Хостинг-провайдеры</div>
-                            <p style="font-size: 1rem; color: #a3a3a3;">Нужна кастомизируемая панель управления KVM? Eskvisor — основа для вашего white-label решения.</p>
+                        <div style="margin-bottom: 2rem;">
+                            <div style="color: var(--light); margin-bottom: 0.5rem; font-weight: 600;">Хостинг-провайдеры</div>
+                            <p style="font-size: 1rem; color: #a3a3a3;">Создавайте тарифные планы с гарантированными ресурсами. Экономьте до 30% на оборудовании. Eskvisor — основа для вашего white-label решения.</p>
                         </div>
 
-                        <div class="config-item">
-                            <div style="color: var(--light); margin-bottom: 0.5rem;">Производители софта (ISV)</div>
-                            <p style="font-size: 1rem; color: #a3a3a3;">Поставляете ПО как виртуальный образ? Встраивайте Eskvisor как OEM-компонент.</p>
+                        <div style="margin-bottom: 2rem;">
+                            <div style="color: var(--light); margin-bottom: 0.5rem; font-weight: 600;">Производители софта (ISV)</div>
+                            <p style="font-size: 1rem; color: #a3a3a3;">Поставляйте ПО как виртуальный образ с встроенной платформой управления. Eskvisor как OEM-компонент увеличивает ценность продукта.</p>
                         </div>
 
-                        <div class="config-item">
-                            <div style="color: var(--light); margin-bottom: 0.5rem;">ИТ-интеграторы</div>
-                            <p style="font-size: 1rem; color: #a3a3a3;">Нужно уникальное решение для тендеров? Eskvisor в вашем портфеле.</p>
+                        <div>
+                            <div style="color: var(--light); margin-bottom: 0.5rem; font-weight: 600;">ИТ-интеграторы</div>
+                            <p style="font-size: 1rem; color: #a3a3a3;">Участвуйте в тендерах с уникальным суверенным решением. Полный контроль над кодом — ваше конкурентное преимущество.</p>
                         </div>
                     </div>
 
                     <div>
-                        <h4 style="margin-bottom: 1.5rem; color: var(--red);"><i class="fas fa-shield-alt"></i> Технические преимущества</h4>
+                        <h4 style="margin-bottom: 1.5rem; color: var(--red);"><i class="fas fa-cogs"></i> Технические преимущества</h4>
 
-                        <div class="config-badges" style="margin-bottom: 1.5rem;">
+                        <div class="audience-badges" style="margin-bottom: 2rem;">
                             <span class="badge">Суверенный код</span>
-                            <span class="badge">Аудит безопасности</span>
-                            <span class="badge">Глубокая интеграция</span>
                             <span class="badge">cgroups v2</span>
                             <span class="badge">libvirt/KVM</span>
-                            <span class="badge">LVM</span>
+                            <span class="badge">LVM интеграция</span>
+                            <span class="badge">Аудит безопасности</span>
+                            <span class="badge">Глубокая интеграция</span>
                         </div>
 
-                        <div class="config-item">
-                            <div style="color: var(--light); margin-bottom: 0.5rem;">Что получают первые клиенты:</div>
+                        <div>
+                            <div style="color: var(--light); margin-bottom: 0.5rem; font-weight: 600;">Что получают первые клиенты:</div>
                             <ul style="color: #a3a3a3; padding-left: 1.5rem; font-size: 1rem;">
                                 <li>Установка и настройка за наш счет</li>
                                 <li>Поддержка напрямую от разработчиков</li>
                                 <li>Влияние на развитие продукта</li>
                                 <li>Специальные условия лицензирования</li>
+                                <li>Обучение вашей команды</li>
                             </ul>
                         </div>
                     </div>
@@ -1600,7 +719,7 @@
             </div>
 
             <div style="text-align: center; margin-top: 3rem;">
-                <a href="mailto:eskander5765@yandex.ru?subject=Пилотный проект Eskvisor&body=Здравствуйте! Хотим обсудить пилотное внедрение Eskvisor в нашу инфраструктуру." class="btn" style="padding: 1.2rem 3rem; font-size: 1.2rem;">
+                <a href="mailto:eskander5765@yandex.ru?subject=Пилотное внедрение Eskvisor&body=Здравствуйте! Хотим обсудить пилотное внедрение Eskvisor." class="btn" style="padding: 1.2rem 3rem; font-size: 1.2rem;">
                     <i class="fas fa-handshake"></i> Обсудить пилотный проект
                 </a>
             </div>
@@ -1616,40 +735,39 @@
             </div>
 
             <div class="contacts-grid">
-                <div class="contact-card fade-in">
+                <div class="contact-card">
                     <div class="contact-icon">
                         <i class="fas fa-user-tie"></i>
                     </div>
                     <h3>Разработчик и владелец</h3>
-                    <div class="contact-details">
+                    <div style="margin-top: 1rem;">
                         <p><strong>Индивидуальный предприниматель</strong></p>
                         <p>Байсиев Эскандер Хакимович</p>
                         <p><strong>ОГРНИП:</strong> 325070000046405</p>
                         <p><strong>ИНН:</strong> 070805916873</p>
-                        <p style="margin-top: 1rem; color: var(--red); font-weight: 600;">Код написан лично мной с нуля</p>
                     </div>
                 </div>
 
-                <div class="contact-card fade-in">
+                <div class="contact-card">
                     <div class="contact-icon">
                         <i class="fas fa-envelope"></i>
                     </div>
                     <h3>Пишите напрямую</h3>
-                    <div class="contact-details">
+                    <div style="margin-top: 1rem;">
                         <p><strong>Основной email:</strong></p>
                         <p style="color: var(--red); font-weight: 600; font-size: 1.1rem;">eskander5765@yandex.ru</p>
                         <p style="margin-top: 1rem;">Отвечаю лично в течение 2-4 часов</p>
                         <p><strong>Формат обращения:</strong></p>
-                        <p>Опишите вашу задачу, текущую инфраструктуру и что хотите получить от Eskvisor</p>
+                        <p>Опишите вашу задачу, текущую инфраструктуру и ожидания от Eskvisor</p>
                     </div>
                 </div>
 
-                <div class="contact-card fade-in">
+                <div class="contact-card">
                     <div class="contact-icon">
                         <i class="fas fa-code"></i>
                     </div>
                     <h3>Технические детали</h3>
-                    <div class="contact-details">
+                    <div style="margin-top: 1rem;">
                         <p><strong>Технологический стек:</strong></p>
                         <p>• libvirt/KVM/QEMU — виртуализация</p>
                         <p>• cgroups v2 — контроль ресурсов</p>
@@ -1665,22 +783,20 @@
     <!-- Футер -->
     <footer>
         <div class="container">
-            <div class="footer-content">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 2rem; margin-bottom: 2rem;">
                 <div>
                     <a href="#" class="logo">esk<span>visor</span></a>
                     <p style="color: #a3a3a3; max-width: 400px; margin-top: 1rem;">Оригинальная платформа управления виртуализацией. Код написан с нуля, без OpenSource-заимствований.</p>
-                    <p style="color: #737373; font-size: 0.9rem; margin-top: 0.5rem;">Проект на 78% готов как технический прототип</p>
                 </div>
 
-                <ul class="footer-links">
-                    <li><a href="#features">Рабочий функционал</a></li>
-                    <li><a href="#ha-plus">Технология Балансиръ</a></li>
-                    <li><a href="#configurator">Для первых клиентов</a></li>
-                    <li><a href="#contacts">Контакты</a></li>
-                </ul>
+                <div style="display: flex; gap: 2rem; list-style: none;">
+                    <a href="#benefits" style="color: #a3a3a3; text-decoration: none;">Преимущества</a>
+                    <a href="#for-who" style="color: #a3a3a3; text-decoration: none;">Для кого</a>
+                    <a href="#contacts" style="color: #a3a3a3; text-decoration: none;">Контакты</a>
+                </div>
             </div>
 
-            <div class="copyright">
+            <div style="text-align: center; padding-top: 2rem; border-top: 1px solid var(--gray); color: #737373; font-size: 0.9rem;">
                 <p>&copy; 2025 eskvisor. Все права защищены. Индивидуальный предприниматель Байсиев Эскандер Хакимович. ОГРНИП: 325070000046405</p>
                 <p style="margin-top: 0.5rem; color: #8a8a8a;">Проект находится в процессе регистрации в Роспатенте. Коммерческое использование — по лицензионному договору.</p>
             </div>
@@ -1688,84 +804,14 @@
     </footer>
 
     <script>
-        // Анимация появления элементов при скролле
-        const fadeElements = document.querySelectorAll('.fade-in');
-
-        const fadeObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
-                }
-            });
-        }, {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        });
-
-        fadeElements.forEach(el => fadeObserver.observe(el));
-
-        // Управление мобильным меню
-        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-        const navLinks = document.getElementById('navLinks');
-        let isMenuOpen = false;
-
-        mobileMenuBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            isMenuOpen = !isMenuOpen;
-
-            if (isMenuOpen) {
-                navLinks.classList.add('active');
-                mobileMenuBtn.innerHTML = '<i class="fas fa-times"></i>';
-            } else {
-                navLinks.classList.remove('active');
-                mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-            }
-        });
-
-        // Закрытие меню при клике на ссылку
-        document.querySelectorAll('.nav-links a').forEach(link => {
-            link.addEventListener('click', function() {
-                navLinks.classList.remove('active');
-                mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-                isMenuOpen = false;
-            });
-        });
-
-        // Закрытие меню при клике вне его
-        document.addEventListener('click', function(e) {
-            if (isMenuOpen && !navLinks.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
-                navLinks.classList.remove('active');
-                mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-                isMenuOpen = false;
-            }
-        });
-
-        // Закрытие меню при ресайзе окна на большие экраны
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 768) {
-                navLinks.classList.remove('active');
-                mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-                isMenuOpen = false;
-            }
-        });
-
-        // Плавная прокрутка для якорных ссылок
+        // Плавная прокрутка
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function(e) {
                 e.preventDefault();
-
                 const targetId = this.getAttribute('href');
                 if (targetId === '#') return;
-
                 const targetElement = document.querySelector(targetId);
                 if (targetElement) {
-                    // Закрываем мобильное меню если открыто
-                    if (isMenuOpen) {
-                        navLinks.classList.remove('active');
-                        mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-                        isMenuOpen = false;
-                    }
-
                     window.scrollTo({
                         top: targetElement.offsetTop - 80,
                         behavior: 'smooth'
@@ -1774,43 +820,27 @@
             });
         });
 
-        // Анимация пульсирующей точки статуса
-        setInterval(() => {
-            const statusDot = document.querySelector('.status-dot');
-            if (statusDot) {
-                statusDot.style.animation = 'none';
-                setTimeout(() => {
-                    statusDot.style.animation = 'pulse-red 2s infinite';
-                }, 10);
-            }
-        }, 4000);
+        // Анимация появления элементов
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
 
-        // Оптимизация для touch устройств
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', function(event) {
-            const now = (new Date()).getTime();
-            if (now - lastTouchEnd <= 300) {
-                event.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, false);
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
 
-        // Предотвращение зума при двойном тапе
-        document.addEventListener('dblclick', function(event) {
-            event.preventDefault();
-        }, { passive: false });
-
-        // Добавляем класс для анимированных элементов при загрузке
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => {
-                document.querySelectorAll('.fade-in').forEach((el, index) => {
-                    setTimeout(() => {
-                        if (el.getBoundingClientRect().top < window.innerHeight) {
-                            el.classList.add('visible');
-                        }
-                    }, index * 100);
-                });
-            }, 500);
+        // Применяем анимацию к карточкам
+        document.querySelectorAll('.feature-card, .benefit-card, .contact-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(30px)';
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(card);
         });
     </script>
 </body>
