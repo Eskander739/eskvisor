@@ -1,12 +1,8 @@
 import os
 
-from dotenv import load_dotenv
-
 from agent.client.pycgroup.cgroup_cli import (
     CLICGroup,
 )
-
-load_dotenv()
 
 
 class PidController:

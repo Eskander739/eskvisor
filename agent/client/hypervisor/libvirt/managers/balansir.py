@@ -1,8 +1,6 @@
 import datetime
 import os
-import uuid
 
-from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
 from agent.client.constants import INVALID_LINUX_CHAR
@@ -32,7 +30,6 @@ from agent.client.hypervisor.libvirt.models.volume.logic import (
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType
 from agent.client.logger_config import DefaultLogger
 
-load_dotenv()
 
 
 class Balansir(LibvirtClient):
@@ -41,7 +38,6 @@ class Balansir(LibvirtClient):
         self.logger = DefaultLogger("Балансиръ")
         self.logger.info("Инициализация виртуального менеджера ресурс пулов")
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
-        self.storage_type_dir_base_path = os.environ.get("STORAGE_TYPE_DIR_BASE_PATH")
         self.storage_manager = StorageManager()
         self.storage_manager.connect()
         self.physical_volume_manager = PhysicalVolumeManager()
@@ -827,8 +823,6 @@ class Balansir(LibvirtClient):
 
 if __name__ == "__main__":
     mng = Balansir()
-    # TODO: Изучить системные вызовы чтобы добавить системные ограничения для нашего виртуального менеджера
-    # TODO: Изучить вопрос чтения данных из памяти, а при внесении изменений - обновлять данные в файлах и памяти
     a = datetime.datetime.now()
     # print(a)
     # data = mng.create_virtual_resource_pool(

@@ -38,19 +38,19 @@ class CLIControl:
 
         return result
 
-    def is_exists(self, cgroup_path: str):
+    def is_exists(self, path: str):
         ru_err = "Нет такого файла или каталога"
         eng_err = "No such file or directory"
-        cmd_args = ["ls", cgroup_path]
+        cmd_args = ["ls", path]
         result = self.execute(cmd_args)
         if ru_err in result or eng_err in result:
             return False
         return True
 
-    def is_directory(self, cgroup_path: str):
+    def is_directory(self, path: str):
         ru_err = "Это каталог"
         eng_err = "Is a directory"
-        cmd_args = ["cat", cgroup_path]
+        cmd_args = ["cat", path]
         result = self.execute(cmd_args)
         if ru_err in result or eng_err in result:
             return True
@@ -61,9 +61,19 @@ class CLIControl:
         result = self.execute(cmd_args)
         return result
 
-    def rmdir(self, path: str):
-        cmd_args = ["rmdir", path]
+    def create_file(self, path: str, info: str | None = None):
+        if info is None:
+            cmd_args = ["touch", path]
+        else:
+            cmd_args = ["sh", "-c", f"echo '{info}' > {path}"]
         result = self.execute(cmd_args)
+        self.logger.info(f"Результат создания файла: '{result}'")
+        return result
+
+    def delete_file_or_path(self, path: str):
+        cmd_args = ["rm", "-r", path]
+        result = self.execute(cmd_args)
+        self.logger.info(f"Результат удаления файла/директории: '{result}'")
         return result
 
     def search_emulators(
@@ -98,23 +108,16 @@ class CLIControl:
             else:
                 all_directories.extend(new_directories)
 
-        # Ищем эмуляторы во всех директориях
         for directory in all_directories:
             if not self.is_directory(directory):
                 continue
-            # Проверяем, существует ли директория
             if not os.path.isdir(directory):
                 continue
 
-            # Для каждого паттерна выполняем поиск
             for pattern in search_patterns:
-                # Убираем звездочку из пути для корректной работы find
                 dir_path = directory.rstrip("*")
 
-                # Формируем команду find
-                # Используем -maxdepth для оптимизации поиска в глубоких путях
                 if "*/*" in directory:  # Для сложных путей вроде /nix/store/*/bin
-                    # Для путей со звездочками используем другой подход
                     base_dir = directory.split("/*")[0]
                     command = (
                         f'find {base_dir} -type d -name "bin" 2>/dev/null | head -20'

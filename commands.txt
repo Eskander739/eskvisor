@@ -36,9 +36,10 @@ sudo chmod 777 /eskvisor/storages/
 # Проверьте статус (должен быть "active (running)")
 sudo systemctl status libvirtd
 
-# команда ниже нужна для корректной работы nfs хранилищ
+# команда ниже нужна для корректной работы nfs хранилищ для тестов
 sudo sh -c "echo '/srv/nfs 127.0.0.1(rw,sync,no_root_squash,fsid=0,no_subtree_check)' >> /etc/exports"
 sudo exportfs -ra
+
 
 #_________________________________Запуск анализатора кода и автоформатирование black______________________________
 

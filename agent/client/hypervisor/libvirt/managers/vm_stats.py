@@ -6,8 +6,6 @@ from collections import deque
 import signal
 import sys
 
-from dotenv import load_dotenv
-
 from agent.client.hypervisor.libvirt.models.vm_stats.stats import (
     MemoryStat,
     VMStats,
@@ -16,8 +14,6 @@ from agent.client.hypervisor.libvirt.models.vm_stats.stats import (
     CpuAndRamUsage,
 )
 from agent.client.logger_config import DefaultLogger
-
-load_dotenv()
 
 
 class VMLiveMonitor:

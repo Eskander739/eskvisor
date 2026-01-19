@@ -2,8 +2,6 @@ import os
 import random
 
 import pytest
-from dotenv import load_dotenv
-
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskCreate,
     DiskFormat,
@@ -12,7 +10,6 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 
 
-load_dotenv()
 SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
 
 

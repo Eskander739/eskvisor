@@ -2,11 +2,8 @@ import json
 import os
 
 import redis
-from dotenv import load_dotenv
 
-from agent.ctl.proc.models import TaskStatus, TaskInfo
-
-load_dotenv()
+from agent.client.task_manager.models import TaskStatus, TaskInfo
 
 DELETE_VM = {
   "type": "vm",

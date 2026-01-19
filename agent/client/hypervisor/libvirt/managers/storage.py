@@ -8,9 +8,9 @@ from datetime import datetime
 from subprocess import TimeoutExpired
 
 import libvirt
-from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
+from agent.client.hypervisor.ha.controller import HAController
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
 from agent.client.hypervisor.libvirt.models.volume.disk import (
@@ -34,7 +34,6 @@ from agent.client.lvm.group import VolumeGroupManager
 from agent.client.lvm.logical import LogicalVolumeManager
 
 
-load_dotenv()
 
 
 class StorageManager(LibvirtClient):
@@ -47,21 +46,28 @@ class StorageManager(LibvirtClient):
         self.system_disk_path = os.environ.get("SYSTEM_DISK_PATH")
         self.volume_group_manager = VolumeGroupManager()
         self.logic_volume_manager = LogicalVolumeManager()
+        self.ha_controller = HAController()
 
     def create_disk(
         self, disk_create: DiskCreate
     ) -> Disk | StorageMessage:
-        if disk_create.path is None:
+        ha_nfs_storages = self.ha_controller.loaded_ha_nfs_storages.nfs_storages
+        if ha_nfs_storages:
+            ha_nfs_storage = ha_nfs_storages.pop()
+            disk_create.path = ha_nfs_storage.mount
+        elif disk_create.path is None:
             disk_create.path = self.system_disk_path
         try:
             self.logger.info(
                 f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB"
             )
             if disk_create.resource_pool:
-                return self._create_lv_in_resource_pool(disk_create)
+                create_resource_pool_disk_result = self._create_file_disk(disk_create)
+                return create_resource_pool_disk_result
             else:
                 self.logger.info("Создание файлового диска")
-                return self._create_file_disk(disk_create)
+                create_file_disk_result = self._create_file_disk(disk_create)
+                return create_file_disk_result
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt: {e}")

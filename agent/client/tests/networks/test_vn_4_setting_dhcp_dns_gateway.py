@@ -2,12 +2,9 @@ import os
 import random
 import re
 import time
-import uuid
 from ipaddress import IPv4Address
 
 import pytest
-from dotenv import load_dotenv
-
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
@@ -28,7 +25,6 @@ from agent.client.hypervisor.libvirt.models.vm import (
 )
 from agent.client.tools import wait_while_not
 
-load_dotenv()
 IMG_PATH = os.environ.get("IMAGE_PATH")
 
 

@@ -110,6 +110,7 @@ class VMCreateRequest(BaseModel):
     boot_devices: list[str] | None = None
     extra_args: str | None = None
     video_model: str = "qxl"
+    boot_uefi: bool = False
 
     machine_type: MachineType = Field(
         default=(

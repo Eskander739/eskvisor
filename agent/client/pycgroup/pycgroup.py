@@ -1,7 +1,5 @@
 import os
 
-from dotenv import load_dotenv
-
 from agent.client.pycgroup.cgroup_cli import (
     CLICGroup,
 )
@@ -17,8 +15,6 @@ from agent.client.pycgroup.ctl.memory_ctl import (
 from agent.client.pycgroup.ctl.pid_ctl import (
     PidController,
 )
-
-load_dotenv()
 
 
 class PYCGroup:

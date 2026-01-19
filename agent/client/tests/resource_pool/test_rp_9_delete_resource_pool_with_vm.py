@@ -1,7 +1,6 @@
 import os
 import random
 import pytest
-from dotenv import load_dotenv
 
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -10,7 +9,6 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
 )
 
-load_dotenv()
 SYSTEM_VOLUME_GROUP_NAME = os.environ.get("VOLUME_GROUP")
 
 

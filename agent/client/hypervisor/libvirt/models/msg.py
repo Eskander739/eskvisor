@@ -146,6 +146,15 @@ class CommandMessagesEnum(Enum):
     # Logic Volume
     edit_logic_volume_error = "Edit logic volume error"
     delete_logic_volume_error = "Delete logic volume error"
+    for_live_migration_vm_need_to_running = "For live migration VM need to running"
+    migration_completed_but_did_not_return_domain = "Migration completed but did not return domain"
+    migration_successfully_completed = "Migration successfully completed"
+    migration_successfully_completed_with_virsh = "Migration successfully completed with virsh"
+    migration_with_disks_successfully_completed_with_virsh = "Migration with disks successfully completed with virsh"
+    migration_without_disks_successfully_completed_with_virsh = "Migration without disks successfully completed with virsh"
+    migration_error = "Migration error"
+    migration_virsh_error = "Migration virsh error"
+    migration_timeout_error_with_virsh = "Migration timeout error with virsh"
 
 
 class DefaultMessage(BaseModel):

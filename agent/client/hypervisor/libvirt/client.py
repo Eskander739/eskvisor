@@ -3,11 +3,7 @@ import logging
 import os
 
 import libvirt
-from dotenv import load_dotenv
-
 from agent.client.hypervisor.libvirt.models.node import NodeInfo
-
-load_dotenv()
 
 
 class LibvirtClient:

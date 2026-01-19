@@ -58,7 +58,7 @@ def test_sf_02_create_and_delete_nfs_storage(
         else:
             assert round(vm_disk.capacity_bytes / (1024**3), 2) < 0.1
         assert vm_disk.file_path_exists is True
-        assert vm_disk.path == attach_disk_create.path
+        assert create_nfs_storage_session == vm_disk.path
     finally:
         # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:

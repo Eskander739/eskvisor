@@ -5,7 +5,6 @@ import sys
 import time
 
 import pytest
-from dotenv import load_dotenv
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.managers.network import NetworkManager
@@ -33,10 +32,9 @@ from agent.client.hypervisor.libvirt.models.vm import (
 from agent.client.lvm.group import VolumeGroupManager
 from agent.client.lvm.logical import LogicalVolumeManager
 from agent.client.lvm.physical import PhysicalVolumeManager
-from agent.client.stg.nfs import NFSStorage
+from agent.client.stg.nfs import NFSStorageManager
 from agent.client.tools import wait_while_not
 
-load_dotenv()
 IMG_PATH = os.environ.get("IMAGE_PATH")
 
 
@@ -73,8 +71,8 @@ def volume_session():
 @pytest.fixture(scope="session")
 def create_nfs_storage_session():
     cli = CLIControl()
-    nfs_stg = NFSStorage()
-    nfs_path = f"/srv/nfs/share_{random.randint(100000, 999999)}"
+    nfs_stg = NFSStorageManager()
+    nfs_path = f"/share_{random.randint(100000, 999999)}"
     nfs_mount_path = f"/mnt/nfs_{random.randint(100000, 999999)}"
 
     # Создать директории
@@ -97,7 +95,7 @@ def create_nfs_storage_session():
     yield nfs_mount_path
 
     # Отмонтировать принудительно
-    nfs_stg.unmount(nfs_mount_path)
+    nfs_stg.umount(nfs_mount_path)
 
     # Удаление локальных директории хранилища
     nfs_local_rmdir = ["rmdir", nfs_path]

@@ -5,7 +5,7 @@ import time
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.models.volume.physical import PhysicalVolume
 from agent.client.logger_config import DefaultLogger
-from agent.client.stg.nfs import NFSStorage
+from agent.client.stg.nfs import NFSStorageManager
 
 
 class PhysicalVolumeManager:

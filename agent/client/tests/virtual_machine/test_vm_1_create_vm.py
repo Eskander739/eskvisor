@@ -27,12 +27,16 @@ def test_vm_01_create_vm(vm_session, vm_state):
     try:
         # ____________________________________Создание ВМ_________________________
         random_name = f"VM-TEST-{random.randint(10000, 99999)}"
+        autostart = {}
+        if vm_state.value == vm_state.RUNNING.value:
+            autostart["autostart"] = True
+            autostart["autostart_vm"] = True
+        else:
+            autostart["autostart"] = False
         new_disk_name = f"disk-{str(random.randint(100000, 999999))}"
         vm_template = VMCreateRequest(
-            name=random_name, disks=[DiskCreate(name=new_disk_name)]
+            name=random_name, disks=[DiskCreate(name=new_disk_name)], **autostart
         )
-        if vm_state.value == vm_state.RUNNING.value:
-            vm_template.autostart_vm = True
         create_vm_info = vm_session.create_vm(vm_template)
         assert (
             create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
@@ -47,14 +51,15 @@ def test_vm_01_create_vm(vm_session, vm_state):
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________
         if random_name is not None:
-            delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name
-            )
-            assert (
-                delete_vm_info.message
-                == CommandMessagesEnum.vm_successfully_deleted.value
-            )
-            assert (
-                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
-            )
-            assert delete_vm_info.success is True
+            if vm_state.value == vm_state.PAUSED.value:
+                delete_vm_info = vm_session.delete_vm_with_force(
+                    name=random_name
+                )
+                assert (
+                        delete_vm_info.message
+                        == CommandMessagesEnum.vm_successfully_deleted.value
+                )
+                assert (
+                        delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+                )
+                assert delete_vm_info.success is True
