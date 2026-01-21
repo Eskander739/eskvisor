@@ -17,17 +17,17 @@ def test_vm_03_start_stop_restart_vm(vm_session):
 
     Выполнить операции power on, power off, restart. Проверить, что состояние ВМ меняется соответственно.
     """
-    random_name = None
+    random_name = f"VM-TEST-{random.randint(10000, 99999)}"
+    vm_created = None
     get_state = vm_session.get_vm_state_by_name
     try:
         # ____________________________________Создание ВМ_________________________
-        random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         vm_template = VMCreateRequest(name=random_name, disks=[DiskCreate()])
         create_vm_info = vm_session.create_vm(vm_template)
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
+        vm_created = True
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.SHUTOFF.value)
-
         # ____________________________________Запуск ВМ___________________________
         start_vm_info = vm_session.start_vm(random_name)
         assert start_vm_info.code == CommandMessagesEnum.vm_successfully_started.name
@@ -49,7 +49,7 @@ def test_vm_03_start_stop_restart_vm(vm_session):
 
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________
-        if random_name is not None:
+        if vm_created is not None:
             delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
             assert (
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name

@@ -26,15 +26,14 @@ def test_vm_05_change_vcpu_hot_plug_unplug(vm_session, vm_resource):
     """
     VM‑05: Горячее добавление CPU ядер
     """
-    random_name = None
-
+    vm_created = None
+    random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     def kb_to_mb(kb):
         return kb / 1024
 
     get_state = vm_session.get_vm_state_by_name
     try:
         # ____________________________________Создание ВМ_________________________
-        random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         vm_template = VMCreateRequest(
             name=random_name,
             disks=[DiskCreate()],
@@ -44,6 +43,7 @@ def test_vm_05_change_vcpu_hot_plug_unplug(vm_session, vm_resource):
         )
         create_vm_info = vm_session.create_vm(vm_template)
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
+        vm_created = True
         assert create_vm_info.vm_info is not None
         vm_info: VirtualMachine = create_vm_info.vm_info
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
@@ -66,7 +66,7 @@ def test_vm_05_change_vcpu_hot_plug_unplug(vm_session, vm_resource):
 
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________
-        if random_name is not None:
+        if vm_created is not None:
             delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
             assert (
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name

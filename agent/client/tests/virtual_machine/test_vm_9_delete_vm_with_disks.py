@@ -17,7 +17,8 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
 
     Удалить ВМ вместе с её дисками. Проверить, что все ресурсы освобождаются.
     """
-    random_name = None
+    vm_created = None
+    random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     vm_deleted = False
 
     def kb_to_mb(kb):
@@ -27,12 +28,12 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
     try:
         # ____________________________________Создание ВМ_________________________
 
-        random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         vm_template = VMCreateRequest(
             name=random_name, disks=[DiskCreate(), DiskCreate()]
         )
         create_vm_info = vm_session.create_vm(vm_template)
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
+        vm_created = True
         assert create_vm_info.vm_info is not None
         vm_info: VirtualMachine = create_vm_info.vm_info
         assert wait_while_not(lambda: get_state(random_name) == VMState.SHUTOFF.value)
@@ -59,7 +60,7 @@ def test_vm_09_delete_vm_with_disks(vm_session, storage_session):
         vm_deleted = True
     finally:
         # ___________Удаление ВМ(постусловие, если не сработает обычное удаление)_
-        if random_name is not None:
+        if vm_created is not None:
             if not vm_deleted:
                 delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
                 assert (

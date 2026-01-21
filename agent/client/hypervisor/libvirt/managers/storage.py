@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import shutil
+import time
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -148,9 +149,7 @@ class StorageManager(LibvirtClient):
                     code=CommandMessagesEnum.rp_virtual_not_found.name,
                     note=str("Отсутствует ресурс пул для создания дисков в нем"),
                 )
-            disk_path = (
-                f"{disk_create.path}/{disk_create.name}.{disk_create.format.value}"
-            )
+            disk_path = str(Path(disk_create.path) / f"{disk_create.name}.{disk_create.format.value}")
             self.logger.info(
                 f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB, ресурс пул: '{disk_create.resource_pool}'"
             )
@@ -550,35 +549,28 @@ class StorageManager(LibvirtClient):
     ) -> Disk | None:
         try:
             self.logger.info(
-                f"Клонирование диска: {disk_name}.{disk_format.value} -> {target_name}.{disk_format.value}"
+                f"Клонирование диска: {path}/{disk_name}.{disk_format.value} -> {path}/{target_name}.{disk_format.value}"
             )
-
-            source_disk = self.get_disk_info(
-                disk_name=disk_name, path=path, disk_format=disk_format
-            )
-            source_disk = source_disk.disk_info
-            if not source_disk:
+            source_path = Path(f"{path}/{disk_name}.{disk_format.value}")
+            target_path = Path(f"{path}/{target_name}.{disk_format.value}")
+            if not source_path.exists():
                 return None
-            source_path = f"{path}/{disk_name}.{disk_format.value}"
-            target_path = f"{path}/{target_name}.{disk_format.value}"
-            target_dir = Path(os.path.dirname(target_path))
-            if not target_dir.exists():
-                target_dir.mkdir()
-
-            if source_disk.format == DiskFormat.QCOW2:
+            if disk_format == DiskFormat.QCOW2:
                 cmd = [
                     "qemu-img",
                     "convert",
+                    "--force-share",
                     "-f",
                     "qcow2",
                     "-O",
                     "qcow2",
-                    source_path,
-                    target_path,
+                    str(source_path),
+                    str(target_path),
                 ]
                 self.logger.info(f"Выполнение команды: {' '.join(cmd)}")
 
                 result = self.cli.execute(cmd, return_proc=True)
+                self.logger.warning(f"Результат клонирования QCOW2 диска: '{result.stdout if result.returncode == 0 else result.stderr}'")
                 if result.returncode != 0:
                     raise Exception(f"Ошибка qemu-img: {result.stderr}")
             else:
@@ -1088,7 +1080,7 @@ class StorageManager(LibvirtClient):
         elif path is None:
             path = self.system_disk_path
         try:
-            disk_path = path + "/" + disk_name + "." + disk_format.value
+            disk_path = str(Path(path) / f"{disk_name}.{disk_format.value}")
             if is_pool:
                 if disk_format.value == DiskFormat.QCOW2.value:
                     if Path(disk_path).exists():

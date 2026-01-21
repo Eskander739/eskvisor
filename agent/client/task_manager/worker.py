@@ -159,6 +159,15 @@ class TaskHandler:
             result = self.vm_manager.clone_vm(source_name, new_name)
             return result
 
+        elif action == "migrate":
+            # Миграция ВМ без дисков(ожидаем что используется HA с NFS хранилищем)
+            vm_name = params["vm_name"]
+            dest_uri = params["dest_uri"]
+            live = params.get("live") if params.get("live") else False
+            undefine_source = params.get("undefine_source") if params.get("undefine_source") else False
+            result = self.vm_manager.migrate_vm(vm_name, dest_uri,  live, undefine_source)
+            return result
+
         elif action == "list":
             # Список ВМ
             only_active = params.get("only_active", False)

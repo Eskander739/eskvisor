@@ -18,15 +18,14 @@ def test_vm_01_create_vm(vm_session, vm_state):
 
     Указать имя, ресурсы (CPU, RAM, диск), сеть. Проверить, что ВМ появляется в списке в состоянии «Выключена».
     """
-    random_name = None
-
+    vm_created = None
+    random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     def kb_to_mb(kb):
         return kb / 1024
 
     get_state = vm_session.get_vm_state_by_name
     try:
         # ____________________________________Создание ВМ_________________________
-        random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         autostart = {}
         if vm_state.value == vm_state.RUNNING.value:
             autostart["autostart_vm"] = True
@@ -40,6 +39,7 @@ def test_vm_01_create_vm(vm_session, vm_state):
         )
         create_vm_info = vm_session.create_vm(vm_template)
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
+        vm_created = True
         assert create_vm_info.vm_info is not None
         vm_info: VirtualMachine = create_vm_info.vm_info
         assert wait_while_not(lambda: get_state(random_name) == vm_state.value)
@@ -49,7 +49,7 @@ def test_vm_01_create_vm(vm_session, vm_state):
         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________
-        if random_name is not None:
+        if vm_created is not None:
             delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
             assert (
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name

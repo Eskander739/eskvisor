@@ -57,7 +57,7 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
                 == attach_disk_create.size_gb
             )
         else:
-            assert round(vm_disk_start.capacity_bytes / (1024**3), 2) < 0.1
+            assert 0 < round(vm_disk_start.capacity_bytes / (1024**3), 2) < 0.1
         assert vm_disk_start.file_path_exists is True
         assert vm_disk_start.path == attach_disk_create.path
 

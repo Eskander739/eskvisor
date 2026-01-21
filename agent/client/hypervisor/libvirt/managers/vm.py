@@ -353,7 +353,6 @@ class VmManager(LibvirtClient):
                 f"--memory {config.memory_mb},{f'maxmemory={config.max_memory_mb}' if config.max_memory_mb and config.max_memory_mb != config.memory_mb else ''}"
             ]
         )
-        # cmd_parts.extend([f"--memory {config.memory_mb},{f'maxmemory={config.max_memory_mb}' if config.max_memory_mb and config.max_memory_mb != config.memory_mb else ''}"])
 
         if config.max_vcpus and config.max_vcpus != config.vcpus:
             cmd_parts.extend(["--vcpus", f"{config.vcpus},maxvcpus={config.max_vcpus}"])
@@ -2340,8 +2339,9 @@ class VmManager(LibvirtClient):
                             shutil.copy2(old_path, new_path)
                         else:
                             disk_format = self.config.disk_format_by_path(new_path)
-                            disk_name = base_name.replace(disk_format.value, "")
+                            disk_name = base_name.replace(f".{disk_format.value}", "")
                             path = old_path.replace(f"/{base_name}", "")
+                            new_path = str(Path(path) / f"{new_name}.{disk_format.value}")
                             self.storage_manager.clone_disk(
                                 disk_name, path, disk_format, new_name
                             )
