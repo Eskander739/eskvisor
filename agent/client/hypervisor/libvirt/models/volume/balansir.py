@@ -35,14 +35,14 @@ class ResourcePoolVirtualCreate(BaseModel):
     vm_reservation_list: list[ResourceReservationVM] | None = None
 
     @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
-        if values.storage_type != StoragePoolType.LOGICAL:
+    def validate_disk_type_constraints(self):
+        if self.storage_type != StoragePoolType.LOGICAL:
             raise ValueError("Отсутствует поддержка других типов хранилищ")
 
-        if not values.name.startswith("resource_pool_"):
+        if not self.name.startswith("resource_pool_"):
             raise ValueError("Имя ресурс пула должно начинаться с resource_pool_")
 
-        return values
+        return self
 
     @computed_field
     @property
@@ -75,16 +75,16 @@ class ResourcePoolVirtualEdit(BaseModel):
     vm_reservation_list: list[ResourceReservationVM] | None = None
 
     @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
-        if values.storage_limit is not None:
-            if values.volume_size_type is None:
+    def validate_disk_type_constraints(self):
+        if self.storage_limit is not None:
+            if self.volume_size_type is None:
                 raise ValueError(
                     "При указании storage_type нужно указать volume_size_type"
                 )
-            if values.storage_type is None:
+            if self.storage_type is None:
                 raise ValueError("При указании storage_type нужно указать storage_type")
 
-        return values
+        return self
 
     @computed_field
     @property
@@ -117,14 +117,37 @@ class ResourcePoolVirtual(BaseModel):
     logical_volume: str | None = None
 
     @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
-        if values.storage_type != StoragePoolType.LOGICAL:
-            if values.group_volume or values.logical_volume:
+    def validate_disk_type_constraints(self):
+        if self.storage_type != StoragePoolType.LOGICAL:
+            if self.group_volume or self.logical_volume:
                 raise ValueError(
                     "Поля group_volume/logical_volume поддерживаются только логическими томами"
                 )
 
-        return values
+        if self.cpu_core_limit == -1.0:
+            # Валидно, означает "неограниченно"
+            return self
+        elif self.cpu_core_limit <= 0:
+            raise ValueError("CPU limit must be positive or -1 for unlimited")
+
+        if self.cpu_core_available == -1.0:
+            # Валидно, означает "неограниченно"
+            return self
+        elif self.cpu_core_available <= 0:
+            raise ValueError("CPU available must be positive or -1 for unlimited")
+
+        if self.ram_limit_bytes == -1.0:
+            # Валидно, означает "неограниченно"
+            return self
+        elif self.ram_limit_bytes <= 0:
+            raise ValueError("RAM limit must be positive or -1 for unlimited")
+
+        if self.ram_available == -1.0:
+            # Валидно, означает "неограниченно"
+            return self
+        elif self.ram_available <= 0:
+            raise ValueError("CPU available must be positive or -1 for unlimited")
+        return self
 
     @computed_field
     @property

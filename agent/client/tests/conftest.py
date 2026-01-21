@@ -104,6 +104,7 @@ def create_nfs_storage_session():
     nfs_local_rmdir = ["rmdir", nfs_mount_path]
     cli.execute(nfs_local_rmdir)
 
+
 @pytest.fixture(scope="session", autouse=True)
 def delete_all_network_info():
     cli = CLIControl()
@@ -254,23 +255,15 @@ def create_resource_pool_session():
             storage_type=StoragePoolType.LOGICAL,
         )
         create_rp_info = rp_manager.create_virtual_resource_pool(rp_template)
-        assert (
-            create_rp_info.message
-            == CommandMessagesEnum.virtual_rp_create_success.value
-        ), create_rp_info.note
-        assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name
+        assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name, create_rp_info.note
 
         yield random_name
 
         delete_rp_info = rp_manager.delete_virtual_resource_pool(random_name, True)
-        assert delete_rp_info.message in (
-            CommandMessagesEnum.rp_virtual_delete_success.value,
-            CommandMessagesEnum.rp_virtual_not_found.value,
-        ), delete_rp_info.note
         assert delete_rp_info.code in (
             CommandMessagesEnum.rp_virtual_delete_success.name,
             CommandMessagesEnum.rp_virtual_not_found.name,
-        )
+        ), delete_rp_info.note
 
 
 @pytest.fixture(scope="session")

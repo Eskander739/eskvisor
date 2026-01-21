@@ -1,5 +1,6 @@
 import os
 import subprocess
+from pathlib import Path
 
 from agent.client.constants import DIRECTORIES_FOR_SEARCH, QEMU_EMULATORS
 from agent.client.logger_config import DefaultLogger
@@ -38,38 +39,6 @@ class CLIControl:
 
         return result
 
-    def is_exists(self, path: str):
-        ru_err = "Нет такого файла или каталога"
-        eng_err = "No such file or directory"
-        cmd_args = ["ls", path]
-        result = self.execute(cmd_args)
-        if ru_err in result or eng_err in result:
-            return False
-        return True
-
-    def is_directory(self, path: str):
-        ru_err = "Это каталог"
-        eng_err = "Is a directory"
-        cmd_args = ["cat", path]
-        result = self.execute(cmd_args)
-        if ru_err in result or eng_err in result:
-            return True
-        return False
-
-    def mkdir(self, path: str):
-        cmd_args = ["mkdir", "-p", path]
-        result = self.execute(cmd_args)
-        return result
-
-    def copy_file(self, current_path: str, target_path: str):
-        if not self.is_exists(current_path):
-            return None
-        cmd_args = ["cp", current_path, target_path]
-        result = self.execute(cmd_args, return_proc=True)
-        if result.returncode != 0:
-            self.logger.info(f"Ошибка копирования файла: '{result}'")
-        return result
-
     def create_file(self, path: str, info: str | None = None):
         if info is None:
             cmd_args = ["touch", path]
@@ -77,12 +46,6 @@ class CLIControl:
             cmd_args = ["sh", "-c", f"echo '{info}' > {path}"]
         result = self.execute(cmd_args)
         self.logger.info(f"Результат создания файла: '{result}'")
-        return result
-
-    def delete_file_or_path(self, path: str):
-        cmd_args = ["rm", "-r", path]
-        result = self.execute(cmd_args)
-        self.logger.info(f"Результат удаления файла/директории: '{result}'")
         return result
 
     def search_emulators(
@@ -118,7 +81,7 @@ class CLIControl:
                 all_directories.extend(new_directories)
 
         for directory in all_directories:
-            if not self.is_directory(directory):
+            if not Path(directory).is_dir():
                 continue
             if not os.path.isdir(directory):
                 continue

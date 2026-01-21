@@ -25,7 +25,7 @@ class RedisTaskManager:
     """
 
     def __init__(
-            self,
+        self,
     ):
         """
         Инициализация подключения к Redis.
@@ -65,7 +65,9 @@ class RedisTaskManager:
         task_len = redis_connect.llen(queue_name)
         return task_len
 
-    def get_all_tasks(self, queue_name: str | None = None, start: int = 0, end: int = -1) -> list[str]:
+    def get_all_tasks(
+        self, queue_name: str | None = None, start: int = 0, end: int = -1
+    ) -> list[str]:
         """
         Возвращает список всех задач в Redis
         """
@@ -74,15 +76,20 @@ class RedisTaskManager:
         tasks = redis_connect.lrange(queue_name, start, end)
         return [current_task for current_task in tasks]
 
-    def get_process_tasks(self, processing_queue_name: str | None = None, start: int = 0, end: int = -1) -> list[str]:
+    def get_process_tasks(
+        self, processing_queue_name: str | None = None, start: int = 0, end: int = -1
+    ) -> list[str]:
         """
         Возвращает список всех задач в работе в Redis
         """
-        queue_name = self.processing_queue_name if processing_queue_name is None else processing_queue_name
+        queue_name = (
+            self.processing_queue_name
+            if processing_queue_name is None
+            else processing_queue_name
+        )
         redis_connect = self.redis_session(self.db_for_requests)
         tasks = redis_connect.lrange(queue_name, start, end)
         return [current_task for current_task in tasks]
-
 
     def get_task_info(self, request_id: str) -> TaskInfo | None:
         status = self.get_task_status(request_id)
@@ -112,7 +119,9 @@ class RedisTaskManager:
         return None
 
     def set_status(self, request_id: str, task_status: TaskStatus):
-        self.redis_session(self.db_for_requests).hset("status", request_id, task_status.value)
+        self.redis_session(self.db_for_requests).hset(
+            "status", request_id, task_status.value
+        )
 
     def set_result(self, request_id: str, result: str):
         self.redis_session(self.db_for_requests).hset("result", request_id, result)
@@ -121,9 +130,7 @@ class RedisTaskManager:
         error = "null" if error else "true"
         self.redis_session(self.db_for_requests).hset("error", request_id, error)
 
-    def add_task(
-            self, task: Task, queue_name: str | None = None
-    ):
+    def add_task(self, task: Task, queue_name: str | None = None):
         """
         Добавляет задачу в очередь
         """
@@ -134,12 +141,18 @@ class RedisTaskManager:
         self.set_error(task.request_id, False)
         return redis_connect.lpush(queue_name, task.model_dump_json())
 
-    def execute_task(self, queue_name: str | None = None, processing_queue_name: str | None = None) -> Task | None:
+    def execute_task(
+        self, queue_name: str | None = None, processing_queue_name: str | None = None
+    ) -> Task | None:
         """
         Выполнить задачу
         """
         queue_name = self.queue_name if queue_name is None else queue_name
-        processing_queue_name = self.processing_queue_name if processing_queue_name is None else processing_queue_name
+        processing_queue_name = (
+            self.processing_queue_name
+            if processing_queue_name is None
+            else processing_queue_name
+        )
         redis_connect = self.redis_session(self.db_for_requests)
         cached_data = redis_connect.rpoplpush(queue_name, processing_queue_name)
         if cached_data:
@@ -149,7 +162,9 @@ class RedisTaskManager:
 
         return None
 
-    def complete_task(self, result: TaskResponse, processing_queue_name: str | None = None) -> int:
+    def complete_task(
+        self, result: TaskResponse, processing_queue_name: str | None = None
+    ) -> int:
         """
         Завершить выполнение задачи
         """
@@ -157,7 +172,11 @@ class RedisTaskManager:
             result = json.dumps(result)
         elif result is None:
             result = "null"
-        processing_queue_name = self.processing_queue_name if processing_queue_name is None else processing_queue_name
+        processing_queue_name = (
+            self.processing_queue_name
+            if processing_queue_name is None
+            else processing_queue_name
+        )
         redis_connect = self.redis_session(self.db_for_requests)
         if result.status == TaskStatus.COMPLETED:
             self.set_status(result.request_id, TaskStatus.COMPLETED)
@@ -184,6 +203,7 @@ class RedisTaskManager:
         redis_connect = self.redis_session(self.db_for_requests)
         deleted_tasks = redis_connect.delete(queue_name)
         return deleted_tasks
+
 
 # Пример использования новых методов
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from agent.client.pycgroup.cgroup_cli import (
     CLICGroup,
@@ -12,8 +13,8 @@ class PidController:
         self.system_vm_pid_path = os.environ.get("SYSTEM_VM_PID_PATH")
 
     def vm_pid(self, name: str) -> int | None:
-        cmd_args = ["cat", f"{self.system_vm_pid_path}/{name}.pid"]
-        result = self.cli.execute(cmd_args)
+        vm_pid_path = Path(self.system_vm_pid_path) / f"{name}.pid"
+        result = vm_pid_path.read_text(encoding="utf-8")
         if not result:
             return None
         return int(result.split("\n")[0])
@@ -21,7 +22,7 @@ class PidController:
     def validate_path(self, cgroup_path: str) -> str | None:
         if self.system_cgroup_path not in cgroup_path:
             cgroup_path = f"{self.system_cgroup_path}/{cgroup_path}"
-        if not self.cli.is_directory(cgroup_path):
+        if not Path(cgroup_path).is_dir():
             raise ValueError("Отсутствует директория в системе")
         return cgroup_path
 
@@ -38,7 +39,8 @@ class PidController:
         pids_from_vm_pid_path.remove(f"{self.system_vm_pid_path}/driver.pid")
         pids_from_vm_pid_path.remove("")
         for vm in pids_from_vm_pid_path:
-            vm_current_pid = int(self.cli.execute(["cat", vm]))
+            vm_pid_path = Path(vm)
+            vm_current_pid = int(vm_pid_path.read_text(encoding="utf-8"))
             vm_name = vm.replace(f"{self.system_vm_pid_path}/", "").replace(".pid", "")
             vm_with_pids[vm_name] = vm_current_pid
 
@@ -49,8 +51,8 @@ class PidController:
 
     def get_pids_from_pool(self, cgroup_pool: str) -> list[int] | None:
         cgroup_pool = self.validate_path(cgroup_pool)
-        cgroup_pool = f"{cgroup_pool}/cgroup.procs"
-        result = self.cli.execute(["cat", f"{cgroup_pool}"])
+        cgroup_pool = Path(cgroup_pool) / "cgroup.procs"
+        result = cgroup_pool.read_text(encoding="utf-8")
         if result:
             return [int(pid) for pid in result.split("\n") if pid]
         else:
@@ -60,29 +62,28 @@ class PidController:
         if not isinstance(pid, int):
             raise ValueError("PID может быть только числом")
         self.validate_path(cgroup_pool)
-        cgroup_pool = f"{cgroup_pool}/cgroup.procs"
-        self.cli.execute(["sh", "-c", f"echo {pid} > {cgroup_pool}"])
-        result = self.cli.execute(["cat", f"{cgroup_pool}"])
+        cgroup_pool = Path(cgroup_pool) / "cgroup.procs"
+        cgroup_pool.write_text(str(pid))
+        result = cgroup_pool.read_text(encoding="utf-8")
         return result
 
     def delete_pid_from_pool(self, cgroup_pool: str, pid: int) -> str:
         if not isinstance(pid, int):
             raise ValueError(f"PID может быть только числом, pid: {type(pid)}")
         self.validate_path(cgroup_pool)
-        cgroup_pool = f"{cgroup_pool}/cgroup.procs"
-        self.cli.execute(
-            ["sh", "-c", f"echo {pid} > {self.system_cgroup_path}/cgroup.procs"]
-        )
-        result = self.cli.execute(["cat", f"{cgroup_pool}"])
+        cgroup_pool = Path(cgroup_pool) / "cgroup.procs"
+        system_pool = Path(self.system_cgroup_path) / "cgroup.procs"
+        system_pool.write_text(str(pid))
+        result = cgroup_pool.read_text(encoding="utf-8")
         return result
 
     def delete_all_pid_from_pool(self, cgroup_pool: str) -> str:
         self.validate_path(cgroup_pool)
         cgroup_pool = f"{cgroup_pool}/cgroup.procs"
-        self.cli.execute(
-            ["sh", "-c", f"cat {cgroup_pool} > {self.system_cgroup_path}/cgroup.procs"]
-        )
-        result = self.cli.execute(["cat", f"{cgroup_pool}"])
+        cgroup_pool = Path(cgroup_pool)
+        cgroup_system_procs = Path(self.system_cgroup_path) / "cgroup.procs"
+        cgroup_system_procs.write_text(cgroup_pool.read_text(encoding="utf-8"))
+        result = cgroup_pool.read_text(encoding="utf-8")
         return result
 
 

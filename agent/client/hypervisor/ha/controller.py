@@ -7,9 +7,13 @@ import orjson
 from agent.client.cli import CLIControl
 from agent.client.constants import DANGEROUS_PATTERNS
 from agent.client.logger_config import DefaultLogger
-from agent.client.models.general import NFSStorages, NFSStorageModel, LoadNFSStorages, NFSStorageForMount
+from agent.client.models.general import (
+    NFSStorages,
+    NFSStorageModel,
+    LoadNFSStorages,
+    NFSStorageForMount,
+)
 from agent.client.stg.nfs import NFSStorageManager
-
 
 
 class HAController:
@@ -20,12 +24,16 @@ class HAController:
         self.system_vm_configs_path = os.environ.get("SYSTEM_VM_CONFIGS_PATH")
         self.loaded_ha_nfs_storages_path = os.environ.get("LOADED_HA_NFS_STORAGES_PATH")
         self.nfs_vm_config_root = os.environ.get("NFS_VM_CONFIG_ROOT")
-        if not self.cli.is_exists(self.loaded_ha_nfs_storages_path):
+        if not Path(self.loaded_ha_nfs_storages_path).exists():
             nfs_storages_model = NFSStorages(nfs_storages=[]).model_dump_json()
-            self.cli.create_file(self.loaded_ha_nfs_storages_path, f"{nfs_storages_model}")
+            self.cli.create_file(
+                self.loaded_ha_nfs_storages_path, f"{nfs_storages_model}"
+            )
 
     @staticmethod
-    def validate_nfs_path_safety(path: str, enable_allow_prefixes: bool = False) -> bool:
+    def validate_nfs_path_safety(
+        path: str, enable_allow_prefixes: bool = False
+    ) -> bool:
         if not isinstance(path, str):
             return False
 
@@ -52,13 +60,19 @@ class HAController:
         cmd_args = lambda local_path: f"ls {local_path} | grep '\.xml$'"
         vm_configs_list = []
         vm_autostart_configs_list = []
-        vm_configs = self.cli.execute(cmd_args(path), shell=True, is_text=True).split("\n")
+        vm_configs = self.cli.execute(cmd_args(path), shell=True, is_text=True).split(
+            "\n"
+        )
         if vm_configs:
             vm_configs_list = [vm_config for vm_config in vm_configs if vm_config]
         path = f"{path}/autostart"
-        vm_autostart_configs = self.cli.execute(cmd_args(path), shell=True, is_text=True).split("\n")
+        vm_autostart_configs = self.cli.execute(
+            cmd_args(path), shell=True, is_text=True
+        ).split("\n")
         if vm_autostart_configs:
-            vm_autostart_configs_list = [vm_config for vm_config in vm_autostart_configs if vm_config]
+            vm_autostart_configs_list = [
+                vm_config for vm_config in vm_autostart_configs if vm_config
+            ]
 
         return vm_configs_list, vm_autostart_configs_list
 
@@ -74,13 +88,19 @@ class HAController:
         for current_storage in storages.nfs_storages:
             path = f"{current_storage.mount}/{self.nfs_vm_config_root}"
             cmd_args = lambda local_path: f"ls {local_path} | grep '\.xml$'"
-            vm_configs = self.cli.execute(cmd_args(path), shell=True, is_text=True).split("\n")
+            vm_configs = self.cli.execute(
+                cmd_args(path), shell=True, is_text=True
+            ).split("\n")
             if vm_configs:
                 vm_configs_list = [vm_config for vm_config in vm_configs if vm_config]
             path = f"{path}/autostart"
-            vm_autostart_configs = self.cli.execute(cmd_args(path), shell=True, is_text=True).split("\n")
+            vm_autostart_configs = self.cli.execute(
+                cmd_args(path), shell=True, is_text=True
+            ).split("\n")
             if vm_autostart_configs:
-                vm_autostart_configs_list = [vm_config for vm_config in vm_autostart_configs if vm_config]
+                vm_autostart_configs_list = [
+                    vm_config for vm_config in vm_autostart_configs if vm_config
+                ]
 
         return vm_configs_list, vm_autostart_configs_list
 
@@ -99,10 +119,16 @@ class HAController:
             return nfs_storages_model
 
         for storage in nfs_storages_list:
-            nfs_storages_model.nfs_storages.append(NFSStorageModel(source=storage.get("source"), mount=storage.get("mount")))
+            nfs_storages_model.nfs_storages.append(
+                NFSStorageModel(
+                    source=storage.get("source"), mount=storage.get("mount")
+                )
+            )
         return nfs_storages_model
 
-    def check_nfs_availability(self, source: str, ping_count: int = 2, timeout: int = 5) -> bool:
+    def check_nfs_availability(
+        self, source: str, ping_count: int = 2, timeout: int = 5
+    ) -> bool:
         """
         Проверяет доступность NFS сервера для монтирования
         """
@@ -110,13 +136,14 @@ class HAController:
             server = source.split(":")[0]
             self.logger.debug(f"Проверяем доступность сервера {server}")
             try:
-                ping_cmd = ['ping', '-c', str(ping_count), '-W', '2', server]
+                ping_cmd = ["ping", "-c", str(ping_count), "-W", "2", server]
                 ping_result = self.cli.execute(ping_cmd, timeout=timeout)
 
                 # Проверяем наличие ключевых фраз в выводе ping
-                success_indicators = ['0% packet loss', 'time=', 'ttl=', 'bytes from']
-                ping_successful = any(indicator in ping_result.lower()
-                                      for indicator in success_indicators)
+                success_indicators = ["0% packet loss", "time=", "ttl=", "bytes from"]
+                ping_successful = any(
+                    indicator in ping_result.lower() for indicator in success_indicators
+                )
 
                 if not ping_successful:
                     self.logger.warning(f"Сервер {server} недоступен по ping")
@@ -150,16 +177,24 @@ class HAController:
         """
 
         if self.loaded_ha_nfs_storages.nfs_storages:
-            self.logger.warning("Поддержка HA режима с множеством СХД планируются в будущих релизах")
+            self.logger.warning(
+                "Поддержка HA режима с множеством СХД планируются в будущих релизах"
+            )
             return False
 
-        check_valid_list = [storage for storage in storages.nfs_storages_for_mount if storage]
+        check_valid_list = [
+            storage for storage in storages.nfs_storages_for_mount if storage
+        ]
         if check_valid_list:
             for storage in storages.nfs_storages_for_mount:
                 source = storage.source  # ip NFS сервера
                 current_nfs_name = storage.nfs_name  # имя NFS сервера
-                read_current_config = self.cli.execute(["cat", self.loaded_ha_nfs_storages_path])
-                current_config = NFSStorages.model_validate(orjson.loads(read_current_config))
+                read_current_config = self.cli.execute(
+                    ["cat", self.loaded_ha_nfs_storages_path]
+                )
+                current_config = NFSStorages.model_validate(
+                    orjson.loads(read_current_config)
+                )
                 self.logger.info(f"Результат чтения конфига: '{read_current_config}'")
 
                 if source in read_current_config:
@@ -169,18 +204,33 @@ class HAController:
                     raise ValueError("NFS сервер недоступен")
 
                 mount_path = f"/mnt/{current_nfs_name}/"
-                current_config.nfs_storages.append(NFSStorageModel(source=source, mount=mount_path))
+                current_config.nfs_storages.append(
+                    NFSStorageModel(source=source, mount=mount_path)
+                )
                 write_new_nfs_storage = self.cli.execute(
-                    ["sh", "-c", f"echo '{current_config.model_dump_json()}' > {self.loaded_ha_nfs_storages_path}"], return_proc=True)
+                    [
+                        "sh",
+                        "-c",
+                        f"echo '{current_config.model_dump_json()}' > {self.loaded_ha_nfs_storages_path}",
+                    ],
+                    return_proc=True,
+                )
                 if write_new_nfs_storage.returncode != 0:
                     self.logger.info(
-                        f"Ошибка при обновлении конфигурации HA NFS хранилищ: '{write_new_nfs_storage.stderr}'")
+                        f"Ошибка при обновлении конфигурации HA NFS хранилищ: '{write_new_nfs_storage.stderr}'"
+                    )
                     return False
-                self.logger.info(f"Результат записи нового NFS сервера: '{write_new_nfs_storage}'")
-                read_updated_config = self.cli.execute(["cat", self.loaded_ha_nfs_storages_path])
-                self.logger.info(f"Результат чтения конфига после записи: '{read_updated_config}'")
-                if not self.cli.is_exists(mount_path):
-                    self.cli.mkdir(mount_path)
+                self.logger.info(
+                    f"Результат записи нового NFS сервера: '{write_new_nfs_storage}'"
+                )
+                read_updated_config = self.cli.execute(
+                    ["cat", self.loaded_ha_nfs_storages_path]
+                )
+                self.logger.info(
+                    f"Результат чтения конфига после записи: '{read_updated_config}'"
+                )
+                if not Path(mount_path).exists():
+                    Path(mount_path).mkdir()
 
                 result_mount = self.nfs_storage_manager.mount(source, mount_path)
                 if not result_mount:
@@ -203,22 +253,38 @@ class HAController:
                     if umount_storage.source != current_storage.source:
                         updated_config.nfs_storages.append(current_storage)
                     else:
-                        umount_result = self.nfs_storage_manager.umount(current_storage.mount)
-                        self.logger.info(f"Результат отмонтирования хранилища {current_storage.mount}: '{umount_result}'")
+                        umount_result = self.nfs_storage_manager.umount(
+                            current_storage.mount
+                        )
+                        self.logger.info(
+                            f"Результат отмонтирования хранилища {current_storage.mount}: '{umount_result}'"
+                        )
                         deleted_storage_mount_points.append(current_storage.mount)
 
         write_updated_nfs_storage = self.cli.execute(
-            ["sh", "-c", f"echo '{updated_config.model_dump_json()}' > {self.loaded_ha_nfs_storages_path}"], return_proc=True)
+            [
+                "sh",
+                "-c",
+                f"echo '{updated_config.model_dump_json()}' > {self.loaded_ha_nfs_storages_path}",
+            ],
+            return_proc=True,
+        )
         if write_updated_nfs_storage.returncode != 0:
-            self.logger.info(f"Ошибка при обновлении конфигурации HA NFS хранилищ: '{write_updated_nfs_storage.stderr}'")
+            self.logger.info(
+                f"Ошибка при обновлении конфигурации HA NFS хранилищ: '{write_updated_nfs_storage.stderr}'"
+            )
             return False
         self.logger.info(f"Отмонтированные хранилища: '{deleted_storage_mount_points}'")
         return True
 
     def delete_vm_from_nfs_config(self, vm_name: str):
         for nfs_storage in self.loaded_ha_nfs_storages.nfs_storages:
-            config_path =str( Path(f'{nfs_storage.mount}/{self.nfs_vm_config_root}/{vm_name}.xml'))
-            config_autostart_path = f'{nfs_storage.mount}/{self.nfs_vm_config_root}/autostart/{vm_name}.xml'
+            config_path = str(
+                Path(f"{nfs_storage.mount}/{self.nfs_vm_config_root}/{vm_name}.xml")
+            )
+            config_autostart_path = (
+                f"{nfs_storage.mount}/{self.nfs_vm_config_root}/autostart/{vm_name}.xml"
+            )
             self.delete_file_or_path(config_path)
             self.delete_file_or_path(config_autostart_path)
 
@@ -229,52 +295,47 @@ class HAController:
 
         for nfs_storage in self.loaded_ha_nfs_storages.nfs_storages:
             try:
-                mounted_nfs_dir = str(Path(f'{nfs_storage.mount}{self.nfs_vm_config_root}'))
-                if not self.is_directory(mounted_nfs_dir):
-                    self.mkdir(mounted_nfs_dir)
+                mounted_nfs_dir = Path(f"{nfs_storage.mount}{self.nfs_vm_config_root}")
+                if not mounted_nfs_dir.is_dir():
+                    mounted_nfs_dir.mkdir()
                 # Основные конфиги - ТОЛЬКО XML файлы
                 rsync_cmd = [
-                    'rsync', '-av',
-                    '--include', '*.xml',  # Включаем только XML
-                    '--exclude', '*',  # Исключаем всё остальное
-                    '--prune-empty-dirs',  # Удаляем пустые директории
-                    f'{self.system_vm_configs_path}',
-                    f'{mounted_nfs_dir}'
+                    "rsync",
+                    "-av",
+                    "--include",
+                    "*.xml",  # Включаем только XML
+                    "--exclude",
+                    "*",  # Исключаем всё остальное
+                    "--prune-empty-dirs",  # Удаляем пустые директории
+                    f"{self.system_vm_configs_path}",
+                    f"{str(mounted_nfs_dir)}",
                 ]
 
                 # Автозапуск - ТОЛЬКО XML файлы
                 autostart_rsync_cmd = [
-                    'rsync', '-av',
-                    '--include', '*.xml',  # Включаем только XML
-                    '--exclude', '*',  # Исключаем всё остальное
-                    '--prune-empty-dirs',
-                    f'{self.system_vm_configs_path}autostart/',
-                    f'{mounted_nfs_dir}/autostart/'
+                    "rsync",
+                    "-av",
+                    "--include",
+                    "*.xml",  # Включаем только XML
+                    "--exclude",
+                    "*",  # Исключаем всё остальное
+                    "--prune-empty-dirs",
+                    f"{self.system_vm_configs_path}autostart/",
+                    f"{str(mounted_nfs_dir)}/autostart/",
                 ]
 
                 result_sync_vm_configs = self.cli.execute(rsync_cmd)
-                self.logger.info(f"Результат синхронизации директории конфигов: '{result_sync_vm_configs}'")
+                self.logger.info(
+                    f"Результат синхронизации директории конфигов: '{result_sync_vm_configs}'"
+                )
                 result_sync_vm_autostart_configs = self.cli.execute(autostart_rsync_cmd)
-                self.logger.info(f"Результат синхронизации директории конфигов автозапуска: '{result_sync_vm_autostart_configs}'")
+                self.logger.info(
+                    f"Результат синхронизации директории конфигов автозапуска: '{result_sync_vm_autostart_configs}'"
+                )
                 self.logger.info(f"Синхронизировано XML с {nfs_storage}")
 
             except Exception as e:
                 self.logger.error(f"Ошибка синхронизации {nfs_storage}: {e}")
-
-    def is_directory(self, path: str):
-        ru_err = "Это каталог"
-        eng_err = "Is a directory"
-        cmd_args = ["cat", path]
-        result = self.cli.execute(cmd_args)
-        if ru_err in result or eng_err in result:
-            return True
-        return False
-
-    def mkdir(self, path: str):
-        cmd_args = ["mkdir", "-p", path]
-        result = self.cli.execute(cmd_args)
-        return result
-
 
     def delete_file_or_path(self, path: str):
         cmd_args = ["rm", "-r", path]
@@ -286,6 +347,16 @@ class HAController:
 if __name__ == "__main__":
     cli = HAController()
     # print(cli.vm_configs())
-    print(cli.load_and_mount_ha_nfs_storages(LoadNFSStorages(nfs_storages_for_mount=[NFSStorageForMount(source="127.0.0.1:/share_622825", nfs_name="ha_cluster")])))
+    print(
+        cli.load_and_mount_ha_nfs_storages(
+            LoadNFSStorages(
+                nfs_storages_for_mount=[
+                    NFSStorageForMount(
+                        source="127.0.0.1:/share_622825", nfs_name="ha_cluster"
+                    )
+                ]
+            )
+        )
+    )
     # print(cli.search_emulators())
     # print(cli.default_emulator)

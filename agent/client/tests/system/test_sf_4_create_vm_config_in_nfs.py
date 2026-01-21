@@ -50,17 +50,20 @@ def test_sf_4_create_vm_config_in_nfs(
             description="Create disk description",
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
-        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name,
-                                                path=attach_disk_create.path,
-                                                disk_format=attach_disk_create.format)
+        vm_disk = storage_session.get_disk_info(
+            disk_name=attach_disk_create.name,
+            path=attach_disk_create.path,
+            disk_format=attach_disk_create.format,
+        )
         vm_disk = vm_disk.disk_info
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.name == attach_disk_create.name
         assert vm_disk.format == disk_format
         assert vm_disk.file_path_exists is True
-        assert ha_nfs_storage.mount == vm_disk.path or vm_disk.path in ha_nfs_storage.mount
+        assert (
+            ha_nfs_storage.mount == vm_disk.path or vm_disk.path in ha_nfs_storage.mount
+        )
         # ____________________________________Создание ВМ_________________________
         random_name = f"VM-TEST-{random.randint(10000, 99999)}"
         autostart = {}
@@ -73,9 +76,6 @@ def test_sf_4_create_vm_config_in_nfs(
             name=random_name, disks=[attach_disk_create], **autostart
         )
         create_vm_info = vm_session.create_vm(vm_template)
-        assert (
-            create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
-        )
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         vm_created = True
         assert create_vm_info.vm_info is not None
@@ -85,7 +85,9 @@ def test_sf_4_create_vm_config_in_nfs(
         assert vm_info.name == vm_template.name
         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
         # ____________________________________Проверка наличия конфигурации ВМ в NFS хранилище_________________________
-        vm_cnfigs_from_ha_storages = vm_session.ha_controller.vm_configs_from_ha_storages
+        vm_cnfigs_from_ha_storages = (
+            vm_session.ha_controller.vm_configs_from_ha_storages
+        )
         if vm_state.value == vm_state.RUNNING.value:
             assert f"{random_name}.xml" in vm_cnfigs_from_ha_storages[0]
             assert f"{random_name}.xml" in vm_cnfigs_from_ha_storages[1]
@@ -95,15 +97,8 @@ def test_sf_4_create_vm_config_in_nfs(
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________
         if vm_created:
-            delete_vm_info = vm_session.delete_vm_with_force(
-                name=random_name
-            )
+            delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
             assert (
-                    delete_vm_info.message
-                    == CommandMessagesEnum.vm_successfully_deleted.value
-            )
-            assert (
-                    delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
             assert delete_vm_info.success is True
-

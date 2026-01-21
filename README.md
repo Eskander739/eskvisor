@@ -100,6 +100,22 @@
 ├───README.md # Файл для описания структуры проекта, инструкции по запуску автотестов, использованию агента и т.д
 └───requirements.txt # Файл с необходимыми библиотеками для работы проекта
 ```
+## Flow данных проекта
+
+1. Frontend → HTTP/WebSocket → Backend (единый)
+2. Backend → LPUSH → Redis Queue
+3. Task Worker → RPOPLPUSH → Redis Queue
+4. Task Worker → LibVirt/API → Virtualization Platform
+5. Task Worker → PUBLISH → Redis Pub/Sub
+6. Backend WebSocket Handler → SUBSCRIBE → Redis Pub/Sub
+7. Backend WebSocket Handler → WebSocket → Frontend
+
+#### Backend единый - WebSocket Handler часть Backend'а, а не отдельный компонент
+
+#### Воркеры сами забирают задачи из очереди (pull-модель)
+
+#### Двойной механизм получения результатов: push через WebSocket + pull через REST API
+
 ## 📦 Установка (для лицензированных пользователей)
 
 Доступ к бинарным файлам и репозиториям предоставляется только после подписания лицензионного соглашения.

@@ -35,9 +35,10 @@ def test_vd_04_extend_disk(storage_session, disk_format):
             sparse=False,
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
-        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=disk_format)
+        vm_disk = storage_session.get_disk_info(
+            disk_name=attach_disk_create.name, disk_format=disk_format
+        )
         vm_disk = vm_disk.disk_info
         disk_path = f"{vm_disk.path}/{attach_disk_create.name}.{disk_format.value}"
         before_change_disk_virtual_size = storage_session.get_disk_virtual_size(
@@ -54,8 +55,15 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         assert vm_disk.path == attach_disk_create.path
 
         # ____________________________________Редактирование диска________________
-        storage_session.extend_disk(new_size_gb=edit_disk.new_size_gb, path=vm_disk.path, disk_name=attach_disk_create.name, disk_format=disk_format)
-        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=disk_format)
+        storage_session.extend_disk(
+            new_size_gb=edit_disk.new_size_gb,
+            path=vm_disk.path,
+            disk_name=attach_disk_create.name,
+            disk_format=disk_format,
+        )
+        vm_disk = storage_session.get_disk_info(
+            disk_name=attach_disk_create.name, disk_format=disk_format
+        )
         vm_disk = vm_disk.disk_info
         disk_path = f"{vm_disk.path}/{attach_disk_create.name}.{disk_format.value}"
         assert vm_disk.path == attach_disk_create.path

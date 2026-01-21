@@ -5,17 +5,34 @@ import sys
 import threading
 import time
 
-from agent.client.task_manager.models import Task, TaskType, TaskAdd, WorkerModel, WorkerStats
+from agent.client.task_manager.models import (
+    Task,
+    TaskType,
+    TaskAdd,
+    WorkerModel,
+    WorkerStats,
+)
 from ctl_queue import RedisTaskManager
 from worker import TaskWorker, TaskHandler
 import uuid
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("Dispatcher")
-GAME_OF_THRONES = ["Петир Бейлиш Мизинец", "Ходор", "Сандор Пёс Клиган", "Санса Старк", "Сэмвелл Тарли", "Эддард Нед Старк", "Джон Сноу", "Роберт Баратеон", "Станис Баратеон", "Дейенерис Таргариен", "Тормунд Великанья Смерть"]
+GAME_OF_THRONES = [
+    "Петир Бейлиш Мизинец",
+    "Ходор",
+    "Сандор Пёс Клиган",
+    "Санса Старк",
+    "Сэмвелл Тарли",
+    "Эддард Нед Старк",
+    "Джон Сноу",
+    "Роберт Баратеон",
+    "Станис Баратеон",
+    "Дейенерис Таргариен",
+    "Тормунд Великанья Смерть",
+]
 random.shuffle(GAME_OF_THRONES)
 
 
@@ -55,7 +72,7 @@ class TaskDispatcher:
                 name=worker_name,
                 queue_manager=self.queue_manager,
                 task_handler=self.task_handler,
-                stop_event=self.stop_event
+                stop_event=self.stop_event,
             )
             self.workers.append(worker)
             worker.start()
@@ -85,10 +102,14 @@ class TaskDispatcher:
         stats = WorkerStats(total_workers=len(self.workers))
 
         for worker in self.workers:
-            stats.workers.append(WorkerModel(name=worker.name,
-                                             alive=worker.is_alive(),
-                                             processing=worker.processing_task,
-                                             current_task=worker.current_request_id))
+            stats.workers.append(
+                WorkerModel(
+                    name=worker.name,
+                    alive=worker.is_alive(),
+                    processing=worker.processing_task,
+                    current_task=worker.current_request_id,
+                )
+            )
             if worker.is_alive():
                 stats.active_workers += 1
 
@@ -98,11 +119,19 @@ class TaskDispatcher:
         """
         Отправка задачи в очередь
         """
-        task = Task(request_id=str(uuid.uuid4()), task_type=task.task_type, action=task.action, params=task.params, created_at=task.created_at)
+        task = Task(
+            request_id=str(uuid.uuid4()),
+            task_type=task.task_type,
+            action=task.action,
+            params=task.params,
+            created_at=task.created_at,
+        )
         success = self.queue_manager.add_task(task, queue_name)
 
         if success:
-            logger.info(f"Задача {task.request_id} типа {task.task_type.value} отправлена в очередь")
+            logger.info(
+                f"Задача {task.request_id} типа {task.task_type.value} отправлена в очередь"
+            )
             return task.request_id
         else:
             logger.error(f"Ошибка отправки задачи {task.request_id} в очередь")
@@ -111,6 +140,7 @@ class TaskDispatcher:
     def cancel_task(self, request_id: str) -> int:
         """Отмена задачи"""
         return self.queue_manager.delete_task(request_id)
+
 
 def main():
     """Основная функция запуска диспетчера"""

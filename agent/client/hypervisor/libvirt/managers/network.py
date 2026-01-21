@@ -20,7 +20,8 @@ from agent.client.hypervisor.libvirt.models.network import (
     NetworkInterfacesList,
     NetworkParameters,
     NetworkTypeInfo,
-    VmInfo, NetworkList,
+    VmInfo,
+    NetworkList,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -46,9 +47,7 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка получения списка сетей: {e}")
             return []
 
-    def create_network(
-        self, params: NetworkParameters
-    ) -> NetworkMessage:
+    def create_network(self, params: NetworkParameters) -> NetworkMessage:
         """Создание виртуальной сети"""
         try:
             # Определяем тип сети перед созданием
@@ -85,11 +84,10 @@ class NetworkManager(LibvirtClient):
 
             created_network = self.get_network_info(params.name)
             assert (
-                created_network.message
-                == CommandMessagesEnum.virtual_network_found.value
+                created_network.code
+                == CommandMessagesEnum.virtual_network_found.name
             )
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_successfully_created.value,
                 code=CommandMessagesEnum.virtual_network_successfully_created.name,
                 net_info=created_network.net_info,
                 success=True,
@@ -98,7 +96,6 @@ class NetworkManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка создания сети '{params.name}': {e}")
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_create_error.value,
                 code=CommandMessagesEnum.virtual_network_create_error.name,
                 success=False,
                 note=str(e),
@@ -108,7 +105,6 @@ class NetworkManager(LibvirtClient):
                 f"Неожиданная ошибка при создании сети '{params.name}': {e}"
             )
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_create_error.value,
                 code=CommandMessagesEnum.virtual_network_create_error.name,
                 success=False,
                 note=str(e),
@@ -161,7 +157,6 @@ class NetworkManager(LibvirtClient):
                     f"Сеть '{network_name}' (тип: {network_type}) не может быть удалена с подключенными ВМ без подтверждения администратора"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_have_connected_vms.value,
                     code=CommandMessagesEnum.virtual_network_have_connected_vms.name,
                     success=False,
                 )
@@ -177,7 +172,6 @@ class NetworkManager(LibvirtClient):
                         f"Сеть '{network_name}' активна. Используйте force=True для принудительного удаления"
                     )
                     return NetworkMessage(
-                        message=CommandMessagesEnum.virtual_network_delete_error.value,
                         code=CommandMessagesEnum.virtual_network_delete_error.name,
                         success=False,
                         note="use force=True for force delete",
@@ -188,7 +182,6 @@ class NetworkManager(LibvirtClient):
                 f"Сеть '{network_name}' (тип: {network_type}) успешно удалена"
             )
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_successfully_deleted.value,
                 code=CommandMessagesEnum.virtual_network_successfully_deleted.name,
                 success=True,
             )
@@ -196,15 +189,12 @@ class NetworkManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления сети '{network_name}': {e}")
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_delete_error.value,
                 code=CommandMessagesEnum.virtual_network_delete_error.name,
                 success=False,
                 note=str(e),
             )
 
-    def restart_network(
-        self, network_name: str, force: bool = False
-    ) -> NetworkMessage:
+    def restart_network(self, network_name: str, force: bool = False) -> NetworkMessage:
         """Перезапуск виртуальной сети с опциональной проверкой подключенных ВМ"""
         try:
             network = self.conn.networkLookupByName(network_name)
@@ -216,7 +206,6 @@ class NetworkManager(LibvirtClient):
                     f"Сеть '{network_name}' имеет подключенные ВМ. Используйте force=True для принудительного перезапуска"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_have_connected_vms.value,
                     code=CommandMessagesEnum.virtual_network_have_connected_vms.name,
                     success=False,
                     note="Network has connected VMs, use force=True to restart anyway",
@@ -240,7 +229,6 @@ class NetworkManager(LibvirtClient):
             )
 
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_successfully_started.value,
                 code=CommandMessagesEnum.virtual_network_successfully_started.name,
                 success=True,
                 note=f"Сеть '{network_name}' успешно {'перезапущена' if was_active else 'запущена'}",
@@ -249,7 +237,6 @@ class NetworkManager(LibvirtClient):
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка перезапуска сети '{network_name}': {e}")
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_restart_error.value,
                 code=CommandMessagesEnum.virtual_network_restart_error.name,
                 success=False,
                 note=str(e),
@@ -324,7 +311,6 @@ class NetworkManager(LibvirtClient):
             updated_info = self.get_network_info(params.name)
 
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_successfully_updated.value,
                 code=CommandMessagesEnum.virtual_network_successfully_updated.name,
                 success=True,
                 net_info=updated_info.net_info if updated_info.success else None,
@@ -348,7 +334,6 @@ class NetworkManager(LibvirtClient):
                 self.logger.error(f"Не удалось восстановить сеть: {restore_error}")
 
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_update_error.value,
                 code=CommandMessagesEnum.virtual_network_update_error.name,
                 success=False,
                 note=str(e),
@@ -385,7 +370,6 @@ class NetworkManager(LibvirtClient):
             )
 
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_found.value,
                 code=CommandMessagesEnum.virtual_network_found.name,
                 success=True,
                 net_info=info,
@@ -396,7 +380,6 @@ class NetworkManager(LibvirtClient):
                 f"Ошибка получения информации о сети '{network_name}': {e}"
             )
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_not_found.value,
                 code=CommandMessagesEnum.virtual_network_not_found.name,
                 success=False,
                 note=str(e),
@@ -706,7 +689,6 @@ class NetworkManager(LibvirtClient):
                     f"Сеть '{network_name}' (тип: {network_type}) запущена"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_successfully_started.value,
                     code=CommandMessagesEnum.virtual_network_successfully_started.name,
                     success=True,
                 )
@@ -715,7 +697,6 @@ class NetworkManager(LibvirtClient):
                     f"Сеть '{network_name}' (тип: {network_type}) уже запущена"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_already_started.value,
                     code=CommandMessagesEnum.virtual_network_already_started.name,
                     success=True,
                 )
@@ -723,7 +704,6 @@ class NetworkManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка запуска сети '{network_name}': {e}")
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_start_error.value,
                 code=CommandMessagesEnum.virtual_network_start_error.name,
                 success=False,
             )
@@ -740,7 +720,6 @@ class NetworkManager(LibvirtClient):
                     f"Сеть '{network_name}' (тип: {network_type}) остановлена"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_successfully_stopped.value,
                     code=CommandMessagesEnum.virtual_network_successfully_stopped.name,
                     success=True,
                 )
@@ -749,7 +728,6 @@ class NetworkManager(LibvirtClient):
                     f"Сеть '{network_name}' (тип: {network_type}) уже остановлена"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_already_stopped.value,
                     code=CommandMessagesEnum.virtual_network_already_stopped.name,
                     success=True,
                 )
@@ -757,7 +735,6 @@ class NetworkManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка остановки сети '{network_name}': {e}")
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_stopping_error.value,
                 code=CommandMessagesEnum.virtual_network_stopping_error.name,
                 success=False,
             )
@@ -804,17 +781,19 @@ class NetworkManager(LibvirtClient):
                         f"Ошибка получения информации о сети {network.name()}: {e}"
                     )
 
-            return NetworkMessage(success=True,
-                                  message=CommandMessagesEnum.networks_list_found.value,
-                                  code=CommandMessagesEnum.networks_list_found.name,
-                                  net_info=NetworkList(items=networks_info, total=len(networks_info)))
+            return NetworkMessage(
+                success=True,
+                code=CommandMessagesEnum.networks_list_found.name,
+                net_info=NetworkList(items=networks_info, total=len(networks_info)),
+            )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения полного списка сетей: {e}")
-            return NetworkMessage(success=False,
-                                  message=CommandMessagesEnum.networks_list_not_found.value,
-                                  code=CommandMessagesEnum.networks_list_not_found.name,
-                                  net_info=NetworkList(items=[], total=0))
+            return NetworkMessage(
+                success=False,
+                code=CommandMessagesEnum.networks_list_not_found.name,
+                net_info=NetworkList(items=[], total=0),
+            )
 
     @staticmethod
     def _determine_network_type(params: NetworkParameters) -> NetworkTypeInfo:
@@ -1012,8 +991,10 @@ class NetworkManager(LibvirtClient):
             # Запускаем сеть, если требуется
             if start_now:
                 start_success = self.start_network(network_name)
-                if start_success.message not in (CommandMessagesEnum.virtual_network_already_started,
-                                             CommandMessagesEnum.virtual_network_successfully_started):
+                if start_success.code not in (
+                    CommandMessagesEnum.virtual_network_already_started.name,
+                    CommandMessagesEnum.virtual_network_successfully_started.name,
+                ):
                     self.logger.error(f"Не удалось запустить сеть '{network_name}'")
                     # Автозапуск все равно настроен, но возвращаем False
                     return False
@@ -1049,7 +1030,6 @@ class NetworkManager(LibvirtClient):
             vm = self.conn.lookupByName(vm_name)
         except libvirt.libvirtError as e:
             return NetworkMessage(
-                message=CommandMessagesEnum.vm_found_error.value,
                 code=CommandMessagesEnum.vm_found_error.name,
                 success=False,
                 note=str(e),
@@ -1240,7 +1220,6 @@ class NetworkManager(LibvirtClient):
             ),
         )
         return NetworkMessage(
-            message=CommandMessagesEnum.virtual_network_interfaces_found.value,
             code=CommandMessagesEnum.virtual_network_interfaces_found.name,
             net_info=net_info,
             success=True,
@@ -1278,7 +1257,6 @@ class NetworkManager(LibvirtClient):
             except libvirt.libvirtError as e:
                 self.logger.error(f"ВМ '{vm_name}' не найдена: {e}")
                 return NetworkMessage(
-                    message=CommandMessagesEnum.vm_found_error.value,
                     code=CommandMessagesEnum.vm_found_error.name,
                     success=False,
                     note=f"VM not found: {e}",
@@ -1300,7 +1278,6 @@ class NetworkManager(LibvirtClient):
                     f"Сетевой интерфейс с MAC '{mac_address}' не найден у ВМ '{vm_name}'"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_interface_not_found.value,
                     code=CommandMessagesEnum.virtual_network_interface_not_found.name,
                     success=False,
                     note=f"Network interface with MAC {mac_address} not found",
@@ -1342,7 +1319,6 @@ class NetworkManager(LibvirtClient):
                 network_info = self.get_vm_network_info(vm_name)
 
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_interface_detached.value,
                     code=CommandMessagesEnum.virtual_network_interface_detached.name,
                     success=True,
                     net_info=network_info.net_info if network_info.success else None,
@@ -1354,7 +1330,6 @@ class NetworkManager(LibvirtClient):
                     f"Ошибка отключения интерфейса {mac_address}: {error_msg}"
                 )
                 return NetworkMessage(
-                    message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
                     code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
                     success=False,
                     note=error_msg,
@@ -1363,7 +1338,6 @@ class NetworkManager(LibvirtClient):
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Ошибка выполнения команды detach-interface: {e}")
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
                 code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
                 success=False,
                 note=str(e),
@@ -1373,7 +1347,6 @@ class NetworkManager(LibvirtClient):
                 f"Неожиданная ошибка при отключении сетевого интерфейса: {e}"
             )
             return NetworkMessage(
-                message=CommandMessagesEnum.virtual_network_interface_detach_error.value,
                 code=CommandMessagesEnum.virtual_network_interface_detach_error.name,
                 success=False,
                 note=str(e),

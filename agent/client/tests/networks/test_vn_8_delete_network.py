@@ -54,23 +54,16 @@ def test_vn_08_delete_network(network_session, network_model):
         network_name = network_model.name
         created_network_info = network_session.create_network(network_model)
         assert (
-            created_network_info.message
-            == CommandMessagesEnum.virtual_network_successfully_created.value
+            created_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_created.name
         )
         # ____________________________________Удаление виртуальной сети___________
-        delete_network_info = network_session.delete_network(
-            network_name, True
-        )
-        assert (
-            delete_network_info.message
-            == CommandMessagesEnum.virtual_network_successfully_deleted.value
-        )
+        delete_network_info = network_session.delete_network(network_name, True)
         assert (
             delete_network_info.code
             == CommandMessagesEnum.virtual_network_successfully_deleted.name
         )
         v_network = network_session.get_network_info(network_name)
-        assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
         assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
         network_list = network_session.list_all_networks().net_info.items
         for current_network in network_list:
@@ -82,7 +75,4 @@ def test_vn_08_delete_network(network_session, network_model):
         if network_name is not None and not network_deleted:
             network_session.delete_network(network_name, True)
             v_network = network_session.get_network_info(network_name)
-            assert (
-                v_network.message == CommandMessagesEnum.virtual_network_not_found.value
-            )
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name

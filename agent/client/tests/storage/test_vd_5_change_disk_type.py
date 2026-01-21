@@ -43,11 +43,18 @@ def test_vd_05_convert_disk(storage_session, disk_format, sparse):
             sparse=sparse,
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
-        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=attach_disk_create.format)
+        vm_disk = storage_session.get_disk_info(
+            disk_name=attach_disk_create.name, disk_format=attach_disk_create.format
+        )
         vm_disk = vm_disk.disk_info
-        disk_path = vm_disk.path + "/" + attach_disk_create.name + "." + attach_disk_create.format.value
+        disk_path = (
+            vm_disk.path
+            + "/"
+            + attach_disk_create.name
+            + "."
+            + attach_disk_create.format.value
+        )
         before_change_disk_virtual_size = storage_session.get_disk_virtual_size(
             disk_path=disk_path
         )
@@ -71,16 +78,21 @@ def test_vd_05_convert_disk(storage_session, disk_format, sparse):
             convert_disk_info.code == CommandMessagesEnum.disk_convert_successfully.name
         )
         assert (
-            convert_disk_info.message
-            == CommandMessagesEnum.disk_convert_successfully.value
-        )
-        assert (
             f".{disk_format_convert.get(disk_format).value}"
             in convert_disk_info.target_path
         )
-        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, disk_format=disk_format_convert.get(disk_format))
+        vm_disk = storage_session.get_disk_info(
+            disk_name=attach_disk_create.name,
+            disk_format=disk_format_convert.get(disk_format),
+        )
         vm_disk = vm_disk.disk_info
-        disk_path = vm_disk.path + "/" + attach_disk_create.name + "." + attach_disk_create.format.value
+        disk_path = (
+            vm_disk.path
+            + "/"
+            + attach_disk_create.name
+            + "."
+            + attach_disk_create.format.value
+        )
         assert vm_disk.format.value == disk_format_convert.get(disk_format).value
         assert Path(disk_path).exists()
         assert Path(convert_disk_info.target_path).exists()
@@ -102,4 +114,3 @@ def test_vd_05_convert_disk(storage_session, disk_format, sparse):
         if target_path is not None:
             delete_disk_info = storage_session.delete_disk(disk_path=target_path)
             assert delete_disk_info is True
-

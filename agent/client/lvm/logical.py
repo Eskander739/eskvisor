@@ -89,7 +89,7 @@ class LogicalVolumeManager:
         volume_group_name: str,
         logic_tp_volume_name: str,
         logic_volume_size_type: LogicalVolumeSizeType = LogicalVolumeSizeType.GB,
-        sparse: bool = False
+        sparse: bool = False,
     ):
         return self.__create_logical_volume(
             logic_volume_name,
@@ -98,7 +98,7 @@ class LogicalVolumeManager:
             logic_tp_volume_name,
             logic_volume_size_type,
             False,
-            sparse
+            sparse,
         )
 
     def create_thin_pool_volume(  # создаем хранилище для ресурса пула
@@ -336,7 +336,9 @@ class LogicalVolumeManager:
 
         return logic_volumes_list
 
-    def convert_file_system_from_raw_to_ext4(self, logic_volume_name: str, volume_group_name: str) -> bool:
+    def convert_file_system_from_raw_to_ext4(
+        self, logic_volume_name: str, volume_group_name: str
+    ) -> bool:
         # Форматируем наш LV под файловую систему для QCOW2
         cmd_args = [
             "mkfs.ext4",
@@ -344,7 +346,9 @@ class LogicalVolumeManager:
         ]
         result = self.cli.execute(cmd_args, return_proc=True)
         if result.returncode == 0:
-            self.logger.info(f"Результат изменения файловой системы LV '{result.stdout}'")
+            self.logger.info(
+                f"Результат изменения файловой системы LV '{result.stdout}'"
+            )
             return True
         self.logger.info(f"Результат изменения файловой системы LV '{result.stderr}'")
         return False

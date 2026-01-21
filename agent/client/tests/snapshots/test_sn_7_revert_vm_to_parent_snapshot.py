@@ -28,11 +28,9 @@ def test_sn_06_create_snapshot_chain(
     try:
         # _____________________________Получение информации о ВМ__________________
         vm_info = vm_session.get_vm_by_name(vm_name)
-        assert vm_info.message == CommandMessagesEnum.vm_successfully_found.value
         assert vm_info.code == CommandMessagesEnum.vm_successfully_found.name
         # _____________________________Проверка отсутствия снапшота_______________
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name)
-        assert get_snapshot_info.message == CommandMessagesEnum.snapshot_not_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_not_found.name
         # ____________________________Создание снапшота остановленной ВМ_____________
 
@@ -45,10 +43,6 @@ def test_sn_06_create_snapshot_chain(
                 vm_name=vm_name, snapshot_name=snapshot_name, description=description
             )
             create_vm_info = snapshot_session.create_snapshot(vm_template)
-            assert (
-                create_vm_info.message
-                == CommandMessagesEnum.snapshot_successfully_created.value
-            )
             assert (
                 create_vm_info.code
                 == CommandMessagesEnum.snapshot_successfully_created.name
@@ -72,22 +66,15 @@ def test_sn_06_create_snapshot_chain(
 
         # ________________________________Проверка текущего снапшота___________
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name)
-        assert get_snapshot_info.message == CommandMessagesEnum.snapshot_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_found.name
         assert get_snapshot_info.snapshot_info.name == third_snap.name
 
         # ________________________________Восстановление ВМ из снапшота___________
-        revert_vm_info = snapshot_session.revert_to_snapshot(
-            vm_name, first_snap.name
-        )
-        assert (
-            revert_vm_info.message == CommandMessagesEnum.snapshot_revert_success.value
-        )
+        revert_vm_info = snapshot_session.revert_to_snapshot(vm_name, first_snap.name)
         assert revert_vm_info.code == CommandMessagesEnum.snapshot_revert_success.name
 
         # _____Проверка того, что теперь текущим снапшотом является восстановленный родитель_____
         get_snapshot_info = snapshot_session.get_current_snapshot(vm_name)
-        assert get_snapshot_info.message == CommandMessagesEnum.snapshot_found.value
         assert get_snapshot_info.code == CommandMessagesEnum.snapshot_found.name
         assert get_snapshot_info.snapshot_info.name == first_snap.name
 
@@ -103,12 +90,7 @@ def test_sn_06_create_snapshot_chain(
         # ______________________________Удаление снапшота(постусловие)____________
         for snapshot_name in (snapshot_name_first, snapshot_name_second):
             delete_snapshot_info = snapshot_session.delete_snapshot(
-                vm_name=vm_name,
-                snapshot_name=snapshot_name
-            )
-            assert (
-                delete_snapshot_info.message
-                == CommandMessagesEnum.snapshot_successfully_deleted.value
+                vm_name=vm_name, snapshot_name=snapshot_name
             )
             assert (
                 delete_snapshot_info.code

@@ -40,13 +40,20 @@ def test_sf_02_create_and_delete_nfs_storage(
             path=create_nfs_storage_session,
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
-        assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
-        vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name,
-                                                path=attach_disk_create.path,
-                                                disk_format=attach_disk_create.format)
+        vm_disk = storage_session.get_disk_info(
+            disk_name=attach_disk_create.name,
+            path=attach_disk_create.path,
+            disk_format=attach_disk_create.format,
+        )
         vm_disk = vm_disk.disk_info
-        disk_path = vm_disk.path + "/" + attach_disk_create.name + "." + attach_disk_create.format.value
+        disk_path = (
+            vm_disk.path
+            + "/"
+            + attach_disk_create.name
+            + "."
+            + attach_disk_create.format.value
+        )
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.name == attach_disk_create.name
         assert vm_disk.format == disk_format

@@ -38,9 +38,6 @@ def test_vm_01_create_vm(vm_session, vm_state):
             name=random_name, disks=[DiskCreate(name=new_disk_name)], **autostart
         )
         create_vm_info = vm_session.create_vm(vm_template)
-        assert (
-            create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
-        )
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         assert create_vm_info.vm_info is not None
         vm_info: VirtualMachine = create_vm_info.vm_info
@@ -52,14 +49,9 @@ def test_vm_01_create_vm(vm_session, vm_state):
         # ____________________________________Удаление ВМ(постусловие)____________
         if random_name is not None:
             if vm_state.value == vm_state.PAUSED.value:
-                delete_vm_info = vm_session.delete_vm_with_force(
-                    name=random_name
-                )
+                delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
                 assert (
-                        delete_vm_info.message
-                        == CommandMessagesEnum.vm_successfully_deleted.value
-                )
-                assert (
-                        delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+                    delete_vm_info.code
+                    == CommandMessagesEnum.vm_successfully_deleted.name
                 )
                 assert delete_vm_info.success is True

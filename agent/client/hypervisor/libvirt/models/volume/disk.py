@@ -5,7 +5,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, computed_field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+    computed_field,
+)
 
 
 class DiskFormat(Enum):
@@ -213,31 +220,31 @@ class Disk(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
+    def validate_disk_type_constraints(self):
         """Проверка условно обязательных полей в зависимости от типа"""
-        disk_type = values.type
+        disk_type = self.type
 
-        if values.status == DiskStatus.ATTACHED:
-            if not values.vm_name:
+        if self.status == DiskStatus.ATTACHED:
+            if not self.vm_name:
                 raise ValueError("Для типа vm_attached обязательно указать vm_name")
-        if not values.status:
-            values.status = DiskStatus.ATTACHED
+        if not self.status:
+            self.status = DiskStatus.ATTACHED
 
         if disk_type == DiskType.POOL_DISK:
-            if not values.pool:
+            if not self.pool:
                 raise ValueError("Для типа pool_disk обязательно указать pool")
 
-        if values.capacity_bytes:
-            if values.capacity_gb is None:
+        if self.capacity_bytes:
+            if self.capacity_gb is None:
                 # Автоматически вычисляем GB из bytes
-                values.capacity_gb = values.capacity_bytes / (1024**3)
-            elif values.capacity_gb is not None:
-                capacity_gb_to_bytes = int(values.capacity_gb * 1024 * 1024 * 1024)
-                if capacity_gb_to_bytes != values.capacity_bytes:
+                self.capacity_gb = self.capacity_bytes / (1024**3)
+            elif self.capacity_gb is not None:
+                capacity_gb_to_bytes = int(self.capacity_gb * 1024 * 1024 * 1024)
+                if capacity_gb_to_bytes != self.capacity_bytes:
                     raise ValueError("capacity_gb не соответствует capacity_bytes")
                 # Проверяем согласованность
 
-        return values
+        return self
 
     @field_validator("target_dev")
     def validate_target_dev_format(cls, v):
@@ -294,15 +301,6 @@ class Disk(BaseModel):
         DiskFormat(v)
         return v
 
-    # Конфигурация Pydantic
-    class Config:
-        use_enum_values = False  # Сохранять enum объекты, а не строки
-        validate_assignment = True  # Валидировать при присвоении
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None,
-            Enum: lambda v: v.value,
-        }
-
 
 # Дополнительная модель для создания диска (без опциональных полей)
 class DiskCreate(BaseModel):
@@ -311,7 +309,9 @@ class DiskCreate(BaseModel):
     """
 
     name: str = Field(
-        default_factory=lambda: f"disk-{random.randint(100000, 999999)}", min_length=1, max_length=255
+        default_factory=lambda: f"disk-{random.randint(100000, 999999)}",
+        min_length=1,
+        max_length=255,
     )
     path: str | None = None
     size_gb: float = Field(1, gt=0, le=65536, description="Размер в GB")
@@ -334,6 +334,7 @@ class DiskCreate(BaseModel):
     @property
     def size_bytes(self) -> int:
         return int(self.size_gb * (1024**3))
+
 
 # Модель для обновления диска
 class DiskUpdate(BaseModel):

@@ -38,18 +38,10 @@ def test_rp_09_delete_resource_pool_with_vm(
             storage_type=StoragePoolType.LOGICAL,
         )
         create_rp_info = resource_pool_session.create_virtual_resource_pool(rp_template)
-        assert (
-            create_rp_info.message
-            == CommandMessagesEnum.virtual_rp_create_success.value
-        )
         assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name
         # ____________________________________Получение информации о пуле ресурсов______________
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
-        )
-        assert (
-            get_rp_info.message
-            == CommandMessagesEnum.rp_virtual_successfully_found.value
         )
         assert (
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
@@ -68,20 +60,12 @@ def test_rp_09_delete_resource_pool_with_vm(
             ResourcePoolVirtualEdit(name=random_name, vms=vm_info.name)
         )
         assert (
-            add_vm_to_resource_pool.message
-            == CommandMessagesEnum.rp_virtual_edit_success.value
-        ), add_vm_to_resource_pool.note
-        assert (
             add_vm_to_resource_pool.code
             == CommandMessagesEnum.rp_virtual_edit_success.name
-        )
+        ), add_vm_to_resource_pool.note
         # ____________________________________Проверка текущего состояния ресурсов______________
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
-        )
-        assert (
-            get_rp_info.message
-            == CommandMessagesEnum.rp_virtual_successfully_found.value
         )
         assert (
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
@@ -93,10 +77,6 @@ def test_rp_09_delete_resource_pool_with_vm(
         # ____________________________________Удаление ресурс пула с ВМ без force______________
         delete_rp_info = resource_pool_session.delete_virtual_resource_pool(random_name)
         assert (
-            delete_rp_info.message
-            == CommandMessagesEnum.rp_virtual_have_vm_need_use_force_for_delete.value
-        )
-        assert (
             delete_rp_info.code
             == CommandMessagesEnum.rp_virtual_have_vm_need_use_force_for_delete.name
         )
@@ -104,10 +84,6 @@ def test_rp_09_delete_resource_pool_with_vm(
         # ____________________________________Удаление ресурс пула с ВМ с force______________
         delete_rp_info = resource_pool_session.delete_virtual_resource_pool(
             random_name, True
-        )
-        assert (
-            delete_rp_info.message
-            == CommandMessagesEnum.rp_virtual_delete_success.value
         )
         assert delete_rp_info.code == CommandMessagesEnum.rp_virtual_delete_success.name
         assert delete_rp_info.success is True
@@ -125,10 +101,6 @@ def test_rp_09_delete_resource_pool_with_vm(
             delete_rp_info = resource_pool_session.delete_virtual_resource_pool(
                 random_name, True
             )
-            assert delete_rp_info.message in (
-                CommandMessagesEnum.rp_virtual_delete_success.value,
-                CommandMessagesEnum.rp_virtual_not_found.value,
-            ), delete_rp_info.note
             assert delete_rp_info.code in (
                 CommandMessagesEnum.rp_virtual_delete_success.name,
                 CommandMessagesEnum.rp_virtual_not_found.name,

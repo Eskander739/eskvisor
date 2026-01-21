@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class TaskType(str, Enum):
     """Типы задач для диспетчеризации"""
+
     STORAGE = "storage"
     VM = "vm"
     NETWORK = "network"
@@ -17,23 +18,27 @@ class TaskType(str, Enum):
 
 class TaskStatus(str, Enum):
     """Статусы выполнения задач"""
-    CREATED = "created" # в ожидании
-    PENDING = "pending" # в ожидании
-    PROCESSING = "processing" # в процессе
-    COMPLETED = "completed" # выполнено
-    FAILED = "failed" # ошибка
-    CANCELLED = "cancelled" # отменено
+
+    CREATED = "created"  # в ожидании
+    PENDING = "pending"  # в ожидании
+    PROCESSING = "processing"  # в процессе
+    COMPLETED = "completed"  # выполнено
+    FAILED = "failed"  # ошибка
+    CANCELLED = "cancelled"  # отменено
 
 
 class TaskAdd(BaseModel):
     """Модель задачи"""
+
     task_type: TaskType = Field(..., description="Тип задачи для диспетчеризации")
     action: str = Field(..., description="Действие (create, delete, update, etc.)")
     params: dict[str, Any] = Field(default_factory=dict, description="Данные задачи")
-    created_at: datetime.datetime  = Field(default_factory=datetime.datetime.now)
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
+
 
 class Task(TaskAdd):
     """Модель задачи"""
+
     request_id: str = Field(..., description="Идентификатор задачи")
 
 

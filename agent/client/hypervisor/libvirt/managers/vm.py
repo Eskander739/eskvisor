@@ -6,15 +6,12 @@ import subprocess
 import tempfile
 import time
 import uuid
-import xml.dom.minidom as minidom
 import xml.etree.ElementTree as ET
-from datetime import datetime
 from pathlib import Path
 
 import libvirt
 from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 
-from agent.client.cli import CLIControl
 from agent.client.hypervisor.ha.controller import HAController
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
@@ -23,7 +20,9 @@ from agent.client.hypervisor.libvirt.managers.storage import StorageManager
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     BusType,
     Disk,
-    DiskAttach, DiskType,
+    DiskAttach,
+    DiskType,
+    CacheMode,
 )
 from agent.client.hypervisor.libvirt.models.enum import (
     GraphicsType,
@@ -39,7 +38,8 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VirtualMachine,
     VMCreateRequest,
     VmUpdateRequest,
-    HostForward, VirtualMachinesList,
+    HostForward,
+    VirtualMachinesList,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -54,7 +54,6 @@ class VmManager(LibvirtClient):
     libvirtError = None
 
     def __init__(self):
-        self.cli = CLIControl()
         self.ha_controller = HAController()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger("VmManager")
@@ -93,7 +92,6 @@ class VmManager(LibvirtClient):
                     if not os.path.exists(config.cdrom):
                         return VmMessage(
                             success=False,
-                            message=f"ISO файл не найден: {config.cdrom}",
                             code="ISO_FILE_NOT_FOUND",
                         )
 
@@ -107,16 +105,12 @@ class VmManager(LibvirtClient):
                     if config.install_method == "location":
                         return VmMessage(
                             success=False,
-                            message="Нельзя одновременно указывать cdrom и location",
                             code="CDROM_AND_LOCATION_CONFLICT",
                         )
 
             existing_vm = self.get_vm_by_name(config.name)
-            if existing_vm.message == CommandMessagesEnum.vm_successfully_found.value:
+            if existing_vm.code == CommandMessagesEnum.vm_successfully_found.name:
                 return VmError(
-                    message=CommandMessagesEnum.vm_with_name_already_exists.value.format(
-                        config.name
-                    ),
                     code=CommandMessagesEnum.vm_with_name_already_exists.name,
                 )
 
@@ -134,9 +128,7 @@ class VmManager(LibvirtClient):
                     self.logger.info(
                         f"Создание диска через StorageManager: {disk.name}"
                     )
-                    result = self.storage_manager.create_disk(
-                        disk
-                    )
+                    result = self.storage_manager.create_disk(disk)
 
                     if hasattr(result, "disk_info") and result.disk_info:
                         # Обновляем путь диска в конфигурации
@@ -147,14 +139,15 @@ class VmManager(LibvirtClient):
                         # Откатываем созданные диски
                         for created_disk_path in all_disks:
                             try:
-                                self.storage_manager.delete_disk(disk_path=created_disk_path)
+                                self.storage_manager.delete_disk(
+                                    disk_path=created_disk_path
+                                )
                             except Exception as e:
                                 self.logger.error(
                                     f"Ошибка при откате диска {created_disk_path}: {e}"
                                 )
                         return VmMessage(
                             success=False,
-                            message=f"Ошибка создания диска: {result.message if hasattr(result, 'message') else 'Unknown error'}",
                             code="DISK_CREATION_FAILED",
                         )
             except Exception as global_e:
@@ -169,7 +162,6 @@ class VmManager(LibvirtClient):
                         )
                 return VmMessage(
                     success=False,
-                    message=f"Ошибка при создании дисков: {str(global_e)}",
                     code="DISK_CREATION_EXCEPTION",
                 )
             command = self._build_virt_install_command(config)
@@ -199,7 +191,6 @@ class VmManager(LibvirtClient):
                     self.ha_controller.sync_nfs_vm_configs()
                     return VmMessage(
                         success=True,
-                        message=CommandMessagesEnum.vm_successfully_created.value,
                         code=CommandMessagesEnum.vm_successfully_created.name,
                         command=command,
                         vm_info=vm_info.vm_info,
@@ -210,7 +201,6 @@ class VmManager(LibvirtClient):
                     self.logger.error("ВМ создана, но не найдена в libvirt")
                     return VmMessage(
                         success=False,
-                        message=CommandMessagesEnum.vm_created_but_not_found_in_libvirt.value,
                         code=CommandMessagesEnum.vm_created_but_not_found_in_libvirt.name,
                         command=command,
                         stdout=result.stdout,
@@ -252,7 +242,6 @@ class VmManager(LibvirtClient):
                             self.ha_controller.sync_nfs_vm_configs()
                             return VmMessage(
                                 success=True,
-                                message=CommandMessagesEnum.vm_successfully_created.value,
                                 code=CommandMessagesEnum.vm_successfully_created.name,
                                 command=import_command,
                                 vm_info=vm_info.vm_info,
@@ -263,7 +252,6 @@ class VmManager(LibvirtClient):
                         else:
                             return VmMessage(
                                 success=False,
-                                message=CommandMessagesEnum.vm_created_but_not_found_in_libvirt.value,
                                 code=CommandMessagesEnum.vm_created_but_not_found_in_libvirt.name,
                                 command=import_command,
                                 vm_info=vm_info.vm_info,
@@ -275,7 +263,6 @@ class VmManager(LibvirtClient):
                         self.logger.error(f"Ошибка создания ВМ: {result.stderr}")
                         return VmMessage(
                             success=False,
-                            message=CommandMessagesEnum.vm_create_error.value,
                             code=CommandMessagesEnum.vm_create_error.name,
                             command=import_command,
                             stdout=result.stdout,
@@ -287,7 +274,6 @@ class VmManager(LibvirtClient):
                     self.logger.error(error_msg)
                     return VmMessage(
                         success=False,
-                        message=CommandMessagesEnum.vm_create_error.value,
                         code=CommandMessagesEnum.vm_create_error.name,
                         command=command,
                         stdout=result.stdout,
@@ -306,7 +292,6 @@ class VmManager(LibvirtClient):
                     )
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.vm_create_subprocess_timeout_error.value,
                 code=CommandMessagesEnum.vm_create_subprocess_timeout_error.name,
                 command=command if "command" in locals() else None,
             )
@@ -323,7 +308,6 @@ class VmManager(LibvirtClient):
                     )
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.vm_create_unexpected_error.value,
                 code=CommandMessagesEnum.vm_create_unexpected_error.name,
                 command=command if "command" in locals() else None,
             )
@@ -383,8 +367,8 @@ class VmManager(LibvirtClient):
             if disk.path or disk.name and disk.format:
                 if disk.path is None:
                     disk.path = self.storage_manager.system_disk_path
-                disk_path = Path(f"{disk.path}/{disk.name}.{disk.format.value}")
-                if self.cli.is_exists(str(disk_path)):
+                disk_path = Path(disk.path) if disk.disk_type.value == DiskType.CDROM.value else Path(f"{disk.path}/{disk.name}.{disk.format.value}")
+                if disk_path.exists():
                     if disk.disk_type.value == DiskType.CDROM.value:
                         disk_params.append(f"--cdrom {disk.path}")
                     else:
@@ -535,12 +519,12 @@ class VmManager(LibvirtClient):
         return " ".join(cmd_parts)
 
     def migrate_vm(
-            self,
-            vm_name: str,
-            dest_uri: str,
-            live: bool = True,
-            undefine_source: bool = False,
-            copy_storage: bool = False
+        self,
+        vm_name: str,
+        dest_uri: str,
+        live: bool = True,
+        undefine_source: bool = False,
+        copy_storage: bool = False,
     ) -> VmMessage:
         """
         Миграция виртуальной машины на другой хост
@@ -572,8 +556,7 @@ class VmManager(LibvirtClient):
             if state != libvirt.VIR_DOMAIN_RUNNING and live:
                 return VmMessage(
                     success=False,
-                    message=CommandMessagesEnum.for_live_migration_vm_need_to_running.value,
-                    code=CommandMessagesEnum.for_live_migration_vm_need_to_running.name
+                    code=CommandMessagesEnum.for_live_migration_vm_need_to_running.name,
                 )
 
             # Флаги миграции
@@ -592,18 +575,16 @@ class VmManager(LibvirtClient):
 
             # Дополнительные параметры для миграции
             migrate_params = {
-                'uri': dest_uri,
-                'bandwidth': 0,  # 0 = неограниченная полоса
-                'timeout': 300,  # 5 минут
+                "uri": dest_uri,
+                "bandwidth": 0,  # 0 = неограниченная полоса
+                "timeout": 300,  # 5 минут
             }
 
             # Выполняем миграцию
             self.logger.info(f"Выполнение миграции с флагами: {flags}")
             try:
                 migrated_domain = domain.migrateToURI3(
-                    dest_uri,
-                    params=migrate_params,
-                    flags=flags
+                    dest_uri, params=migrate_params, flags=flags
                 )
 
                 if migrated_domain:
@@ -611,15 +592,13 @@ class VmManager(LibvirtClient):
                     self.ha_controller.delete_vm_from_nfs_config(vm_name)
                     return VmMessage(
                         success=True,
-                        message=CommandMessagesEnum.migration_successfully_completed.name,
                         code=CommandMessagesEnum.migration_successfully_completed.name,
-                        note=f"Live migration: {live} for {dest_uri}"
+                        note=f"Live migration: {live} for {dest_uri}",
                     )
                 else:
                     return VmMessage(
                         success=False,
-                        message=CommandMessagesEnum.migration_completed_but_did_not_return_domain.value,
-                        code=CommandMessagesEnum.migration_completed_but_did_not_return_domain.name
+                        code=CommandMessagesEnum.migration_completed_but_did_not_return_domain.name,
                     )
 
             except libvirt.libvirtError as e:
@@ -634,18 +613,17 @@ class VmManager(LibvirtClient):
             self.logger.exception(f"Неожиданная ошибка при миграции: {e}")
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.migration_error.value,
                 code=CommandMessagesEnum.migration_error.name,
-                note=str(e)
+                note=str(e),
             )
 
     def _migrate_via_virsh(
-            self,
-            vm_name: str,
-            dest_uri: str,
-            live: bool = True,
-            undefine_source: bool = False,
-            copy_storage: bool = False
+        self,
+        vm_name: str,
+        dest_uri: str,
+        live: bool = True,
+        undefine_source: bool = False,
+        copy_storage: bool = False,
     ) -> VmMessage:
         """
         Альтернативная миграция через virsh команду
@@ -668,53 +646,46 @@ class VmManager(LibvirtClient):
             self.logger.info(f"Выполнение virsh команды: {' '.join(cmd_parts)}")
 
             result = subprocess.run(
-                cmd_parts,
-                capture_output=True,
-                text=True,
-                timeout=600
+                cmd_parts, capture_output=True, text=True, timeout=600
             )
 
             if result.returncode == 0:
                 self.ha_controller.delete_vm_from_nfs_config(vm_name)
                 return VmMessage(
                     success=True,
-                    message=CommandMessagesEnum.migration_successfully_completed_with_virsh.value,
                     code=CommandMessagesEnum.migration_successfully_completed_with_virsh.name,
                     stdout=result.stdout,
-                    stderr=result.stderr
+                    stderr=result.stderr,
                 )
             else:
                 return VmMessage(
                     success=False,
-                    message=CommandMessagesEnum.migration_error.value,
                     code=CommandMessagesEnum.migration_error.name,
                     stdout=result.stdout,
-                    stderr=result.stderr
+                    stderr=result.stderr,
                 )
 
         except subprocess.TimeoutExpired:
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.migration_timeout_error_with_virsh.value,
-                code=CommandMessagesEnum.migration_timeout_error_with_virsh.value
+                code=CommandMessagesEnum.migration_timeout_error_with_virsh.value,
             )
         except Exception as e:
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.migration_virsh_error.value,
                 code=CommandMessagesEnum.migration_virsh_error.name,
-                note=str(e)
+                note=str(e),
             )
 
     def _migrate_storage_via_virsh(
-            self,
-            vm_name: str,
-            dest_uri: str,
-            dest_pool: str,
-            xml_path: str,
-            live: bool,
-            sparse_copy: bool,
-            bandwidth_limit: int
+        self,
+        vm_name: str,
+        dest_uri: str,
+        dest_pool: str,
+        xml_path: str,
+        live: bool,
+        sparse_copy: bool,
+        bandwidth_limit: int,
     ) -> VmMessage:
         """
         Альтернативная миграция с дисками через virsh команду
@@ -731,14 +702,17 @@ class VmManager(LibvirtClient):
             if bandwidth_limit > 0:
                 cmd_parts.extend(["--bandwidth", str(bandwidth_limit)])
 
-            cmd_parts.extend([
-                "--copy-storage-all",
-                "--persistent",
-                "--undefinesource",
-                "--xml", xml_path,
-                vm_name,
-                dest_uri
-            ])
+            cmd_parts.extend(
+                [
+                    "--copy-storage-all",
+                    "--persistent",
+                    "--undefinesource",
+                    "--xml",
+                    xml_path,
+                    vm_name,
+                    dest_uri,
+                ]
+            )
 
             self.logger.info(f"Выполнение virsh команды: {' '.join(cmd_parts)}")
 
@@ -746,17 +720,16 @@ class VmManager(LibvirtClient):
                 cmd_parts,
                 capture_output=True,
                 text=True,
-                timeout=1800  # 30 минут для миграции с дисками
+                timeout=1800,  # 30 минут для миграции с дисками
             )
 
             if result.returncode == 0:
                 return VmMessage(
                     success=True,
-                    message=CommandMessagesEnum.migration_with_disks_successfully_completed_with_virsh.value,
                     code=CommandMessagesEnum.migration_with_disks_successfully_completed_with_virsh.name,
                     stdout=result.stdout,
                     stderr=result.stderr,
-                    note=f"Пул: {dest_pool}"
+                    note=f"Пул: {dest_pool}",
                 )
             else:
                 # Пробуем упрощенный вариант без --copy-storage-all
@@ -769,47 +742,36 @@ class VmManager(LibvirtClient):
                 simple_cmd.extend(["--persistent", vm_name, dest_uri])
 
                 simple_result = subprocess.run(
-                    simple_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=600
+                    simple_cmd, capture_output=True, text=True, timeout=600
                 )
 
                 if simple_result.returncode == 0:
                     return VmMessage(
                         success=True,
-                        message=CommandMessagesEnum.migration_without_disks_successfully_completed_with_virsh.value,
                         code=CommandMessagesEnum.migration_without_disks_successfully_completed_with_virsh.name,
-                        note="Диски не скопированы, требуется общее хранилище"
+                        note="Диски не скопированы, требуется общее хранилище",
                     )
                 else:
                     return VmMessage(
                         success=False,
-                        message=CommandMessagesEnum.migration_virsh_error.value,
                         code=CommandMessagesEnum.migration_virsh_error.name,
                         stdout=result.stdout,
-                        stderr=result.stderr
+                        stderr=result.stderr,
                     )
 
         except subprocess.TimeoutExpired:
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.migration_timeout_error_with_virsh.value,
-                code=CommandMessagesEnum.migration_timeout_error_with_virsh.name
+                code=CommandMessagesEnum.migration_timeout_error_with_virsh.name,
             )
         except Exception as e:
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.migration_virsh_error.value,
                 code=CommandMessagesEnum.migration_virsh_error.name,
-                note=str(e)
+                note=str(e),
             )
 
-    def check_migration_compatibility(
-            self,
-            vm_name: str,
-            dest_uri: str
-    ) -> dict:
+    def check_migration_compatibility(self, vm_name: str, dest_uri: str) -> dict:
         """
         Проверка совместимости для миграции
 
@@ -817,11 +779,11 @@ class VmManager(LibvirtClient):
             Словарь с результатами проверки
         """
         compatibility = {
-            'cpu_compatible': False,
-            'storage_accessible': False,
-            'network_accessible': False,
-            'libvirt_version_compatible': False,
-            'errors': []
+            "cpu_compatible": False,
+            "storage_accessible": False,
+            "network_accessible": False,
+            "libvirt_version_compatible": False,
+            "errors": [],
         }
 
         try:
@@ -833,9 +795,9 @@ class VmManager(LibvirtClient):
             root = ET.fromstring(xml_desc)
             cpu_elem = root.find(".//cpu")
             if cpu_elem is not None:
-                cpu_mode = cpu_elem.get('mode', 'host-model')
-                if cpu_mode == 'host-passthrough':
-                    compatibility['errors'].append(
+                cpu_mode = cpu_elem.get("mode", "host-model")
+                if cpu_mode == "host-passthrough":
+                    compatibility["errors"].append(
                         "CPU mode 'host-passthrough' не поддерживает миграцию"
                     )
 
@@ -843,47 +805,42 @@ class VmManager(LibvirtClient):
             ha_storages = self.ha_controller.loaded_ha_nfs_storages
             for storage in ha_storages.nfs_storages:
                 if not self.ha_controller.check_nfs_availability(storage.source):
-                    compatibility['errors'].append(
+                    compatibility["errors"].append(
                         f"NFS хранилище {storage.source} недоступно"
                     )
 
             # Проверяем доступность целевого хоста
             try:
                 # Пытаемся подключиться к целевому хосту
-                test_cmd = ['virsh', '-c', dest_uri, 'list', '--all']
+                test_cmd = ["virsh", "-c", dest_uri, "list", "--all"]
                 result = subprocess.run(
-                    test_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
+                    test_cmd, capture_output=True, text=True, timeout=10
                 )
 
                 if result.returncode == 0:
-                    compatibility['libvirt_version_compatible'] = True
+                    compatibility["libvirt_version_compatible"] = True
                 else:
-                    compatibility['errors'].append(
+                    compatibility["errors"].append(
                         f"Не удалось подключиться к целевому хосту: {result.stderr}"
                     )
 
             except Exception as e:
-                compatibility['errors'].append(
+                compatibility["errors"].append(
                     f"Ошибка подключения к целевому хосту: {str(e)}"
                 )
 
             # Проверяем общую совместимость
-            if len(compatibility['errors']) == 0:
-                compatibility['cpu_compatible'] = True
-                compatibility['storage_accessible'] = True
-                compatibility['network_accessible'] = True
+            if len(compatibility["errors"]) == 0:
+                compatibility["cpu_compatible"] = True
+                compatibility["storage_accessible"] = True
+                compatibility["network_accessible"] = True
 
             return compatibility
 
         except Exception as e:
             self.logger.error(f"Ошибка проверки совместимости: {e}")
-            compatibility['errors'].append(str(e))
+            compatibility["errors"].append(str(e))
             return compatibility
-
-
 
     def attach_iso_to_vm(
         self, vm_name: str, iso_path: str, bus_type: str = "ide", target_dev: str = None
@@ -911,7 +868,6 @@ class VmManager(LibvirtClient):
             if not os.path.exists(iso_path):
                 return VmMessage(
                     success=False,
-                    message=f"ISO файл не найден: {iso_path}",
                     code="ISO_FILE_NOT_FOUND",
                 )
 
@@ -935,7 +891,7 @@ class VmManager(LibvirtClient):
                 disk_format=disk_format,
                 target_dev=target_dev or self._get_free_cdrom_device(vm_name),
                 bus_type=bus_type_enum,
-                cache_mode="none",
+                cache_mode=CacheMode.NONE,
             )
 
             # Подключаем диск через StorageManager
@@ -944,13 +900,11 @@ class VmManager(LibvirtClient):
             if hasattr(result, "success") and result.success:
                 return VmMessage(
                     success=True,
-                    message=f"ISO успешно подключен к ВМ {vm_name}",
                     code="ISO_ATTACH_SUCCESS",
                 )
             else:
                 return VmMessage(
                     success=False,
-                    message=f"Ошибка подключения ISO: {result.message if hasattr(result, 'message') else 'Unknown error'}",
                     code="ISO_ATTACH_FAILED",
                 )
 
@@ -958,7 +912,6 @@ class VmManager(LibvirtClient):
             self.logger.exception(f"Ошибка при подключении ISO к ВМ: {e}")
             return VmMessage(
                 success=False,
-                message=f"Ошибка при подключении ISO: {str(e)}",
                 code="ISO_ATTACH_EXCEPTION",
             )
 
@@ -1022,13 +975,11 @@ class VmManager(LibvirtClient):
             if result:
                 return VmMessage(
                     success=True,
-                    message=f"ISO успешно отключен от ВМ {vm_name}",
                     code="ISO_DETACH_SUCCESS",
                 )
             else:
                 return VmMessage(
                     success=False,
-                    message="Ошибка отключения ISO",
                     code="ISO_DETACH_FAILED",
                 )
 
@@ -1036,7 +987,6 @@ class VmManager(LibvirtClient):
             self.logger.exception(f"Ошибка при отключении ISO от ВМ: {e}")
             return VmMessage(
                 success=False,
-                message=f"Ошибка при отключении ISO: {str(e)}",
                 code="ISO_DETACH_EXCEPTION",
             )
 
@@ -1112,9 +1062,7 @@ class VmManager(LibvirtClient):
 
     # _______________________________________________Редактирование ВМ________
 
-    def edit_vm(
-        self, vm_name: str, vm_update: VmUpdateRequest
-    ) -> VmMessage:
+    def edit_vm(self, vm_name: str, vm_update: VmUpdateRequest) -> VmMessage:
         try:
             self.logger.info(f"Редактирование свойств ВМ {vm_name}")
 
@@ -1307,7 +1255,6 @@ class VmManager(LibvirtClient):
             self.ha_controller.sync_nfs_vm_configs()
             return VmMessage(
                 success=True,
-                message=CommandMessagesEnum.vm_edit_success.value,
                 code=CommandMessagesEnum.vm_edit_success.name,
             )
 
@@ -1315,7 +1262,6 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка при редактировании ВМ {vm_name}: {e}")
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.vm_edit_error.value,
                 code=CommandMessagesEnum.vm_edit_error.name,
                 note=str(e),
             )
@@ -1323,7 +1269,6 @@ class VmManager(LibvirtClient):
             self.logger.exception(f"Неожиданная ошибка при редактировании ВМ: {e}")
             return VmMessage(
                 success=False,
-                message=CommandMessagesEnum.vm_edit_unexpected_error.value,
                 code=CommandMessagesEnum.vm_edit_unexpected_error.name,
                 note=str(e),
             )
@@ -1640,14 +1585,16 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка получения списка ВМ, \nerr: {e}")
 
         if vms:
-            return VmMessage(success=True,
-                             message=CommandMessagesEnum.vm_list_found.value,
-                             code=CommandMessagesEnum.vm_list_found.name,
-                             vm_info=VirtualMachinesList(items=vms, total=len(vms)))
-        return VmMessage(success=False,
-                         message=CommandMessagesEnum.vm_list_not_found.value,
-                         code=CommandMessagesEnum.vm_list_not_found.name,
-                         vm_info=VirtualMachinesList(items=vms, total=len(vms)))
+            return VmMessage(
+                success=True,
+                code=CommandMessagesEnum.vm_list_found.name,
+                vm_info=VirtualMachinesList(items=vms, total=len(vms)),
+            )
+        return VmMessage(
+            success=False,
+            code=CommandMessagesEnum.vm_list_not_found.name,
+            vm_info=VirtualMachinesList(items=vms, total=len(vms)),
+        )
 
     @staticmethod
     def parse_hostfwd_regex(hostfwd_str: str) -> dict:
@@ -1776,7 +1723,6 @@ class VmManager(LibvirtClient):
             virtual_machine = self.conn.lookupByName(name)
             self.logger.info(f"Поиск ВМ {name}")
             return VmMessage(
-                message=CommandMessagesEnum.vm_successfully_found.value,
                 code=CommandMessagesEnum.vm_successfully_found.name,
                 vm_info=self.get_vm_info(virtual_machine),
                 success=True,
@@ -1784,7 +1730,6 @@ class VmManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.info(f"ВМ {name} не найдена")
             return VmMessage(
-                message=CommandMessagesEnum.vm_found_error.value,
                 code=CommandMessagesEnum.vm_found_error.name,
                 success=False,
                 note=str(e),
@@ -1797,20 +1742,17 @@ class VmManager(LibvirtClient):
             if domain.create() == 0:
                 self.logger.info(f"ВМ {name} запущена")
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_started.value,
                     code=CommandMessagesEnum.vm_successfully_started.name,
                     success=True,
                 )
             self.logger.info(f"ВМ {name} не запустилась")
             return VmMessage(
-                message=CommandMessagesEnum.vm_start_error.value,
                 code=CommandMessagesEnum.vm_start_error.name,
                 success=False,
             )
         except self.libvirtError as e:
             self.logger.error(f"Ошибка запуска ВМ {name}, \nerr: {e}")
             return VmMessage(
-                message=CommandMessagesEnum.vm_start_error.value,
                 code=CommandMessagesEnum.vm_start_error.name,
                 success=False,
                 note=str(e),
@@ -1836,12 +1778,10 @@ class VmManager(LibvirtClient):
                 action = "принудительно выключена" if force else "выключена"
                 self.logger.info(f"ВМ {name} {action}")
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_shutdowned.value,
                     code=CommandMessagesEnum.vm_successfully_shutdowned.name,
                     success=True,
                 )
             return VmMessage(
-                message=CommandMessagesEnum.vm_shutdown_error.value,
                 code=CommandMessagesEnum.vm_shutdown_error.name,
                 success=False,
             )
@@ -1849,15 +1789,12 @@ class VmManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка выключения ВМ {name}, \nerr: {e}")
             return VmMessage(
-                message=CommandMessagesEnum.vm_shutdown_error.value,
                 code=CommandMessagesEnum.vm_shutdown_error.name,
                 success=False,
                 note=str(e),
             )
 
-    def reboot_vm(
-        self, name: str, hard_reset: bool = False
-    ) -> VmMessage:
+    def reboot_vm(self, name: str, hard_reset: bool = False) -> VmMessage:
         """Перезагрузка виртуальной машины"""
         try:
             domain = self.conn.lookupByName(name)
@@ -1865,26 +1802,22 @@ class VmManager(LibvirtClient):
                 domain.reset()
                 self.logger.info(f"Выполнена жесткая перезагрузка для ВМ {name}")
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_restarted.value,
                     code=CommandMessagesEnum.vm_successfully_restarted.name,
                     success=True,
                 )
             if domain.reboot(0) == 0:
                 self.logger.info(f"ВМ {name} перезагружается")
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_restarted.value,
                     code=CommandMessagesEnum.vm_successfully_restarted.name,
                     success=True,
                 )
             return VmMessage(
-                message=CommandMessagesEnum.vm_restart_error.value,
                 code=CommandMessagesEnum.vm_restart_error.name,
                 success=False,
             )
         except self.libvirtError as e:
             self.logger.error(f"Ошибка перезагрузки ВМ {name}, \nerr: {e}")
             return VmMessage(
-                message=CommandMessagesEnum.vm_restart_error.value,
                 code=CommandMessagesEnum.vm_restart_error.name,
                 success=False,
                 note=str(e),
@@ -1897,20 +1830,17 @@ class VmManager(LibvirtClient):
             if domain.suspend() == 0:
                 self.logger.info(f"ВМ {name} приостановлена")
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_stopped.value,
                     code=CommandMessagesEnum.vm_successfully_stopped.name,
                     success=True,
                 )
             self.logger.info(f"ВМ {name} не приостановлена")
             return VmMessage(
-                message=CommandMessagesEnum.vm_stop_error.value,
                 code=CommandMessagesEnum.vm_stop_error.name,
                 success=False,
             )
         except self.libvirtError as e:
             self.logger.error(f"Ошибка приостановки ВМ {name}, \nerr: {e}")
             return VmMessage(
-                message=CommandMessagesEnum.vm_stop_error.value,
                 code=CommandMessagesEnum.vm_stop_error.name,
                 success=False,
                 note=str(e),
@@ -1923,20 +1853,17 @@ class VmManager(LibvirtClient):
             if domain.resume() == 0:
                 self.logger.info(f"ВМ {name} возобновлена")
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_resumed.value,
                     code=CommandMessagesEnum.vm_successfully_resumed.name,
                     success=True,
                 )
             self.logger.info(f"ВМ {name} не возобновлена")
             return VmMessage(
-                message=CommandMessagesEnum.vm_resume_error.value,
                 code=CommandMessagesEnum.vm_resume_error.name,
                 success=False,
             )
         except self.libvirtError as e:
             self.logger.error(f"Ошибка возобновления ВМ {name}")
             return VmMessage(
-                message=CommandMessagesEnum.vm_resume_error.value,
                 code=CommandMessagesEnum.vm_resume_error.name,
                 success=False,
                 note=str(e),
@@ -2017,7 +1944,6 @@ class VmManager(LibvirtClient):
             self.logger.info(f"ВМ {name} удалена")
             self.ha_controller.delete_vm_from_nfs_config(name)
             return VmMessage(
-                message=CommandMessagesEnum.vm_successfully_deleted.value,
                 code=CommandMessagesEnum.vm_successfully_deleted.name,
                 success=True,
             )
@@ -2026,12 +1952,9 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка удаления ВМ {name}, \nerr: {e}")
 
             if "nvram" in str(e).lower():
-                return self._delete_vm_with_nvram_fallback(
-                    name, delete_disks
-                )
+                return self._delete_vm_with_nvram_fallback(name, delete_disks)
 
             return VmMessage(
-                message=CommandMessagesEnum.vm_delete_error.value,
                 code=CommandMessagesEnum.vm_delete_error.name,
                 success=False,
                 note=str(e),
@@ -2104,7 +2027,6 @@ class VmManager(LibvirtClient):
                         pass
 
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_deleted.value,
                     code=CommandMessagesEnum.vm_successfully_deleted.name,
                     success=True,
                 )
@@ -2119,7 +2041,6 @@ class VmManager(LibvirtClient):
                         f"ВМ {name} удалена через virsh undefine --remove-all-storage"
                     )
                     return VmMessage(
-                        message=CommandMessagesEnum.vm_successfully_deleted.value,
                         code=CommandMessagesEnum.vm_successfully_deleted.name,
                         success=True,
                     )
@@ -2128,7 +2049,6 @@ class VmManager(LibvirtClient):
                         f"Не удалось удалить ВМ {name} даже через virsh: {result.stderr}"
                     )
                     return VmMessage(
-                        message=CommandMessagesEnum.vm_delete_error.value,
                         code=CommandMessagesEnum.vm_delete_error.name,
                         success=False,
                     )
@@ -2138,7 +2058,6 @@ class VmManager(LibvirtClient):
                 f"Ошибка в альтернативном методе удаления ВМ {name}, \nerr: {e}"
             )
             return VmMessage(
-                message=CommandMessagesEnum.vm_delete_error.value,
                 code=CommandMessagesEnum.vm_delete_error.name,
                 success=False,
                 note=str(e),
@@ -2153,9 +2072,7 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка получения XML для ВМ {name}, \nerr: {e}")
             return None
 
-    def delete_vm_with_force(
-        self, name: str, delete_disks: bool = True
-    ):
+    def delete_vm_with_force(self, name: str, delete_disks: bool = True):
         """
         Вспомогательная функция для принудительного удаления ВМ
         Используйте эту функцию если обычное удаление не работает
@@ -2187,14 +2104,12 @@ class VmManager(LibvirtClient):
             if result.success:
                 print(f"ВМ {name} успешно удалена")
                 return VmMessage(
-                    message=CommandMessagesEnum.vm_successfully_deleted.value,
                     code=CommandMessagesEnum.vm_successfully_deleted.name,
                     success=True,
                 )
 
         print(f"Не удалось удалить ВМ {name}")
         return VmMessage(
-            message=CommandMessagesEnum.vm_delete_error.value,
             code=CommandMessagesEnum.vm_delete_error.name,
             success=False,
         )
@@ -2231,7 +2146,9 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка при парсинге XML для поиска NVRAM: {e}")
             return None
 
-    def clone_vm(self, source_name: str, new_name: str, new_uuid: bool = True) -> VmMessage:
+    def clone_vm(
+        self, source_name: str, new_name: str, new_uuid: bool = True
+    ) -> VmMessage:
         try:
             source_domain = self.conn.lookupByName(source_name)
             xml_config = source_domain.XMLDesc(0)
@@ -2252,13 +2169,13 @@ class VmManager(LibvirtClient):
             nvram_elem = root.find(".//os/nvram")
             if nvram_elem is not None and nvram_elem.text:
                 old_nvram_path = nvram_elem.text
-                if self.cli.is_exists(old_nvram_path):
+                if Path(old_nvram_path).exists():
                     # Создаем новый путь для NVRAM
                     nvram_dir = os.path.dirname(old_nvram_path)
                     old_nvram_name = os.path.basename(old_nvram_path)
 
                     # Извлекаем базовое имя (без _VARS.fd или аналогичного суффикса)
-                    if old_nvram_name.endswith('_VARS.fd'):
+                    if old_nvram_name.endswith("_VARS.fd"):
                         base_nvram_name = old_nvram_name[:-8]  # Убираем _VARS.fd
                     else:
                         base_nvram_name = os.path.splitext(old_nvram_name)[0]
@@ -2271,11 +2188,13 @@ class VmManager(LibvirtClient):
                     try:
                         shutil.copy2(old_nvram_path, new_nvram_path)
                         nvram_elem.text = new_nvram_path
-                        self.logger.info(f"NVRAM файл скопирован: {old_nvram_path} -> {new_nvram_path}")
+                        self.logger.info(
+                            f"NVRAM файл скопирован: {old_nvram_path} -> {new_nvram_path}"
+                        )
                     except Exception as e:
                         self.logger.warning(f"Не удалось скопировать NVRAM файл: {e}")
                         # Создаем пустой NVRAM файл
-                        open(new_nvram_path, 'wb').close()
+                        open(new_nvram_path, "wb").close()
                         os.chmod(new_nvram_path, 0o600)
                         nvram_elem.text = new_nvram_path
 
@@ -2288,12 +2207,14 @@ class VmManager(LibvirtClient):
                     os_elem = root.find(".//os")
                     if os_elem is not None:
                         new_nvram_elem = ET.SubElement(os_elem, "nvram")
-                        new_nvram_path = f"/var/lib/libvirt/qemu/nvram/{new_name}_VARS.fd"
+                        new_nvram_path = (
+                            f"/var/lib/libvirt/qemu/nvram/{new_name}_VARS.fd"
+                        )
                         new_nvram_elem.text = new_nvram_path
 
                         # Создаем пустой файл NVRAM
                         try:
-                            open(new_nvram_path, 'wb').close()
+                            open(new_nvram_path, "wb").close()
                             os.chmod(new_nvram_path, 0o600)
                         except Exception as e:
                             self.logger.warning(f"Не удалось создать NVRAM файл: {e}")
@@ -2320,14 +2241,13 @@ class VmManager(LibvirtClient):
                         source_elem.set("file", new_path)
 
             # Применяем изменения
-            new_xml = ET.tostring(root, encoding='unicode')
+            new_xml = ET.tostring(root, encoding="unicode")
             new_domain = self.conn.defineXML(new_xml)
 
             # Синхронизируем с NFS
             self.ha_controller.sync_nfs_vm_configs()
 
             return VmMessage(
-                message=CommandMessagesEnum.vm_successfully_cloned.value,
                 code=CommandMessagesEnum.vm_successfully_cloned.name,
                 success=True,
             )
@@ -2335,10 +2255,10 @@ class VmManager(LibvirtClient):
         except Exception as e:
             self.logger.error(str(e))
             return VmMessage(
-                message=CommandMessagesEnum.vm_clone_error.value,
                 code=CommandMessagesEnum.vm_clone_error.name,
                 success=False,
             )
+
 
 if __name__ == "__main__":
     # Пример создания ВМ с использованием нового API

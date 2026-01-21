@@ -1,4 +1,6 @@
 import os
+import shutil
+from pathlib import Path
 
 from agent.client.pycgroup.cgroup_cli import (
     CLICGroup,
@@ -15,6 +17,7 @@ from agent.client.pycgroup.ctl.memory_ctl import (
 from agent.client.pycgroup.ctl.pid_ctl import (
     PidController,
 )
+from agent.client.pycgroup.pycgroup_logger import PyCGroupLogger
 
 
 class PYCGroup:
@@ -36,6 +39,7 @@ class PYCGroup:
         self.io_ctrl = IoController()
         self.memory_ctl = MemortController()
         self.pid_ctl = PidController()
+        self.logger = PyCGroupLogger()
 
     @staticmethod
     def byte_to_mb(byte: int) -> int:
@@ -61,12 +65,12 @@ class PYCGroup:
     ):
         cgroup_path = f"{self.system_cgroup_path}/{pool_name}/{container_name}"
         if is_created:
-            if not self.cli.is_exists(str(cgroup_path)):
+            if not Path(str(cgroup_path)).exists():
                 raise FileNotFoundError(f"{cgroup_path} пул не найден")
-            if not self.cli.is_directory(str(cgroup_path)):
+            if not Path(str(cgroup_path)).is_dir():
                 raise ValueError(f"{cgroup_path} не является директорией")
         else:
-            if self.cli.is_exists(str(cgroup_path)):
+            if Path(str(cgroup_path)).exists():
                 raise ValueError(f"{cgroup_path} пул уже создан")
 
         return cgroup_path
@@ -96,7 +100,7 @@ class PYCGroup:
         memory_reservation: int | None = None,
     ):
         cgroup_path = self.cgroup_container_path(pool_name, container_name, False)
-        self.cli.mkdir(cgroup_path)
+        Path(cgroup_path).mkdir()
 
         mem_max_result = self.memory_ctl.set_memory_max(cgroup_path, max_memory)
         if self.byte_to_kb(mem_max_result) != max_memory:
@@ -192,27 +196,27 @@ class PYCGroup:
 
     def delete_cgroup_container(self, pool_name: str, container_name: str):
         cgroup_path = self.cgroup_container_path(pool_name, container_name, False)
-        self.delete_pid_from_container(container_name)
-        self.cli.rmdir(cgroup_path)
-        if self.cli.is_exists(cgroup_path):
+        self.delete_pid_from_container(pool_name, container_name)
+        shutil.rmtree(cgroup_path)
+        if Path(cgroup_path).exists():
             raise ValueError(f"Контейнер {str(cgroup_path)} не был удален")
 
     # ______________Пул методы______________
     def cgroup_pool_path(self, name: str, is_created: bool = True):
         if self.system_cgroup_path in name:
-            cgroup_path = name
+            cgroup_path = Path(name)
         else:
-            cgroup_path = f"{self.system_cgroup_path}/{name}"
+            cgroup_path = Path(f"{self.system_cgroup_path}/{name}")
         if is_created:
-            if not self.cli.is_exists(cgroup_path):
+            if not cgroup_path.exists():
                 raise FileNotFoundError(f"{cgroup_path} пул не найден")
-            if not self.cli.is_directory(cgroup_path):
+            if not cgroup_path.is_dir():
                 raise ValueError(f"{cgroup_path} не является директорией")
         else:
-            if self.cli.is_exists(str(cgroup_path)):
+            if cgroup_path.exists():
                 raise ValueError(f"{cgroup_path} пул уже создан")
 
-        return cgroup_path
+        return str(cgroup_path)
 
     @property
     def get_cgroup_pool_names(self):
@@ -303,7 +307,7 @@ class PYCGroup:
         vms: list[str] | None = None,
     ):
         cgroup_path = self.cgroup_pool_path(name, False)
-        self.cli.mkdir(cgroup_path)
+        Path(cgroup_path).mkdir()
 
         mem_max_result = self.memory_ctl.set_memory_max(cgroup_path, max_memory)
         if max_memory is not None:
@@ -391,23 +395,18 @@ class PYCGroup:
 
     def delete_cgroup_pool(self, name: str, force: bool = False):
         cgroup_path = self.cgroup_pool_path(name)
-
-        result = self.cli.rmdir(cgroup_path)
-        ru_err = "Устройство или ресурс занято"
-        eng_err = "Device or resource busy"
-        if ru_err in result or eng_err in result:
-            if not force:
-                raise ValueError(
-                    "В пуле присутствуют процессы, используйте force для удаления"
-                )
-
-            pid_list = self.pid_ctl.get_pids_from_pool(cgroup_path)
+        pid_list = self.pid_ctl.get_pids_from_pool(cgroup_path)
+        if pid_list is not None:
             for current_pid in pid_list:
+                if not force:
+                    raise ValueError(
+                        "В пуле присутствуют процессы, используйте force для удаления"
+                    )
                 self.pid_ctl.delete_pid_from_pool(cgroup_path, current_pid)
-
-            result = self.cli.rmdir(cgroup_path)
-        if self.cli.is_exists(cgroup_path):
-            raise ValueError(f"Пул {str(cgroup_path)} не был удален: {result}")
+        result = self.cli.execute(["rmdir", cgroup_path])
+        self.logger.info(f"Результат удаления ресурс пула: {result}")
+        if Path(cgroup_path).exists():
+            raise ValueError(f"Пул {cgroup_path} не был удален")
 
 
 if __name__ == "__main__":

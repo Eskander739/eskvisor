@@ -28,12 +28,12 @@ class HostForward(BaseModel):
     guest_port: int
 
     @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
+    def validate_disk_type_constraints(self):
         """Проверка условно обязательных полей в зависимости от типа"""
-        if values.host_ip is not None:
-            IPv4Address(values.host_ip)
+        if self.host_ip is not None:
+            IPv4Address(self.host_ip)
 
-        return values
+        return self
 
     @property
     def hostfwd_to_string(self):
@@ -51,11 +51,11 @@ class NetQemuCommandline(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
+    def validate_disk_type_constraints(self):
         """Проверка условно обязательных полей в зависимости от типа"""
-        IPv4Address(values.dns)
+        IPv4Address(self.dns)
 
-        return values
+        return self
 
     @property
     def qemu_commandline_string(self):
@@ -143,31 +143,35 @@ class VMCreateRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
+    def validate_disk_type_constraints(self):
         """Проверка условно обязательных полей в зависимости от типа"""
 
-        if values.boot_devices:
-            for current_disk in values.disks:
+        if self.boot_devices:
+            for current_disk in self.disks:
                 if current_disk.path is None:
                     raise ValueError(
                         "Несовместимые параметры, "
-                        f"нельзя использовать boot_devices='{values.boot_devices}' и диски с path=None"
+                        f"нельзя использовать boot_devices='{self.boot_devices}' и диски с path=None"
                     )
 
-        if values.boot_devices is None and values.install_method is None:
+        if self.boot_devices is None and self.install_method is None:
             raise ValueError(
                 "Несовместимые параметры "
                 "нельзя использовать boot_devices=None и диски с install_method=None"
             )
 
-        return values
+        return self
 
     # Валидаторы
     @field_validator("os_variant")
     def set_default_variant(cls, v, values):
         """Установка варианта ОС по умолчанию"""
         if v is None:
-            os_type = values.data.get("os_type") if not isinstance(values, dict) else values.get("os_type")
+            os_type = (
+                values.data.get("os_type")
+                if not isinstance(values, dict)
+                else values.get("os_type")
+            )
             if os_type == OSType.WINDOWS:
                 return "win10"
             elif os_type == OSType.LINUX:
@@ -178,14 +182,22 @@ class VMCreateRequest(BaseModel):
     def set_current_memory(cls, v, values):
         """Установка текущей памяти, если не указана"""
         if v is None:
-            return values.data.get("memory_mb") if not isinstance(values, dict) else values.get("memory_mb")
+            return (
+                values.data.get("memory_mb")
+                if not isinstance(values, dict)
+                else values.get("memory_mb")
+            )
         return v
 
     @field_validator("max_vcpus")
     def set_max_vcpus(cls, v, values):
         """Установка максимального количества vCPUs"""
         if v is None:
-            return values.data.get("vcpus") if not isinstance(values, dict) else values.get("vcpus")
+            return (
+                values.data.get("vcpus")
+                if not isinstance(values, dict)
+                else values.get("vcpus")
+            )
         return v
 
     @field_validator("controllers")
@@ -314,6 +326,7 @@ class VirtualMachine(BaseModel):
     @property
     def max_memory_bytes(self) -> float:
         return int(self.max_memory * 1024)
+
 
 class VirtualMachinesList(BaseModel):
     total: int

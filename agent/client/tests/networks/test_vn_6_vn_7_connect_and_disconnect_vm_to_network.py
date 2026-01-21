@@ -4,7 +4,10 @@ import time
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate, DiskType
+from agent.client.hypervisor.libvirt.models.volume.disk import (
+    DiskCreate,
+    DiskType,
+)
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -43,7 +46,10 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
     vm_template = VMCreateRequest(
         name=random_name,
         autostart_vm=True,
-        disks=[DiskCreate(path=IMG_PATH, disk_type=DiskType.CDROM), DiskCreate()],
+        disks=[
+            DiskCreate(path=IMG_PATH, disk_type=DiskType.CDROM),
+            DiskCreate(),
+        ],
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
         qemu_commandline=NetQemuCommandline(),
     )
@@ -64,28 +70,19 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         network_name = nat_params.name
         created_network_info = network_session.create_network(nat_params)
         assert (
-            created_network_info.message
-            == CommandMessagesEnum.virtual_network_successfully_created.value
+            created_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_created.name
         )
         vm_template.networks[0].source = nat_params.name
         # ____________________________________Создание ВМ_________________________
         create_vm_info = vm_session.create_vm(vm_template)
-        assert (
-            create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
-        )
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         vm_created = True
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         time.sleep(60)
         # _________________________Проверка наличия виртуальной сети у ВМ_________
-        get_net_vm_info = network_session.get_vm_network_info(
-            vm_template.name
-        )
-        assert (
-            get_net_vm_info.message
-            == CommandMessagesEnum.virtual_network_interfaces_found.value
-        )
+        get_net_vm_info = network_session.get_vm_network_info(vm_template.name)
         assert (
             get_net_vm_info.code
             == CommandMessagesEnum.virtual_network_interfaces_found.name
@@ -108,10 +105,6 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
             random_name, network_mac_address
         )
         assert (
-            detach_net_itnerface_info.message
-            == CommandMessagesEnum.virtual_network_interface_detached.value
-        )
-        assert (
             detach_net_itnerface_info.code
             == CommandMessagesEnum.virtual_network_interface_detached.name
         )
@@ -119,13 +112,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         result = results.pop()
         assert network_mac_address not in result
         # _________________________Проверка отсутствия виртуальной сети у ВМ______
-        get_net_vm_info = network_session.get_vm_network_info(
-            vm_template.name
-        )
-        assert (
-            get_net_vm_info.message
-            == CommandMessagesEnum.virtual_network_interfaces_found.value
-        )
+        get_net_vm_info = network_session.get_vm_network_info(vm_template.name)
         assert (
             get_net_vm_info.code
             == CommandMessagesEnum.virtual_network_interfaces_found.name
@@ -139,22 +126,20 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
                 name=random_name, delete_disks=False
             )
             assert (
-                delete_vm_info.message
-                == CommandMessagesEnum.vm_successfully_deleted.value
-            )
-            assert (
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
             assert delete_vm_info.success is True
-            disk_path = vm_template.disks[1].path + "/" + vm_template.disks[1].name + "." + vm_template.disks[
-                1].format.value
+            disk_path = (
+                vm_template.disks[1].path
+                + "/"
+                + vm_template.disks[1].name
+                + "."
+                + vm_template.disks[1].format.value
+            )
             delete_disk = storage_session.delete_disk(disk_path=disk_path)
             assert delete_disk is True
         # ____________________________________Удаление сети(постусловие)__________
         if network_name is not None:
             network_session.delete_network(network_name, True)
             v_network = network_session.get_network_info(network_name)
-            assert (
-                v_network.message == CommandMessagesEnum.virtual_network_not_found.value
-            )
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name

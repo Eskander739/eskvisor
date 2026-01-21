@@ -17,10 +17,10 @@ class DNSForwarder(BaseModel):
     addr: str  # IP адрес DNS сервера
 
     @model_validator(mode="after")
-    def validate_mode(cls, values):
-        IPvAnyNetwork(values.addr)
+    def validate_mode(self):
+        IPvAnyNetwork(self.addr)
 
-        return values
+        return self
 
 
 class DNSHost(BaseModel):
@@ -30,11 +30,10 @@ class DNSHost(BaseModel):
     hostnames: list[str]  # Список имен хостов для этого IP
 
     @model_validator(mode="after")
-    def validate_mode(cls, values):
-        IPvAnyNetwork(values.ip)
+    def validate_mode(self):
+        IPvAnyNetwork(self.ip)
 
-        return values
-
+        return self
 
 
 class DNSTXT(BaseModel):
@@ -63,12 +62,12 @@ class NetworkDHCPRange(BaseModel):
     end: IPvAnyAddress
 
     @model_validator(mode="after")
-    def validate_mode(cls, values):
-        if isinstance(values.start, str):
-            IPvAnyNetwork(values.start)
-        if isinstance(values.end, str):
-            IPvAnyNetwork(values.end)
-        return values
+    def validate_mode(self):
+        if isinstance(self.start, str):
+            IPvAnyNetwork(self.start)
+        if isinstance(self.end, str):
+            IPvAnyNetwork(self.end)
+        return self
 
 
 class NetworkDHCPHost(BaseModel):
@@ -112,13 +111,12 @@ class NetworkDNSHost(BaseModel):
     hostnames: list[str] | None = None
 
     @model_validator(mode="after")
-    def validate_mode(cls, values):
-        IPvAnyNetwork(values.ip)
-        if values.hostnames:
-            for hostname in values.hostnames:
+    def validate_mode(self):
+        if self.hostnames:
+            for hostname in self.hostnames:
                 IPvAnyNetwork(hostname)
 
-        return values
+        return self
 
 
 class NetworkDNSTXT(BaseModel):
@@ -149,8 +147,8 @@ class NetworkParameters(BaseModel):
     uuid: str | None = None
     bridge: NetworkBridge | None = None
     forward: NetworkForward | None = None
-    ipv4: bool | None = True # включен ли этот тип сетей
-    ipv6: bool | None = False # включен ли этот тип сетей
+    ipv4: bool | None = True  # включен ли этот тип сетей
+    ipv6: bool | None = False  # включен ли этот тип сетей
     ipv4_address: IPvAnyNetwork | None = None
     ipv6_address: IPvAnyNetwork | None = None
     dhcp_ranges: list[NetworkDHCPRange] | None = None
@@ -168,30 +166,25 @@ class NetworkParameters(BaseModel):
     autostart: bool = False
 
     @model_validator(mode="after")
-    def validate_mode(cls, values):
-        if isinstance(values.ipv4_address, str):
-            IPvAnyNetwork(values.ipv4_address)
-        if isinstance(values.ipv6_address, str):
-            IPvAnyNetwork(values.ipv6_address)
-        if (
-            values.forward
-            and values.forward.dev
-            and values.bridge
-            and values.bridge.name
-        ):
+    def validate_mode(self):
+        if isinstance(self.ipv4_address, str):
+            IPvAnyNetwork(self.ipv4_address)
+        if isinstance(self.ipv6_address, str):
+            IPvAnyNetwork(self.ipv6_address)
+        if self.forward and self.forward.dev and self.bridge and self.bridge.name:
             raise ValueError(
                 "Для bridge-сети нужно указать либо <bridge name>, либо <forward dev>, но не оба одновременно"
             )
-        if values.forward and values.forward.mode == "bridge":
+        if self.forward and self.forward.mode == "bridge":
             if (
-                values.bridge.delay is not None
-                or values.bridge.stp is not None
-                or values.bridge.zone is not None
+                self.bridge.delay is not None
+                or self.bridge.stp is not None
+                or self.bridge.zone is not None
             ):
                 raise ValueError(
                     "Параметры delay, stp, zone не поддерживаются в режиме forward mode='bridge'"
                 )
-        return values
+        return self
 
     @field_validator("isolated")
     def validate_isolated(cls, v, values):
@@ -242,9 +235,11 @@ class NetworkInfo(BaseModel):
     ipv4_address: str | None = None
     dhcp_ranges: list[NetworkDHCPRange] | None = None
 
+
 class NetworkList(BaseModel):
     total: int
     items: list[NetworkInfo]
+
 
 class VmNetAdapter(BaseModel):
     """

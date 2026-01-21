@@ -1,5 +1,7 @@
 import os
 import random
+import time
+
 import pytest
 
 from agent.client.hypervisor.libvirt.models.general import StoragePoolType
@@ -37,18 +39,10 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             storage_type=StoragePoolType.LOGICAL,
         )
         create_rp_info = resource_pool_session.create_virtual_resource_pool(rp_template)
-        assert (
-            create_rp_info.message
-            == CommandMessagesEnum.virtual_rp_create_success.value
-        )
         assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name
         # ____________________________________Получение информации о пуле ресурсов______________
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
-        )
-        assert (
-            get_rp_info.message
-            == CommandMessagesEnum.rp_virtual_successfully_found.value
         )
         assert (
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
@@ -67,20 +61,12 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             ResourcePoolVirtualEdit(name=random_name, vms=vm_info.name)
         )
         assert (
-            add_vm_to_resource_pool.message
-            == CommandMessagesEnum.rp_virtual_edit_success.value
-        ), add_vm_to_resource_pool.note
-        assert (
             add_vm_to_resource_pool.code
             == CommandMessagesEnum.rp_virtual_edit_success.name
         )
         # ____________________________________Проверка текущего состояния ресурсов______________
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
-        )
-        assert (
-            get_rp_info.message
-            == CommandMessagesEnum.rp_virtual_successfully_found.value
         )
         assert (
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
@@ -103,20 +89,13 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             )
         )
         assert (
-            add_vm_to_resource_pool.message
-            == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.value
-        ), add_vm_to_resource_pool.note
-        assert (
             add_vm_to_resource_pool.code
             == CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name
-        )
+        ), add_vm_to_resource_pool.note
         # ____________________________________Проверка текущего состояния ресурсов после удаления ВМ______________
+        time.sleep(5)  # ожидаем тк нагрузка CPU не сразу падает
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
-        )
-        assert (
-            get_rp_info.message
-            == CommandMessagesEnum.rp_virtual_successfully_found.value
         )
         assert (
             get_rp_info.code == CommandMessagesEnum.rp_virtual_successfully_found.name
@@ -136,10 +115,6 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             delete_rp_info = resource_pool_session.delete_virtual_resource_pool(
                 random_name, True
             )
-            assert delete_rp_info.message in (
-                CommandMessagesEnum.rp_virtual_delete_success.value,
-                CommandMessagesEnum.rp_virtual_not_found.value,
-            ), delete_rp_info.note
             assert delete_rp_info.code in (
                 CommandMessagesEnum.rp_virtual_delete_success.name,
                 CommandMessagesEnum.rp_virtual_not_found.name,

@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 from agent.client.pycgroup.cgroup_cli import CLICGroup
 
@@ -38,7 +39,7 @@ class CPUController:
 
         if cpu_percent is None:
             # Снимаем ограничение
-            self.cli.write_text(cpu_max_file, f"max {period_us}")
+            Path(cpu_max_file).write_text(f"max {period_us}")
         else:
             # Конвертируем проценты в микросекунды
             max_us = int(cpu_percent * period_us / 100)
@@ -49,10 +50,10 @@ class CPUController:
             elif max_us > 2**63 - 1:  # Максимальное для int64
                 raise ValueError(f"Слишком большое значение CPU: {cpu_percent}%")
 
-            self.cli.write_text(cpu_max_file, f"{max_us} {period_us}")
+            Path(cpu_max_file).write_text(f"{max_us} {period_us}")
 
         # Возвращаем установленное значение
-        return self.cli.read_text(cpu_max_file).strip()
+        return Path(cpu_max_file).read_text(encoding="utf-8")
 
     def set_cpu_cores(
         self,
@@ -92,10 +93,10 @@ class CPUController:
         """
         cpu_max_file = f"{cgroup_pool}/cpu.max"
 
-        if not self.cli.is_exists(cpu_max_file):
+        if not Path(cpu_max_file).exists():
             raise FileNotFoundError(f"Файл не найден: {cpu_max_file}")
 
-        value = self.cli.read_text(cpu_max_file).strip()
+        value = Path(cpu_max_file).read_text(encoding="utf-8").strip()
 
         if value.startswith("max"):
             return "max"
@@ -148,7 +149,7 @@ class CPUController:
         """
         cpu_stat_file = f"{cgroup_pool}/cpu.stat"
 
-        if not self.cli.is_exists(cpu_stat_file):
+        if not Path(cpu_stat_file).exists():
             return {}
 
         stats = {}
@@ -176,11 +177,11 @@ class CPUController:
         """
         cpu_max_file = f"{cgroup_pool}/cpu.max"
         value = None
-        if not self.cli.is_exists(cpu_max_file):
+        if not Path(cpu_max_file).exists():
             raise FileNotFoundError(f"Файл не найден: {cpu_max_file}")
 
         try:
-            value = self.cli.read_text(cpu_max_file).strip()
+            value = Path(cpu_max_file).read_text(encoding="utf-8").strip()
 
             if value.startswith("max"):
                 return "max"
@@ -442,7 +443,7 @@ class CPUController:
         weight_int = int(round(weight))
         weight_int = max(self._MIN_WEIGHT, min(weight_int, self._MAX_WEIGHT))
 
-        self.cli.write_text(cpu_weight_file, str(weight_int))
+        Path(cpu_weight_file).write_text(str(weight_int))
         return weight_int
 
     def get_cpu_weight(self, cgroup_pool: str) -> int:
@@ -454,12 +455,12 @@ class CPUController:
         """
         cpu_weight_file = f"{cgroup_pool}/cpu.weight"
 
-        if not self.cli.is_exists(cpu_weight_file):
+        if not Path(cpu_weight_file).exists():
             # Если файла нет, возвращаем значение по умолчанию
             return self._DEFAULT_WEIGHT
 
         try:
-            value = self.cli.read_text(cpu_weight_file).strip()
+            value = Path(cpu_weight_file).read_text(encoding="utf-8").strip()
             return int(value)
         except (ValueError, AttributeError):
             return self._DEFAULT_WEIGHT

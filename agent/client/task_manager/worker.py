@@ -6,13 +6,32 @@ from datetime import datetime
 
 import orjson
 
-from agent.client.hypervisor.libvirt.models.msg import NetworkMessage, SnapshotMessage, RpMessage, VmMessage
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkInfo
-from agent.client.hypervisor.libvirt.models.snapshots import SnapshotCreateRequest, SnapshotCloneRequest
+from agent.client.hypervisor.libvirt.models.msg import (
+    NetworkMessage,
+    SnapshotMessage,
+    RpMessage,
+    VmMessage,
+)
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkParameters,
+    NetworkInfo,
+)
+from agent.client.hypervisor.libvirt.models.snapshots import (
+    SnapshotCreateRequest,
+    SnapshotCloneRequest,
+)
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest, VmUpdateRequest
-from agent.client.hypervisor.libvirt.models.volume.balansir import ResourcePoolVirtualCreate, ResourcePoolVirtualEdit, \
-    ResourcePoolVirtual
-from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate, DiskAttach, DiskDetach, Disk
+from agent.client.hypervisor.libvirt.models.volume.balansir import (
+    ResourcePoolVirtualCreate,
+    ResourcePoolVirtualEdit,
+    ResourcePoolVirtual,
+)
+from agent.client.hypervisor.libvirt.models.volume.disk import (
+    DiskCreate,
+    DiskAttach,
+    DiskDetach,
+    Disk,
+)
 from agent.client.task_manager.models import TaskType, TaskResponse, TaskStatus
 from ctl_queue import RedisTaskManager
 from agent.client.hypervisor.libvirt.managers.vm import VmManager
@@ -23,8 +42,7 @@ from agent.client.hypervisor.libvirt.managers.balansir import Balansir
 from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("Worker")
 
@@ -41,7 +59,6 @@ class TaskHandler:
         self.storage_manager = StorageManager()
         self.balansir = Balansir()
 
-
         self.balansir.connect()
 
         self.storage_manager.conn = self.balansir.conn
@@ -49,10 +66,9 @@ class TaskHandler:
         self.net_manager.conn = self.balansir.conn
         self.vm_manager.conn = self.balansir.conn
 
-
-
-    def handle_task(self, task_type: TaskType, action: str,
-                    params: dict[str, Any]) -> dict[str, Any]:
+    def handle_task(
+        self, task_type: TaskType, action: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Основной метод обработки задачи
 
@@ -84,13 +100,13 @@ class TaskHandler:
                 return {
                     "success": False,
                     "result": "Unknown task type",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
                 }
 
             return {
                 "success": True,
                 "result": result.model_dump_json(),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
         except Exception as e:
@@ -98,7 +114,7 @@ class TaskHandler:
             return {
                 "success": False,
                 "result": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     def _handle_vm_task(self, action: str, params: dict) -> VmMessage:
@@ -128,9 +144,7 @@ class TaskHandler:
             vm_name = params["vm_name"]
             delete_disks = params.get("delete_disks", False)
             delete_nvram = params.get("delete_nvram", True)
-            return self.vm_manager.delete_vm(
-                vm_name, delete_disks, delete_nvram
-            )
+            return self.vm_manager.delete_vm(vm_name, delete_disks, delete_nvram)
 
         elif action == "edit":
             # Редактирование ВМ
@@ -169,7 +183,6 @@ class TaskHandler:
 
         else:
             raise ValueError(f"Unknown VM action: {action}")
-
 
     def _handle_network_task(self, action: str, payload: dict) -> NetworkMessage:
         """Обработка сетевых задач"""
@@ -234,7 +247,9 @@ class TaskHandler:
             vm_name = payload["vm_name"]
             snapshot_name = payload["snapshot_name"]
             remove_children = payload.get("remove_children", False)
-            return self.snapshot_manager.delete_snapshot(vm_name, snapshot_name, remove_children)
+            return self.snapshot_manager.delete_snapshot(
+                vm_name, snapshot_name, remove_children
+            )
 
         elif action == "revert":
             # Восстановление снапшота
@@ -261,7 +276,9 @@ class TaskHandler:
         else:
             raise ValueError(f"Unknown snapshot action: {action}")
 
-    def _handle_storage_task(self, action: str, payload: dict) -> Disk | bool | None | list[Disk]:
+    def _handle_storage_task(
+        self, action: str, payload: dict
+    ) -> Disk | bool | None | list[Disk]:
         """Обработка задач хранилища"""
 
         if action == "create_disk":
@@ -313,12 +330,16 @@ class TaskHandler:
             disk_format = payload["disk_format"]
             target_name = payload["target_name"]
 
-            disk = self.storage_manager.clone_disk(disk_name, path, disk_format, target_name)
+            disk = self.storage_manager.clone_disk(
+                disk_name, path, disk_format, target_name
+            )
             return disk
         else:
             raise ValueError(f"Unknown storage action: {action}")
 
-    def _handle_resource_pool_task(self, action: str, payload: dict) -> RpMessage | list[ResourcePoolVirtual]:
+    def _handle_resource_pool_task(
+        self, action: str, payload: dict
+    ) -> RpMessage | list[ResourcePoolVirtual]:
         """Обработка задач ресурсных пулов"""
 
         if action == "create":
@@ -351,7 +372,7 @@ class TaskHandler:
                 name=name_filter,
                 cpu_core_limit=cpu_filter,
                 ram_limit_bytes=ram_filter,
-                storage_type=storage_filter
+                storage_type=storage_filter,
             )
             return pools
 
@@ -400,7 +421,7 @@ class TaskHandler:
                 "vm_name": vm_name,
                 "duration": duration,
                 "interval": interval,
-                "stats": stats_history
+                "stats": stats_history,
             }
 
         else:
@@ -412,9 +433,13 @@ class TaskWorker(threading.Thread):
     Воркер для обработки задач из очереди
     """
 
-    def __init__(self, name: str,
-                 queue_manager: RedisTaskManager, task_handler: TaskHandler,
-                 stop_event: threading.Event):
+    def __init__(
+        self,
+        name: str,
+        queue_manager: RedisTaskManager,
+        task_handler: TaskHandler,
+        stop_event: threading.Event,
+    ):
         """
         Инициализация воркера
 
@@ -424,7 +449,9 @@ class TaskWorker(threading.Thread):
             task_handler: Обработчик задач
             stop_event: Событие для остановки
         """
-        super().__init__(name=name, daemon=True) # daemon=True означает что поток будет завершен только при завершении главного потока
+        super().__init__(
+            name=name, daemon=True
+        )  # daemon=True означает что поток будет завершен только при завершении главного потока
         self.queue_manager = queue_manager
         self.task_handler = task_handler
         self.stop_event = stop_event
@@ -453,34 +480,48 @@ class TaskWorker(threading.Thread):
                         action=task.action,
                         params=task.params,
                     )
-                    handle_result = orjson.loads(result.get("result")) if isinstance(result.get("result"), str) else result.get("result")
+                    handle_result = (
+                        orjson.loads(result.get("result"))
+                        if isinstance(result.get("result"), str)
+                        else result.get("result")
+                    )
                     if result.get("success", False):
-                        result = TaskResponse(request_id=task.request_id,
-                                              task=task,
-                                              result=handle_result,
-                                              status=TaskStatus.COMPLETED,
-                                              started_at=task.created_at,
-                                              completed_at=datetime.now())
+                        result = TaskResponse(
+                            request_id=task.request_id,
+                            task=task,
+                            result=handle_result,
+                            status=TaskStatus.COMPLETED,
+                            started_at=task.created_at,
+                            completed_at=datetime.now(),
+                        )
                         self.queue_manager.complete_task(result)
                         logger.info(f"Задача {task.request_id} успешно завершена")
                     else:
-                        result = TaskResponse(request_id=task.request_id,
-                                              task=task,
-                                              result=handle_result,
-                                              status=TaskStatus.FAILED,
-                                              started_at=task.created_at,
-                                              completed_at=datetime.now())
+                        result = TaskResponse(
+                            request_id=task.request_id,
+                            task=task,
+                            result=handle_result,
+                            status=TaskStatus.FAILED,
+                            started_at=task.created_at,
+                            completed_at=datetime.now(),
+                        )
                         self.queue_manager.complete_task(result)
-                        logger.error(f"Задача {task.request_id} завершена с ошибкой: {result.get('error')}")
+                        logger.error(
+                            f"Задача {task.request_id} завершена с ошибкой: {result.get('error')}"
+                        )
 
                 except Exception as e:
-                    result = TaskResponse(request_id=task.request_id,
-                                          task=task,
-                                          result={"error": str(e)},
-                                          status=TaskStatus.FAILED,
-                                          started_at=task.created_at,
-                                          completed_at=datetime.now())
-                    logger.error(f"Ошибка обработки задачи {task.request_id}: {e}", exc_info=True)
+                    result = TaskResponse(
+                        request_id=task.request_id,
+                        task=task,
+                        result={"error": str(e)},
+                        status=TaskStatus.FAILED,
+                        started_at=task.created_at,
+                        completed_at=datetime.now(),
+                    )
+                    logger.error(
+                        f"Ошибка обработки задачи {task.request_id}: {e}", exc_info=True
+                    )
                     self.queue_manager.complete_task(result)
 
                 finally:

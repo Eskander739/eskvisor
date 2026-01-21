@@ -35,18 +35,6 @@ class OSType(str, Enum):
     GENERIC = "generic"
 
 
-class DiskFormat(str, Enum):
-    """Форматы дисков"""
-
-    QCOW2 = "qcow2"
-    RAW = "raw"
-    VMDK = "vmdk"
-    VDI = "vdi"
-    VHD = "vhd"
-    VHDX = "vhdx"
-    ISO = "iso"  # Для образов
-
-
 class NetworkType(str, Enum):
     """Типы сетевых интерфейсов"""
 

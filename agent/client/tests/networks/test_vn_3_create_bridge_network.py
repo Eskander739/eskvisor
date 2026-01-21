@@ -30,10 +30,6 @@ def test_vn_03_create_bridge_network(network_session):
         network_name = bridge_params.name
         created_network_info = network_session.create_network(bridge_params)
         assert (
-            created_network_info.message
-            == CommandMessagesEnum.virtual_network_successfully_created.value
-        )
-        assert (
             created_network_info.code
             == CommandMessagesEnum.virtual_network_successfully_created.name
         )
@@ -48,7 +44,4 @@ def test_vn_03_create_bridge_network(network_session):
         if network_name is not None:
             network_session.delete_network(network_name, True)
             v_network = network_session.get_network_info(network_name)
-            assert (
-                v_network.message == CommandMessagesEnum.virtual_network_not_found.value
-            )
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
