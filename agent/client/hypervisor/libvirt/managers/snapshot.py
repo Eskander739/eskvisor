@@ -1125,7 +1125,10 @@ class SnapshotManager(LibvirtClient):
             # Получаем все снапшоты ВМ
             snapshots_msg = self.snapshots_by_vm_name(vm_name)
 
-            if snapshots_msg.code == CommandMessagesEnum.snapshot_list_error.networks_list_not_found:
+            if (
+                snapshots_msg.code
+                == CommandMessagesEnum.snapshot_list_error.networks_list_not_found
+            ):
                 return snapshots_msg
 
             snapshots_info = snapshots_msg.snapshot_info.snapshots

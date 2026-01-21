@@ -48,7 +48,9 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
     try:
         # ____________________________________Создание ВМ_________________________
         create_vm_info = vm_session.create_vm(vm_template)
-        assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name, create_vm_info.note
+        assert (
+            create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
+        ), create_vm_info.note
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
         time.sleep(60)

@@ -367,7 +367,11 @@ class VmManager(LibvirtClient):
             if disk.path or disk.name and disk.format:
                 if disk.path is None:
                     disk.path = self.storage_manager.system_disk_path
-                disk_path = Path(disk.path) if disk.disk_type.value == DiskType.CDROM.value else Path(f"{disk.path}/{disk.name}.{disk.format.value}")
+                disk_path = (
+                    Path(disk.path)
+                    if disk.disk_type.value == DiskType.CDROM.value
+                    else Path(f"{disk.path}/{disk.name}.{disk.format.value}")
+                )
                 if disk_path.exists():
                     if disk.disk_type.value == DiskType.CDROM.value:
                         disk_params.append(f"--cdrom {disk.path}")

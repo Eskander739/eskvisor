@@ -255,7 +255,9 @@ def create_resource_pool_session():
             storage_type=StoragePoolType.LOGICAL,
         )
         create_rp_info = rp_manager.create_virtual_resource_pool(rp_template)
-        assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name, create_rp_info.note
+        assert (
+            create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name
+        ), create_rp_info.note
 
         yield random_name
 

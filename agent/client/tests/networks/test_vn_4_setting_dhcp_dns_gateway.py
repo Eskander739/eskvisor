@@ -98,9 +98,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
 
         # _________________________Проверка созданных настроек сети_______________
         get_network_info = network_session.get_network_info(network_name)
-        assert (
-            get_network_info.code == CommandMessagesEnum.virtual_network_found.name
-        )
+        assert get_network_info.code == CommandMessagesEnum.virtual_network_found.name
         network = get_network_info.net_info
 
         # Проверяем DHCP диапазон

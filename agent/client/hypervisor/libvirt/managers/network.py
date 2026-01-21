@@ -84,8 +84,7 @@ class NetworkManager(LibvirtClient):
 
             created_network = self.get_network_info(params.name)
             assert (
-                created_network.code
-                == CommandMessagesEnum.virtual_network_found.name
+                created_network.code == CommandMessagesEnum.virtual_network_found.name
             )
             return NetworkMessage(
                 code=CommandMessagesEnum.virtual_network_successfully_created.name,

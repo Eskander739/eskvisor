@@ -68,7 +68,9 @@ def test_sn_03_sn_08_restore_vm_from_snapshot(
         # ____________________________________Изменение ресурсов ВМ_______________
         vm_session.start_vm(vm_name)
         edit_vm_info = vm_session.edit_vm(vm_name, VmUpdateRequest(vcpus=3))
-        assert edit_vm_info.code == CommandMessagesEnum.vm_edit_success.name, edit_vm_info.note
+        assert (
+            edit_vm_info.code == CommandMessagesEnum.vm_edit_success.name
+        ), edit_vm_info.note
         assert wait_while_not(lambda: get_state(vm_name) == VMState.RUNNING.value)
         vm_get_info = vm_session.get_vm_by_name(vm_name)
         assert vm_get_info.code == CommandMessagesEnum.vm_successfully_found.name

@@ -41,7 +41,9 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
             ram_reservation_gb=0.5,
         )
         create_rp_info = resource_pool_session.create_virtual_resource_pool(rp_template)
-        assert create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name, create_rp_info.note
+        assert (
+            create_rp_info.code == CommandMessagesEnum.virtual_rp_create_success.name
+        ), create_rp_info.note
         # ____________________________________Получение информации о пуле ресурсов______________
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(
             random_name
