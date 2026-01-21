@@ -7,7 +7,7 @@ import orjson
 from agent.client.cli import CLIControl
 from agent.client.constants import DANGEROUS_PATTERNS
 from agent.client.logger_config import DefaultLogger
-from agent.client.models.general import NFSStorages, NFSStorageModel, LoadNFSStorages
+from agent.client.models.general import NFSStorages, NFSStorageModel, LoadNFSStorages, NFSStorageForMount
 from agent.client.stg.nfs import NFSStorageManager
 
 
@@ -286,6 +286,6 @@ class HAController:
 if __name__ == "__main__":
     cli = HAController()
     # print(cli.vm_configs())
-    print(cli.vm_configs_from_ha_storages)
+    print(cli.load_and_mount_ha_nfs_storages(LoadNFSStorages(nfs_storages_for_mount=[NFSStorageForMount(source="127.0.0.1:/share_622825", nfs_name="ha_cluster")])))
     # print(cli.search_emulators())
     # print(cli.default_emulator)

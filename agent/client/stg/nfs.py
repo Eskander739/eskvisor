@@ -103,6 +103,7 @@ class NFSStorageManager:
 
 if __name__ == "__main__":
     nfs_stg = NFSStorageManager()
+    # from agent.client.models.general import LoadNFSStorages, NFSStorageForMount
     # nfs_load_model = NFSStorageForMount(
     #     source="127.0.0.1:/share_622825",
     #     nfs_name="cluster_HA_QC1")
@@ -111,7 +112,7 @@ if __name__ == "__main__":
     # storage_model.nfs_storages_for_mount.append(nfs_load_model)
     # print(storage_model)
     # print(nfs_stg.load_and_mount_ha_nfs_storages(storage_model))
-
+    #
     # отмонтирование ha хранилищ
     # ha_model_umount = NFSStorages(nfs_storages=[])
     # ha_model_umount.nfs_storages.append(NFSStorageModel(source="127.0.0.1:/share_622825", mount="/mnt/cluster_HA_QC1"))

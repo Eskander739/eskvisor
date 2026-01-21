@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 
 import libvirt
 
+from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     Disk,
@@ -46,6 +47,7 @@ class SnapshotManager(LibvirtClient):
     def __init__(self):
         super().__init__()
         self.logger = DefaultLogger("SnapshotManager")
+        self.cli = CLIControl()
 
     def snapshots_by_vm_name(
         self, vm_name: str
@@ -897,7 +899,17 @@ class SnapshotManager(LibvirtClient):
 
                         # Копируем диск
                         try:
-                            shutil.copy2(old_path, new_path)
+                            result = self.cli.copy_file(old_path, new_path)
+                            if result.returncode != 0:
+                                self.logger.error(
+                                    f"Ошибка копирования диска {old_path}: {result.stderr}"
+                                )
+                                return SnapshotMessage(
+                                    success=False,
+                                    message=CommandMessagesEnum.snapshot_clone_error.value,
+                                    code=CommandMessagesEnum.snapshot_clone_error.name,
+                                    note=result.stderr,
+                                )
                             source_elem.set("file", new_path)
                         except Exception as e:
                             self.logger.error(

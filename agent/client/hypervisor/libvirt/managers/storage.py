@@ -5,6 +5,7 @@ import shutil
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from pathlib import Path
 from subprocess import TimeoutExpired
 
 import libvirt
@@ -52,20 +53,16 @@ class StorageManager(LibvirtClient):
         self, disk_create: DiskCreate
     ) -> Disk | StorageMessage:
         ha_nfs_storages = self.ha_controller.loaded_ha_nfs_storages.nfs_storages
-        if ha_nfs_storages:
+        if ha_nfs_storages and disk_create.path is None:
             ha_nfs_storage = ha_nfs_storages.pop()
             disk_create.path = ha_nfs_storage.mount
         elif disk_create.path is None:
             disk_create.path = self.system_disk_path
         try:
-            self.logger.info(
-                f"Создание диска: {disk_create.name}, размер: {disk_create.size_gb}GB"
-            )
             if disk_create.resource_pool:
-                create_resource_pool_disk_result = self._create_file_disk(disk_create)
+                create_resource_pool_disk_result = self._create_lv_in_resource_pool(disk_create)
                 return create_resource_pool_disk_result
             else:
-                self.logger.info("Создание файлового диска")
                 create_file_disk_result = self._create_file_disk(disk_create)
                 return create_file_disk_result
 
@@ -96,7 +93,7 @@ class StorageManager(LibvirtClient):
 
         return result
 
-    def _create_lv_in_resource_pool(
+    def _create_lv_in_resource_pool( # TODO: Разобраться почему нету
         self, disk_create: DiskCreate
     ) -> StorageMessage:
         current_lv = self.logic_volume_manager.get_volume_by_name(disk_create.name, self.system_volume_group_name)
@@ -219,14 +216,14 @@ class StorageManager(LibvirtClient):
     ) -> StorageMessage:
         try:
             disk_info = None
-            disk_path = f"{disk_create.path}/{disk_create.name}.{disk_create.format.value}"
+            disk_path = str(Path(f"{disk_create.path}/{disk_create.name}.{disk_create.format.value}"))
             self.logger.info(
                 f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB, ресурс пул: '{disk_create.resource_pool}'"
             )
             if disk_create.resource_pool is not None:
                 return self._create_file_disk_in_resource_pool(disk_create)
             else:
-                if self.cli.is_exists(disk_path):
+                if disk_create.disk_type != DiskType.CDROM and self.cli.is_exists(disk_path):
                     self.logger.info(f"Файл уже существует: {disk_path}")
                     return StorageMessage(
                         message=CommandMessagesEnum.disk_already_created.value,
@@ -355,8 +352,8 @@ class StorageManager(LibvirtClient):
         # Отмонтировать
         umount_cmd_args = ["umount", disk_path]
         result = self.cli.execute(umount_cmd_args, return_proc=True)
-        self.logger.info(f"Результат отмонтирования точки: {result}")
         if result.returncode != 0:
+            self.logger.info(f"Результат отмонтирования точки: {result.stderr}")
             return False
 
         # Удалить lv
@@ -524,7 +521,7 @@ class StorageManager(LibvirtClient):
                 if result.returncode != 0:
                     raise Exception(f"Ошибка qemu-img: {result.stderr}")
             else:
-                shutil.copy2(source_path, target_path)
+                self.cli.copy_file(source_path, target_path)
 
             return self.get_disk_info(disk_name=target_name, path=path, disk_format=disk_format)
 
@@ -1019,7 +1016,11 @@ class StorageManager(LibvirtClient):
         disk_format: DiskFormat = DiskFormat.QCOW2,
         is_pool: bool = False,
     ) -> Disk | StorageMessage:
-        if path is None:
+        ha_nfs_storages = self.ha_controller.loaded_ha_nfs_storages.nfs_storages
+        if ha_nfs_storages and path is None:
+            ha_nfs_storage = ha_nfs_storages.pop()
+            path = ha_nfs_storage.mount
+        elif path is None:
             path = self.system_disk_path
         try:
             disk_path = path + "/" + disk_name + "." + disk_format.value

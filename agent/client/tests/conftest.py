@@ -109,7 +109,8 @@ def delete_all_network_info():
     cli = CLIControl()
     yield
     with NetworkManager() as nm:
-        for network in nm.list_all_networks():
+        print("nm.list_all_networks(): ", nm.list_all_networks())
+        for network in nm.list_all_networks().net_info.items:
             if network.name != "default":
                 nm.delete_network(network.name, force=True)
 
@@ -119,7 +120,6 @@ def delete_all_network_info():
     if test_bridge in result:
         cmd_args_delete_bridge = ["ip", "link", "delete", "virbr-test-ntt"]
         cli.execute(cmd_args_delete_bridge)
-
 
 
 @pytest.fixture(scope="session")

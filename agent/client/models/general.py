@@ -12,6 +12,10 @@ class NFSStorageModel(BaseModel):
         source = values.source.split(":")[0]
         IPvAnyNetwork(source)
         Path(values.mount)
+        if values.mount.endswith("/"):
+            values.mount = values.mount[:-1]
+
+        return values
 
 
 class NFSStorageForMount(BaseModel):
@@ -20,10 +24,11 @@ class NFSStorageForMount(BaseModel):
 
     @model_validator(mode="after")
     def validate_mode(cls, values):
-        print(values)
         ip, source = values.source.split(":")
         IPvAnyNetwork(ip)
         Path(source)
+
+        return values
 
 class NFSStorages(BaseModel):
     nfs_storages: list[NFSStorageModel]

@@ -18,8 +18,9 @@ class DNSForwarder(BaseModel):
 
     @model_validator(mode="after")
     def validate_mode(cls, values):
-        IPvAnyNetwork(values.domain)
         IPvAnyNetwork(values.addr)
+
+        return values
 
 
 class DNSHost(BaseModel):
@@ -31,6 +32,8 @@ class DNSHost(BaseModel):
     @model_validator(mode="after")
     def validate_mode(cls, values):
         IPvAnyNetwork(values.ip)
+
+        return values
 
 
 
@@ -56,8 +59,8 @@ class NetworkTypeInfo(BaseModel):
 
 # Модели Pydantic для валидации параметров
 class NetworkDHCPRange(BaseModel):
-    start: IPvAnyAddress | str
-    end: IPvAnyAddress | str
+    start: IPvAnyAddress
+    end: IPvAnyAddress
 
     @model_validator(mode="after")
     def validate_mode(cls, values):
@@ -115,6 +118,8 @@ class NetworkDNSHost(BaseModel):
             for hostname in values.hostnames:
                 IPvAnyNetwork(hostname)
 
+        return values
+
 
 class NetworkDNSTXT(BaseModel):
     name: str
@@ -146,7 +151,7 @@ class NetworkParameters(BaseModel):
     forward: NetworkForward | None = None
     ipv4: bool | None = True # включен ли этот тип сетей
     ipv6: bool | None = False # включен ли этот тип сетей
-    ipv4_address: IPvAnyNetwork | str | None = None
+    ipv4_address: IPvAnyNetwork | None = None
     ipv6_address: IPvAnyNetwork | None = None
     dhcp_ranges: list[NetworkDHCPRange] | None = None
     dhcp_hosts: list[NetworkDHCPHost] | None = None
@@ -237,6 +242,9 @@ class NetworkInfo(BaseModel):
     ipv4_address: str | None = None
     dhcp_ranges: list[NetworkDHCPRange] | None = None
 
+class NetworkList(BaseModel):
+    total: int
+    items: list[NetworkInfo]
 
 class VmNetAdapter(BaseModel):
     """

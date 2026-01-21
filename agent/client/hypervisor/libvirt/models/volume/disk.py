@@ -311,7 +311,7 @@ class DiskCreate(BaseModel):
     """
 
     name: str = Field(
-        f"disk-{str(random.randint(100000, 999999))}", min_length=1, max_length=255
+        default_factory=lambda: f"disk-{random.randint(100000, 999999)}", min_length=1, max_length=255
     )
     path: str | None = None
     size_gb: float = Field(1, gt=0, le=65536, description="Размер в GB")
@@ -320,7 +320,7 @@ class DiskCreate(BaseModel):
     sparse: bool = Field(
         default=True, description="Создать разреженный диск"
     )  # Если False = занимает сразу все указанное место
-    disk_type: DiskType | str = DiskType.EXTERNAL_DISK
+    disk_type: DiskType = DiskType.EXTERNAL_DISK
     bus_type: BusType | None = Field(None, description="Тип шины подключения")
     cache: str = "none"
     readonly: bool = False
@@ -329,13 +329,6 @@ class DiskCreate(BaseModel):
     resource_pool: str | None = None
     # RAW с sparse=True - должен создавать разреженный файл (sparse file)
     # RAW с sparse=False - должен создавать полный файл, заполненный нулями
-
-    # @model_validator(mode="after")
-    # def validate_query(self) -> Self:
-    #     """Валидация запроса"""
-    #
-    #     return self
-
 
     @computed_field
     @property
@@ -363,7 +356,7 @@ class DiskAttach(BaseModel):
     disk_format: DiskFormat
     target_dev: str = Field(default="vdb")
     bus_type: BusType = Field(default=BusType.VIRTIO)
-    cache_mode: CacheMode | str = Field(default=CacheMode.WRITEBACK)
+    cache_mode: CacheMode = Field(default=CacheMode.WRITEBACK)
 
 
 class DiskDetach(BaseModel):

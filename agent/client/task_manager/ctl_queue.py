@@ -3,36 +3,7 @@ import os
 
 import redis
 
-from agent.client.task_manager.models import TaskStatus, TaskInfo
-
-DELETE_VM = {
-  "type": "vm",
-  "action": "delete_vm",
-  "params": {
-    "vm_name": "old-test-vm",
-    "force_delete": False,
-    "remove_disks": True
-  }
-}
-ADD_VM = {
-  "type": "vm",
-  "action": "create_vm",
-  "params": {
-    "vm_name": "ubuntu-server-01",
-    "autostart_vm": True,
-    "cpu_cores": 2,
-    "memory_mb": 2048,
-    "disk_size_gb": 20
-  }
-}
-START_VM  ={
-  "type": "vm",
-  "action": "start_vm",
-  "params": {
-    "vm_name": "stopped-vm-05",
-    "headless": True
-  }
-}
+from agent.client.task_manager.models import TaskStatus, TaskInfo, Task, TaskResponse
 
 
 class RedisTaskManager:
@@ -103,6 +74,15 @@ class RedisTaskManager:
         tasks = redis_connect.lrange(queue_name, start, end)
         return [current_task for current_task in tasks]
 
+    def get_process_tasks(self, processing_queue_name: str | None = None, start: int = 0, end: int = -1) -> list[str]:
+        """
+        Возвращает список всех задач в работе в Redis
+        """
+        queue_name = self.processing_queue_name if processing_queue_name is None else processing_queue_name
+        redis_connect = self.redis_session(self.db_for_requests)
+        tasks = redis_connect.lrange(queue_name, start, end)
+        return [current_task for current_task in tasks]
+
 
     def get_task_info(self, request_id: str) -> TaskInfo | None:
         status = self.get_task_status(request_id)
@@ -142,19 +122,19 @@ class RedisTaskManager:
         self.redis_session(self.db_for_requests).hset("error", request_id, error)
 
     def add_task(
-            self, params: dict, queue_name: str | None = None
+            self, task: Task, queue_name: str | None = None
     ):
         """
         Добавляет задачу в очередь
         """
         queue_name = self.queue_name if queue_name is None else queue_name
         redis_connect = self.redis_session(self.db_for_requests)
-        self.set_status(params.get("request_id"), TaskStatus.COMPLETED)
-        self.set_result(params.get("request_id"), "null")
-        self.set_error(params.get("request_id"), False)
-        return redis_connect.lpush(queue_name, json.dumps(params))
+        self.set_status(task.request_id, TaskStatus.COMPLETED)
+        self.set_result(task.request_id, "null")
+        self.set_error(task.request_id, False)
+        return redis_connect.lpush(queue_name, task.model_dump_json())
 
-    def execute_task(self, queue_name: str | None = None, processing_queue_name: str | None = None) -> dict | None:
+    def execute_task(self, queue_name: str | None = None, processing_queue_name: str | None = None) -> Task | None:
         """
         Выполнить задачу
         """
@@ -165,22 +145,27 @@ class RedisTaskManager:
         if cached_data:
             data = json.loads(json.loads(json.dumps(cached_data)))
             redis_connect.hset("status", data.get("request_id"), TaskStatus.PROCESSING)
-            return json.loads(json.loads(json.dumps(cached_data)))
+            return Task(**json.loads(json.loads(json.dumps(cached_data))))
 
         return None
 
-    def complete_task(self, request_id: str, result: str | None, error: bool, processing_queue_name: str | None = None) -> int:
+    def complete_task(self, result: TaskResponse, processing_queue_name: str | None = None) -> int:
         """
         Завершить выполнение задачи
         """
-
+        if isinstance(result, dict):
+            result = json.dumps(result)
+        elif result is None:
+            result = "null"
         processing_queue_name = self.processing_queue_name if processing_queue_name is None else processing_queue_name
         redis_connect = self.redis_session(self.db_for_requests)
-        self.set_status(request_id, TaskStatus.COMPLETED)
-        self.set_result(request_id, result)
-        self.set_error(request_id, error)
+        if result.status == TaskStatus.COMPLETED:
+            self.set_status(result.request_id, TaskStatus.COMPLETED)
+        else:
+            self.set_status(result.request_id, TaskStatus.FAILED)
+        self.set_result(result.request_id, result.model_dump_json())
         # TODO: Релализовать удаление статуса после COMPLETED когда информация будет записнаа в БД
-        return redis_connect.lrem(processing_queue_name, 1, request_id)
+        return redis_connect.lrem(processing_queue_name, 1, result.request_id)
 
     def delete_task(self, request_id: str, queue_name: str | None = None) -> int:
         """
@@ -207,6 +192,10 @@ if __name__ == "__main__":
     # jwt_manager.add_task(ADD_VM)
     # jwt_manager.add_task(START_VM)
     # jwt_manager.add_task(DELETE_VM)
+    # rtm.delete_all_tasks("task_processing_queue")
+    # rtm.delete_all_tasks()
+    for task in rtm.get_process_tasks():
+        print("ЗАДАЧА В ПРОЦЕССЕ: ", task)
     for task in rtm.get_all_tasks():
-        print(task)
-    # jwt_manager.execute_task()
+        print("ЗАДАЧА В ОЖИДАНИИ: ", task)
+        # rtm.execute_task()

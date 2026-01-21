@@ -61,6 +61,15 @@ class CLIControl:
         result = self.execute(cmd_args)
         return result
 
+    def copy_file(self, current_path: str, target_path: str):
+        if not self.is_exists(current_path):
+            return None
+        cmd_args = ["cp", current_path, target_path]
+        result = self.execute(cmd_args, return_proc=True)
+        if result.returncode != 0:
+            self.logger.info(f"Ошибка копирования файла: '{result}'")
+        return result
+
     def create_file(self, path: str, info: str | None = None):
         if info is None:
             cmd_args = ["touch", path]

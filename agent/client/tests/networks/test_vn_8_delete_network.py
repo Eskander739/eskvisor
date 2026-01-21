@@ -72,7 +72,7 @@ def test_vn_08_delete_network(network_session, network_model):
         v_network = network_session.get_network_info(network_name)
         assert v_network.message == CommandMessagesEnum.virtual_network_not_found.value
         assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
-        network_list = network_session.list_all_networks()
+        network_list = network_session.list_all_networks().net_info.items
         for current_network in network_list:
             assert current_network.name != network_name
         network_deleted = True

@@ -20,7 +20,7 @@ from agent.client.hypervisor.libvirt.models.network import (
     NetworkInterfacesList,
     NetworkParameters,
     NetworkTypeInfo,
-    VmInfo,
+    VmInfo, NetworkList,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -694,7 +694,7 @@ class NetworkManager(LibvirtClient):
             )
             return False
 
-    def start_network(self, network_name: str) -> bool:
+    def start_network(self, network_name: str) -> NetworkMessage:
         """Запуск сети"""
         try:
             current_network = self.conn.networkLookupByName(network_name)
@@ -705,18 +705,30 @@ class NetworkManager(LibvirtClient):
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) запущена"
                 )
-                return True
+                return NetworkMessage(
+                    message=CommandMessagesEnum.virtual_network_successfully_started.value,
+                    code=CommandMessagesEnum.virtual_network_successfully_started.name,
+                    success=True,
+                )
             else:
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) уже запущена"
                 )
-                return True
+                return NetworkMessage(
+                    message=CommandMessagesEnum.virtual_network_already_started.value,
+                    code=CommandMessagesEnum.virtual_network_already_started.name,
+                    success=True,
+                )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка запуска сети '{network_name}': {e}")
-            return False
+            return NetworkMessage(
+                message=CommandMessagesEnum.virtual_network_start_error.value,
+                code=CommandMessagesEnum.virtual_network_start_error.name,
+                success=False,
+            )
 
-    def stop_network(self, network_name: str) -> bool:
+    def stop_network(self, network_name: str) -> NetworkMessage:
         """Остановка сети"""
         try:
             network = self.conn.networkLookupByName(network_name)
@@ -727,18 +739,30 @@ class NetworkManager(LibvirtClient):
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) остановлена"
                 )
-                return True
+                return NetworkMessage(
+                    message=CommandMessagesEnum.virtual_network_successfully_stopped.value,
+                    code=CommandMessagesEnum.virtual_network_successfully_stopped.name,
+                    success=True,
+                )
             else:
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) уже остановлена"
                 )
-                return True
+                return NetworkMessage(
+                    message=CommandMessagesEnum.virtual_network_already_stopped.value,
+                    code=CommandMessagesEnum.virtual_network_already_stopped.name,
+                    success=True,
+                )
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка остановки сети '{network_name}': {e}")
-            return False
+            return NetworkMessage(
+                message=CommandMessagesEnum.virtual_network_stopping_error.value,
+                code=CommandMessagesEnum.virtual_network_stopping_error.name,
+                success=False,
+            )
 
-    def list_all_networks(self) -> list[NetworkInfo]:
+    def list_all_networks(self) -> NetworkMessage:
         """Получение полного списка всех сетей с информацией"""
         networks_info = []
         try:
@@ -780,11 +804,17 @@ class NetworkManager(LibvirtClient):
                         f"Ошибка получения информации о сети {network.name()}: {e}"
                     )
 
-            return networks_info
+            return NetworkMessage(success=True,
+                                  message=CommandMessagesEnum.networks_list_found.value,
+                                  code=CommandMessagesEnum.networks_list_found.name,
+                                  net_info=NetworkList(items=networks_info, total=len(networks_info)))
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения полного списка сетей: {e}")
-            return []
+            return NetworkMessage(success=False,
+                                  message=CommandMessagesEnum.networks_list_not_found.value,
+                                  code=CommandMessagesEnum.networks_list_not_found.name,
+                                  net_info=NetworkList(items=[], total=0))
 
     @staticmethod
     def _determine_network_type(params: NetworkParameters) -> NetworkTypeInfo:
@@ -909,17 +939,17 @@ class NetworkManager(LibvirtClient):
 
     def get_network_summary(self) -> dict:
         """Получение сводки по всем сетям"""
-        networks = self.list_all_networks()
+        networks = self.list_all_networks().net_info
 
         summary = {
-            "total": len(networks),
+            "total": networks.total,
             "active": 0,
             "inactive": 0,
             "by_type": {},
             "by_autostart": {"enabled": 0, "disabled": 0},
         }
 
-        for network in networks:
+        for network in networks.items:
             # Подсчет активных/неактивных
             if network.active:
                 summary["active"] += 1
@@ -982,7 +1012,8 @@ class NetworkManager(LibvirtClient):
             # Запускаем сеть, если требуется
             if start_now:
                 start_success = self.start_network(network_name)
-                if not start_success:
+                if start_success.message not in (CommandMessagesEnum.virtual_network_already_started,
+                                             CommandMessagesEnum.virtual_network_successfully_started):
                     self.logger.error(f"Не удалось запустить сеть '{network_name}'")
                     # Автозапуск все равно настроен, но возвращаем False
                     return False
@@ -1361,7 +1392,7 @@ if __name__ == "__main__":
             print(f"  - {net_type}: {count}")
 
         print("\n=== Подробная информация о сетях ===")
-        for network in nm.list_all_networks():
+        for network in nm.list_all_networks().net_info.items:
             print(f"\nСеть: {network.name}")
             print(f"  Тип: {network.network_type.type}")
             print(f"  Описание: {network.network_type.description}")

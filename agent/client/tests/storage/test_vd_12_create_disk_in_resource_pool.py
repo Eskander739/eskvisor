@@ -41,8 +41,9 @@ def test_vd_12_create_disk_in_resource_pool(
         attach_disk = storage_session.create_disk(attach_disk_create)
         assert attach_disk.message == CommandMessagesEnum.disk_successfully_created.value
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
-        print("attach_disk_create.path: ", attach_disk_create.path)
         vm_disk = storage_session.get_disk_info(disk_name=attach_disk_create.name, path=attach_disk_create.path, disk_format=attach_disk_create.format, is_pool=True)
+        assert vm_disk.message == CommandMessagesEnum.disk_founded.value, vm_disk.note
+        assert vm_disk.code == CommandMessagesEnum.disk_founded.name
         logic_volume_disk_current = storage_session.logic_volume_manager.get_volume_by_name(attach_disk_create.name, SYSTEM_VOLUME_GROUP_NAME)
         vm_disk = vm_disk.disk_info
         assert vm_disk.status.value == DiskStatus.DETACHED.value

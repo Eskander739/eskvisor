@@ -35,19 +35,6 @@ class OSType(str, Enum):
     GENERIC = "generic"
 
 
-class DiskType(str, Enum):
-    """Типы дисков"""
-
-    FILE = "file"
-    BLOCK = "block"
-    DIR = "dir"
-    NETWORK = "network"
-    VOLUME = "volume"
-    DISK = "disk"  # Основной диск для ОС
-    CDROM = "cdrom"  # CD/DVD привод с ISO
-    FLOPPY = "floppy"  # Дискета
-
-
 class DiskFormat(str, Enum):
     """Форматы дисков"""
 

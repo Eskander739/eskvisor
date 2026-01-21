@@ -5,7 +5,7 @@ import time
 from ipaddress import IPv4Address
 
 import pytest
-from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
+from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate, DiskType
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -45,7 +45,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
     vm_template = VMCreateRequest(
         name=random_name,
         autostart_vm=True,
-        disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
+        disks=[DiskCreate(path=IMG_PATH, disk_type=DiskType.CDROM), DiskCreate()],
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
         qemu_commandline=NetQemuCommandline(),
     )
@@ -202,7 +202,8 @@ def test_vn_04_setting_dhcp_dns_gateway(
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
             assert delete_vm_info.success is True
-            delete_disk = storage_session.delete_disk(disk_path=vm_template.disks[1].path)
+            disk_path = vm_template.disks[1].path + "/" + vm_template.disks[1].name + "." + vm_template.disks[1].format.value
+            delete_disk = storage_session.delete_disk(disk_path=disk_path)
             assert delete_disk is True
 
         # ____________________________________Удаление сети(постусловие)__________

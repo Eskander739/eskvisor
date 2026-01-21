@@ -6,7 +6,7 @@ from agent.client.hypervisor.libvirt.models.enum import ControllerType
 class VMController(BaseModel):
     """Модель контроллера ВМ"""
 
-    controller_type: ControllerType | str
+    controller_type: ControllerType
     index: int = 0
     model: str | None = None
     ports: int | None = None

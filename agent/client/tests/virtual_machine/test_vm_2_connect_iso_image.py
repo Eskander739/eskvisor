@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
+from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate, DiskType
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -38,7 +38,7 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
     vm_template = VMCreateRequest(
         name=random_name,
         autostart_vm=True,
-        disks=[DiskCreate(path=IMG_PATH), DiskCreate()],
+        disks=[DiskCreate(path=IMG_PATH, disk_type=DiskType.CDROM), DiskCreate(name=f"disk-{str(random.randint(100000, 999999))}")],
         networks=[VmNetAdapter(network_type=NetworkType.USER)],
         qemu_commandline=NetQemuCommandline(),
     )
@@ -47,7 +47,7 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
         create_vm_info = vm_session.create_vm(vm_template)
         assert (
             create_vm_info.message == CommandMessagesEnum.vm_successfully_created.value
-        )
+        ), create_vm_info.note
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
@@ -76,6 +76,7 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
             assert (
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
+            disk_path = vm_template.disks[1].path + "/" + vm_template.disks[1].name + "." + vm_template.disks[1].format.value
             assert delete_vm_info.success is True
-            delete_disk = storage_session.delete_disk(disk_path=vm_template.disks[1].path)
+            delete_disk = storage_session.delete_disk(disk_path=disk_path)
             assert delete_disk is True

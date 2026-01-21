@@ -23,10 +23,9 @@ from agent.client.hypervisor.libvirt.managers.storage import StorageManager
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     BusType,
     Disk,
-    DiskAttach,
+    DiskAttach, DiskType,
 )
 from agent.client.hypervisor.libvirt.models.enum import (
-    DiskType,
     GraphicsType,
     NetworkType,
 )
@@ -40,7 +39,7 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VirtualMachine,
     VMCreateRequest,
     VmUpdateRequest,
-    HostForward,
+    HostForward, VirtualMachinesList,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -389,7 +388,6 @@ class VmManager(LibvirtClient):
                     if disk.disk_type.value == DiskType.CDROM.value:
                         disk_params.append(f"--cdrom {disk.path}")
                     else:
-                        print("МЫ ДОЛЖНЫ БЫТЬ ТУТ НАХУЙ")
                         disk_params.append(f"path={str(disk_path)}")
                         disk_params.append(f"format={disk.format.value}")
                 else:
@@ -530,7 +528,7 @@ class VmManager(LibvirtClient):
                 config.qemu_commandline.hostfwd.host_ip,
                 config.qemu_commandline.hostfwd.host_port,
             ) in all_ip_and_port:
-                config.qemu_commandline.host_port = self.generate_new_net_id
+                config.qemu_commandline.net_id = self.generate_new_net_id
 
             cmd_parts.append(config.qemu_commandline.qemu_commandline_string)
 
@@ -1613,7 +1611,7 @@ class VmManager(LibvirtClient):
 
     # _______________________________________________Редактирование ВМ________
 
-    def list_vms(self, only_active: bool = False) -> list[VirtualMachine]:
+    def list_vms(self, only_active: bool = False) -> VmMessage:
         """
         Получение списка виртуальных машин
 
@@ -1641,7 +1639,15 @@ class VmManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения списка ВМ, \nerr: {e}")
 
-        return vms
+        if vms:
+            return VmMessage(success=True,
+                             message=CommandMessagesEnum.vm_list_found.value,
+                             code=CommandMessagesEnum.vm_list_found.name,
+                             vm_info=VirtualMachinesList(items=vms, total=len(vms)))
+        return VmMessage(success=False,
+                         message=CommandMessagesEnum.vm_list_not_found.value,
+                         code=CommandMessagesEnum.vm_list_not_found.name,
+                         vm_info=VirtualMachinesList(items=vms, total=len(vms)))
 
     @staticmethod
     def parse_hostfwd_regex(hostfwd_str: str) -> dict:
@@ -2225,7 +2231,7 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка при парсинге XML для поиска NVRAM: {e}")
             return None
 
-    def clone_vm(self, source_name: str, new_name: str, new_uuid: bool = True) -> dict:
+    def clone_vm(self, source_name: str, new_name: str, new_uuid: bool = True) -> VmMessage:
         try:
             source_domain = self.conn.lookupByName(source_name)
             xml_config = source_domain.XMLDesc(0)
@@ -2320,17 +2326,19 @@ class VmManager(LibvirtClient):
             # Синхронизируем с NFS
             self.ha_controller.sync_nfs_vm_configs()
 
-            return {
-                "success": True,
-                "message": f"ВМ '{source_name}' клонирована в '{new_name}'",
-                "xml": new_xml,
-                "domain_name": new_domain.name(),
-            }
+            return VmMessage(
+                message=CommandMessagesEnum.vm_successfully_cloned.value,
+                code=CommandMessagesEnum.vm_successfully_cloned.name,
+                success=True,
+            )
 
         except Exception as e:
-            error_msg = f"Ошибка клонирования ВМ: {str(e)}"
-            self.logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+            self.logger.error(str(e))
+            return VmMessage(
+                message=CommandMessagesEnum.vm_clone_error.value,
+                code=CommandMessagesEnum.vm_clone_error.name,
+                success=False,
+            )
 
 if __name__ == "__main__":
     # Пример создания ВМ с использованием нового API
@@ -2356,14 +2364,14 @@ if __name__ == "__main__":
         # vm_manager.shutdown_vm("test-hotplug-vm-2", force=True)
         # vm_manager.start_vm("TEST-VM_66323")
         # vm_manager.delete_vm_with_force("test-hotplug-vm-2")
-        vms = vm_manager.list_vms()
-        print(f"Найдено ВМ: {len(vms)}")
+        vms = vm_manager.list_vms().vm_info
+        print(f"Найдено ВМ: {len(vms.items)}")
         # vm_manager.delete_vm_with_force("VM-TEST-20873")
-        for vm in vms:
+        for vm in vms.items:
             # vm_manager.start_vm(vm.name)
             # vm_manager.shutoff_vm(vm.name, True)
             # if vm.state.value == VMState.SHUTOFF.value:
-            # vm_manager.delete_vm_with_force(vm.name)
+            vm_manager.delete_vm_with_force(vm.name)
             print(
                 f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}, HOST_FORWARD: {vm.hostfwd}"
             )

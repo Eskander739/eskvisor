@@ -5,7 +5,7 @@ from pydantic import BaseModel, model_validator
 from agent.client.hypervisor.libvirt.models.volume.disk import Disk
 from agent.client.hypervisor.libvirt.models.network import (
     NetworkInfo,
-    NetworkInterfacesInfo,
+    NetworkInterfacesInfo, NetworkList,
 )
 
 from agent.client.hypervisor.libvirt.models.snapshots import (
@@ -20,7 +20,7 @@ from agent.client.hypervisor.libvirt.models.snapshots import (
     SnapshotsChain,
     SnapshotWithParent,
 )
-from agent.client.hypervisor.libvirt.models.vm import VirtualMachine
+from agent.client.hypervisor.libvirt.models.vm import VirtualMachine, VirtualMachinesList
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtual,
 )
@@ -37,6 +37,8 @@ class CommandMessagesEnum(Enum):
     vm_successfully_created = "VM successfully created"
     vm_successfully_deleted = "VM successfully deleted"
     vm_delete_error = "VM delete error"
+    vm_successfully_cloned = "VM successfully cloned"
+    vm_clone_error = "VM clone error"
     vm_create_error = "VM create error"
     vm_start_error = "VM start error"
     vm_stop_error = "VM stop error"
@@ -83,11 +85,18 @@ class CommandMessagesEnum(Enum):
     virtual_network_interface_detached = (
         "Virtual network interface successfully detached"
     )
+    networks_list_found = "Networks list found"
+    networks_list_not_found = "Networks list not found"
     virtual_network_interface_detach_error = "Virtual network interface detach error"
     virtual_network_interface_not_found = "Virtual network interface not found"
     virtual_network_successfully_updated = "Virtual network successfully updated"
     virtual_network_update_error = "Virtual network updat error"
+    virtual_network_already_started = "Virtual network already started"
+    virtual_network_start_error = "Virtual network start error"
     virtual_network_successfully_started = "Virtual network successfully started"
+    virtual_network_successfully_stopped = "Virtual network successfully stopped"
+    virtual_network_already_stopped = "Virtual network already stopped"
+    virtual_network_stopping_error = "Virtual network stopping error"
     virtual_network_restart_error = "Virtual network restart error"
 
     # Ресурс пулы
@@ -99,6 +108,8 @@ class CommandMessagesEnum(Enum):
     rp_ram_or_cpu_more_than_on_node = "Resource pool RAM/CPU more than on the node"
     rp_already_created = "Resource pool already"
     vm_list_is_correct = "VM List is correct"
+    vm_list_found = "VM list found"
+    vm_list_not_found = "VM list not found"
     rp_cpu_configuration_error = "Resource pool CPU configuration error"
     rp_ram_configuration_error = "Resource pool RAM configuration error"
     vm_can_not_reserve_resource_when_vm_not_in_virtual_rp = (
@@ -158,24 +169,8 @@ class CommandMessagesEnum(Enum):
 
 
 class DefaultMessage(BaseModel):
-    message: CommandMessagesEnum | str
-    code: CommandMessagesEnum | str
-
-    @model_validator(mode="after")
-    def validate_disk_type_constraints(cls, values):
-        """
-        Проверка условно обязательных полей в зависимости от типа
-        """
-        CommandMessagesEnum(values.message)
-
-        for key, value in CommandMessagesEnum.__dict__.items():
-            if values.code in key or values.code == key:
-                break
-        else:
-            raise ValueError(f"Некорректный code: {values.code}")
-
-        return values
-
+    message: str
+    code: str
 
 class VmError(DefaultMessage):
     pass
@@ -184,7 +179,7 @@ class VmError(DefaultMessage):
 class VmMessage(DefaultMessage):
     success: bool
     command: str | None = None
-    vm_info: None | VirtualMachine = None
+    vm_info: None | VirtualMachine | VirtualMachinesList = None
     stdout: str | None = None
     stderr: str | None = None
     note: str | None = None
@@ -200,7 +195,7 @@ class StorageMessage(DefaultMessage):
 
 class NetworkMessage(DefaultMessage):
     success: bool
-    net_info: NetworkInfo | NetworkInterfacesInfo | None = None
+    net_info: NetworkInfo | NetworkInterfacesInfo | NetworkList | None = None
     note: str | None = None
 
 

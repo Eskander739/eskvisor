@@ -33,6 +33,8 @@ class HostForward(BaseModel):
         if values.host_ip is not None:
             IPv4Address(values.host_ip)
 
+        return values
+
     @property
     def hostfwd_to_string(self):
         return f'{self.protocol}:{self.host_ip if self.host_ip else ""}:{self.host_port}-:{self.guest_port}'
@@ -52,6 +54,8 @@ class NetQemuCommandline(BaseModel):
     def validate_disk_type_constraints(cls, values):
         """Проверка условно обязательных полей в зависимости от типа"""
         IPv4Address(values.dns)
+
+        return values
 
     @property
     def qemu_commandline_string(self):
@@ -78,9 +82,9 @@ class VMCreateRequest(BaseModel):
         "import"  # "import", "pxe", "boot", "cdrom", "location"
     )
     description: str | None = None
-    architecture: Architecture | str = Architecture.X86_64
+    architecture: Architecture = Architecture.X86_64
     emulator_type: EmulatorType = EmulatorType.KVM
-    os_type: OSType | str = OSType.LINUX
+    os_type: OSType = OSType.LINUX
     os_variant: str | None = "generic"  # ubuntu22.04, centos8, win10 и т.д.
     noautoconsole: bool = True
 
@@ -98,7 +102,7 @@ class VMCreateRequest(BaseModel):
     controllers: list[VMController] = Field(default_factory=list)
 
     # Графика и консоль
-    graphics: GraphicsType | str = GraphicsType.VNC
+    graphics: GraphicsType = GraphicsType.VNC
     graphics_port: int | None = None
     graphics_listen: str = "0.0.0.0"
     console_type: str = "pty"
@@ -163,7 +167,7 @@ class VMCreateRequest(BaseModel):
     def set_default_variant(cls, v, values):
         """Установка варианта ОС по умолчанию"""
         if v is None:
-            os_type = values.get("os_type")
+            os_type = values.data.get("os_type") if not isinstance(values, dict) else values.get("os_type")
             if os_type == OSType.WINDOWS:
                 return "win10"
             elif os_type == OSType.LINUX:
@@ -174,14 +178,14 @@ class VMCreateRequest(BaseModel):
     def set_current_memory(cls, v, values):
         """Установка текущей памяти, если не указана"""
         if v is None:
-            return values.get("memory_mb")
+            return values.data.get("memory_mb") if not isinstance(values, dict) else values.get("memory_mb")
         return v
 
     @field_validator("max_vcpus")
     def set_max_vcpus(cls, v, values):
         """Установка максимального количества vCPUs"""
         if v is None:
-            return values.get("vcpus")
+            return values.data.get("vcpus") if not isinstance(values, dict) else values.get("vcpus")
         return v
 
     @field_validator("controllers")
@@ -219,14 +223,14 @@ class VMCreateRequest(BaseModel):
 
         # Добавляем SCSI контроллер если есть SCSI диски
         disks = values.get("disks", [])
-        if any(disk.bus == BusType.SCSI for disk in disks):
+        if any(disk.bus_type == BusType.SCSI for disk in disks):
             scsi_controller = VMController(
                 controller_type=ControllerType.SCSI, index=0, model="virtio-scsi"
             )
             controllers.append(scsi_controller)
 
         # Добавляем SATA контроллер если есть SATA диски
-        if any(disk.bus == BusType.SATA for disk in disks):
+        if any(disk.bus_type == BusType.SATA for disk in disks):
             sata_controller = VMController(
                 controller_type=ControllerType.SATA, index=0, model="ahci"
             )
@@ -234,7 +238,7 @@ class VMCreateRequest(BaseModel):
 
         # Добавляем IDE контроллер если есть IDE диски или CDROM
         cdrom = values.get("cdrom")
-        if any(disk.bus == BusType.IDE for disk in disks) or cdrom:
+        if any(disk.bus_type == BusType.IDE for disk in disks) or cdrom:
             ide_controller = VMController(
                 controller_type=ControllerType.IDE, index=0, model="piix4-ide"
             )
@@ -310,3 +314,7 @@ class VirtualMachine(BaseModel):
     @property
     def max_memory_bytes(self) -> float:
         return int(self.max_memory * 1024)
+
+class VirtualMachinesList(BaseModel):
+    total: int
+    items: list[VirtualMachine]
