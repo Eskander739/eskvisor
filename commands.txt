@@ -39,7 +39,11 @@ sudo systemctl status libvirtd
 # команда ниже нужна для корректной работы nfs хранилищ для тестов
 sudo sh -c "echo '/srv/nfs 127.0.0.1(rw,sync,no_root_squash,fsid=0,no_subtree_check)' >> /etc/exports"
 sudo exportfs -ra
-
+#_________________________________Для подключаемых NFS хранилищ______________________________
+sudo chmod -R 777 /mnt/ha_cluster/libvirt/
+udo chmod -R 777 /mnt/ha_cluster/libvirt/qemu/
+# sudo /usr/bin/python3 -m pytest --tb=auto /home/eska/eskvisor/agent/client/tests/virtual_machine - запуск тестов
+# Окружение python нужно устанавливать как обычное так и под sudo
 
 #_________________________________Запуск анализатора кода и автоформатирование black______________________________
 

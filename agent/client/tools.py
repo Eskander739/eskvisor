@@ -3,7 +3,7 @@ import time
 from pydantic import ValidationError
 
 
-def wait_while_not(func, timeout=300, interval=2):
+def wait_while_not(func, timeout=60, interval=2):
     """
     Excecutes func until it returns True or timeout is reached
     :param func: Excecutable function

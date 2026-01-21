@@ -1,4 +1,3 @@
-import uuid
 from ipaddress import IPv4Address
 from typing import Any
 
@@ -89,8 +88,8 @@ class VMCreateRequest(BaseModel):
     noautoconsole: bool = True
 
     # Ресурсы
-    memory_mb: int = 256
-    current_memory_mb: int | None = None
+    memory_mb: int = 256  # значение memory_mb всего равно maxmemory при live режиме
+    max_memory_mb: int | None = None
     vcpus: int = 2
     max_vcpus: int | None = 4
     cpu_model: str | None = None
@@ -176,17 +175,6 @@ class VMCreateRequest(BaseModel):
                 return "win10"
             elif os_type == OSType.LINUX:
                 return "generic"
-        return v
-
-    @field_validator("current_memory_mb")
-    def set_current_memory(cls, v, values):
-        """Установка текущей памяти, если не указана"""
-        if v is None:
-            return (
-                values.data.get("memory_mb")
-                if not isinstance(values, dict)
-                else values.get("memory_mb")
-            )
         return v
 
     @field_validator("max_vcpus")
@@ -282,7 +270,7 @@ class VMCreateRequest(BaseModel):
 
 
 class VmUpdateRequest(BaseModel):
-    memory_mb: int | None = None
+    max_memory_mb: int | None = None
     vcpus: int | None = None
     max_vcpus: int | None = None
     current_memory_mb: int | None = None
@@ -300,13 +288,16 @@ class VmUpdateRequest(BaseModel):
     memballoon_model: str | None = None
     hyperv_features: dict[str, Any] | None = None
     qemu_agent: bool | None = None
-    reboot_if_needed: bool = False
+    change_live_config: bool = (
+        False  # если включена - изменяет запущенную конфигурацию а не постоянную
+    )
 
 
 class VirtualMachine(BaseModel):
     """Информация о виртуальной машине"""
 
     name: str
+    description: str | None = None
     state: VMState
     id: int | None = None
     net_id: str | None = None

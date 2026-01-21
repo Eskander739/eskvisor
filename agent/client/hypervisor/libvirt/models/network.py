@@ -7,7 +7,7 @@ from pydantic import (
     model_validator,
 )
 
-from agent.client.hypervisor.libvirt.models.enum import NetworkModel, NetworkType
+from agent.client.hypervisor.libvirt.models.enum import NetworkModelEnum, NetworkType
 
 
 class DNSForwarder(BaseModel):
@@ -268,7 +268,7 @@ class VmNetAdapter(BaseModel):
     """
 
     network_type: NetworkType = NetworkType.NETWORK
-    model: NetworkModel = NetworkModel.VIRTIO
+    model: NetworkModelEnum = NetworkModelEnum.VIRTIO
     mac_address: str | None = None
     source: str | None = "default"
 

@@ -48,7 +48,7 @@ class NetworkType(str, Enum):
     CLIENT = "client"
 
 
-class NetworkModel(str, Enum):
+class NetworkModelEnum(str, Enum):
     """Модели сетевых карт"""
 
     VIRTIO = "virtio"

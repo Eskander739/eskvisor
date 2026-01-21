@@ -15,6 +15,7 @@ from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 from agent.client.hypervisor.ha.controller import HAController
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
+from agent.client.hypervisor.libvirt.managers.network import NetworkManager
 from agent.client.hypervisor.libvirt.managers.snapshot import SnapshotManager
 from agent.client.hypervisor.libvirt.managers.storage import StorageManager
 from agent.client.hypervisor.libvirt.models.volume.disk import (
@@ -44,6 +45,13 @@ from agent.client.hypervisor.libvirt.models.vm import (
 from agent.client.logger_config import DefaultLogger
 
 QEMU_NAMESPACE = {"qemu": "http://libvirt.org/schemas/domain/qemu/1.0"}
+SUPPORT_LIVE_UPGRADE_PARAMS = (
+    "vcpus",
+)  # параметры поддерживаемые в live обновлении конфигурации ВМ из модели VmUpdateRequest
+UNSUPPORT_LIVE_UPGRADE_PARAMS = (
+    "max_memory_mb",
+    "current_memory_mb",
+)  # параметры которые нельзя обновить на лету(в нашей системе)
 
 
 class VmManager(LibvirtClient):
@@ -61,7 +69,9 @@ class VmManager(LibvirtClient):
         self.snapshot.connect()
         super().__init__()
         self.storage_manager = StorageManager()
+        self.network_manager = NetworkManager()
         self.storage_manager.connect()
+        self.network_manager.conn = self.storage_manager.conn
 
     def create_vm(
         self, config: VMCreateRequest, dry_run: bool = False
@@ -338,10 +348,12 @@ class VmManager(LibvirtClient):
         if config.machine_type:
             cmd_parts.extend(["--machine", f"{config.machine_type.value}"])
 
-        cmd_parts.extend(["--memory", str(config.memory_mb)])
-
-        if config.current_memory_mb and config.current_memory_mb != config.memory_mb:
-            cmd_parts.extend(["--current-memory", str(config.current_memory_mb)])
+        cmd_parts.extend(
+            [
+                f"--memory {config.memory_mb},{f'maxmemory={config.max_memory_mb}' if config.max_memory_mb and config.max_memory_mb != config.memory_mb else ''}"
+            ]
+        )
+        # cmd_parts.extend([f"--memory {config.memory_mb},{f'maxmemory={config.max_memory_mb}' if config.max_memory_mb and config.max_memory_mb != config.memory_mb else ''}"])
 
         if config.max_vcpus and config.max_vcpus != config.vcpus:
             cmd_parts.extend(["--vcpus", f"{config.vcpus},maxvcpus={config.max_vcpus}"])
@@ -1116,12 +1128,133 @@ class VmManager(LibvirtClient):
 
                 modified = True
 
+            # Изменение описания
+            if vm_update.description is not None:
+                self.logger.info(f"Изменение описания на '{vm_update.description}'")
+
+                # Находим или создаем элемент description
+                description_elem = root.find("description")
+                if description_elem is None:
+                    # Создаем элемент description если его нет
+                    description_elem = ET.SubElement(root, "description")
+
+                # Устанавливаем текст описания
+                description_elem.text = str(vm_update.description)
+
+
+                modified = True
+                
+            # TODO: Реализовать изменение autostart(то что директория)
+            # Изменение модели CPU (требует остановки ВМ)
+            if vm_update.cpu_model is not None and False == True: # Заглушка, не протестировано
+                try:
+                    cpu_config = vm_update.cpu_model
+
+                    # Валидация входных данных
+                    if not isinstance(cpu_config, dict):
+                        raise ValueError("cpu_model должен быть словарем")
+
+                    # Проверяем обязательные поля для разных режимов
+                    mode = cpu_config.get("mode", "host-passthrough")
+                    valid_modes = ["host-passthrough", "host-model", "custom", "maximum"]
+
+                    if mode not in valid_modes:
+                        raise ValueError(f"Недопустимый режим CPU: {mode}. Допустимо: {valid_modes}")
+
+                    # Для custom режима обязательна модель
+                    if mode == "custom" and "model" not in cpu_config:
+                        raise ValueError("Для custom режима CPU требуется параметр 'model'")
+
+                    # Проверяем, что ВМ остановлена
+                    try:
+                        current_dom = self.conn.lookupByName(vm_name)
+                        if current_dom.isActive():
+                            raise ValueError(
+                                f"Нельзя изменить модель CPU у запущенной ВМ '{vm_name}'. "
+                                f"Сначала остановите ВМ: virsh destroy {vm_name}"
+                            )
+                    except libvirt.libvirtError:
+                        # ВМ не найдена - это нормально при создании
+                        pass
+
+                    self.logger.info(f"Изменение модели CPU на режим '{mode}'")
+
+                    # Находим или создаем элемент cpu
+                    cpu_elem = root.find("cpu")
+                    if cpu_elem is None:
+                        # Вставляем после элемента memory
+                        memory_elem = root.find("memory")
+                        if memory_elem is not None:
+                            index = list(root).index(memory_elem) + 1
+                            cpu_elem = ET.Element("cpu")
+                            root.insert(index, cpu_elem)
+                        else:
+                            cpu_elem = ET.SubElement(root, "cpu")
+                    else:
+                        # Очищаем старую конфигурацию
+                        for child in list(cpu_elem):
+                            cpu_elem.remove(child)
+
+                    # Устанавливаем атрибуты
+                    cpu_elem.set("mode", mode)
+
+                    if "match" in cpu_config:
+                        cpu_elem.set("match", cpu_config["match"])
+
+                    if "check" in cpu_config:
+                        cpu_elem.set("check", cpu_config["check"])
+
+                    # Добавляем модель для custom/host-model
+                    if mode in ["custom", "host-model"] and "model" in cpu_config:
+                        model_elem = ET.SubElement(cpu_elem, "model")
+                        model_elem.text = cpu_config["model"]
+                        model_elem.set("fallback", cpu_config.get("fallback", "allow"))
+
+                    # Добавляем топологию
+                    if "topology" in cpu_config:
+                        topology = cpu_config["topology"]
+                        topology_elem = ET.SubElement(cpu_elem, "topology")
+
+                        # Валидация топологии
+                        sockets = int(topology.get("sockets", 1))
+                        cores = int(topology.get("cores", 1))
+                        threads = int(topology.get("threads", 1))
+
+                        if sockets * cores * threads <= 0:
+                            raise ValueError("Некорректная топология CPU")
+
+                        topology_elem.set("sockets", str(sockets))
+                        topology_elem.set("cores", str(cores))
+                        topology_elem.set("threads", str(threads))
+
+                    # Добавляем features
+                    if "features" in cpu_config:
+                        features = cpu_config["features"]
+                        for feature_name, feature_policy in features.items():
+                            if feature_policy not in ["require", "optional", "disable", "forbid"]:
+                                self.logger.warning(f"Некорректная политика фичи '{feature_name}': {feature_policy}")
+                                continue
+
+                            feature_elem = ET.SubElement(cpu_elem, "feature")
+                            feature_elem.set("policy", feature_policy)
+                            feature_elem.set("name", feature_name)
+
+                    modified = True
+                    self.logger.info(f"Конфигурация CPU успешно обновлена: режим={mode}")
+
+                except ValueError as e:
+                    self.logger.error(f"Ошибка валидации CPU конфигурации: {e}")
+                    raise
+                except Exception as e:
+                    self.logger.error(f"Ошибка обновления CPU конфигурации: {e}")
+                    raise
+
             # Изменение памяти
-            if vm_update.memory_mb is not None:
-                self.logger.info(f"Изменение памяти на {vm_update.memory_mb} MB")
+            if vm_update.max_memory_mb is not None:
+                self.logger.info(f"Изменение памяти на {vm_update.max_memory_mb} MB")
 
                 # Преобразуем MB в KB (libvirt работает с KB)
-                memory_kb = vm_update.memory_mb * 1024
+                memory_kb = vm_update.max_memory_mb * 1024
 
                 # Находим или создаем элемент memory
                 memory_elem = root.find("memory")
@@ -1167,93 +1300,56 @@ class VmManager(LibvirtClient):
             if modified:
                 # Конвертируем XML обратно в строку
                 new_xml = ET.tostring(root, encoding="unicode", method="xml")
-                self.logger.debug(f"Новый XML: {new_xml[:500]}...")
+                self.logger.info(f"Новый XML: {new_xml[:500]}...")
 
-                # Сохраняем во временный файл
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".xml", delete=False
-                ) as tmp_file:
-                    tmp_file.write(new_xml)
-                    tmp_file_path = tmp_file.name
-
-                try:
-                    if not is_running:
-                        self.conn.defineXML(new_xml)
-                        self.logger.info("Конфигурация ВМ обновлена (остановлена)")
-                    else:
-                        try:
-                            # Пытаемся обновить с флагом --live
-                            cmd = ["virsh", "define", tmp_file_path]
-                            result = subprocess.run(
-                                cmd, capture_output=True, text=True, timeout=30
-                            )
-
-                            if result.returncode != 0:
-                                self.logger.warning(
-                                    f"Не удалось обновить на лету: {result.stderr}"
+                if not is_running:
+                    self.conn.defineXML(new_xml)
+                    self.logger.info("Конфигурация ВМ обновлена (остановлена)")
+                else:
+                    if vm_update.change_live_config:
+                        vm_update_model = vm_update.model_dump()
+                        vm_update_model.pop("change_live_config")
+                        params = [
+                            (key, param)
+                            for key, param in vm_update_model.items()
+                            if param
+                        ]
+                        for key, _ in params:
+                            if key not in SUPPORT_LIVE_UPGRADE_PARAMS:
+                                return VmMessage(
+                                    success=False,
+                                    code=CommandMessagesEnum.vm_edit_error_unsupport_update_this_params_on_live_mode.name,
                                 )
-                                # Возможно, потребуется перезагрузка
-                        except Exception as e:
-                            self.logger.warning(f"Ошибка при обновлении на лету: {e}")
-
-                    self.logger.info(f"Конфигурация ВМ {vm_name} обновлена")
-
-                finally:
-                    # Удаляем временный файл
-                    if os.path.exists(tmp_file_path):
-                        os.unlink(tmp_file_path)
-
-                # Если ВМ запущена и мы изменили vCPU или память, применяем изменения на
-                # лету
-                if is_running:
-                    try:
                         if vm_update.vcpus is not None:
-                            # Пытаемся изменить vCPU на лету
-                            flags = libvirt.VIR_DOMAIN_VCPU_LIVE
-                            vm.setVcpusFlags(vm_update.vcpus, flags)
-                            self.logger.info(
-                                f"vCPU изменено на лету на {vm_update.vcpus}"
+                            try:
+                                vm.setVcpusFlags(
+                                    vm_update.vcpus, libvirt.VIR_DOMAIN_AFFECT_LIVE
+                                )
+                                self.logger.info("vCPU изменены на лету")
+                            except libvirt.libvirtError as e:
+                                self.logger.error(f"Ошибка: {e}")
+                    else:
+                        shutoff_result = self.shutoff_vm(vm_name, True)
+                        if (
+                            shutoff_result.code
+                            != CommandMessagesEnum.vm_successfully_shutdowned.name
+                        ):
+                            return VmMessage(
+                                success=False,
+                                code=CommandMessagesEnum.vm_edit_error_in_shutoff_process.name,
                             )
-
-                        if vm_update.memory_mb is not None:
-                            # Пытаемся изменить память на лету
-                            memory_kb = vm_update.memory_mb * 1024
-                            flags = libvirt.VIR_DOMAIN_MEM_LIVE
-                            vm.setMemoryFlags(memory_kb, flags)
-                            self.logger.info(
-                                f"Память изменена на лету на {vm_update.memory_mb} MB"
-                            )
-                    except Exception as e:
-                        self.logger.warning(
-                            f"Не удалось применить изменения на лету: {e}"
-                        )
-                        self.logger.info(
-                            "Для полного применения изменений может потребоваться перезагрузка ВМ"
+                        self.conn.defineXML(new_xml)
+                        self.start_vm(vm_name)
+                        self.logger.info(f"ВМ {vm_name} успешно обновлена")
+                        self.ha_controller.sync_nfs_vm_configs()
+                        return VmMessage(
+                            success=True,
+                            code=CommandMessagesEnum.vm_edit_success.name,
                         )
 
+                self.logger.info(f"Конфигурация ВМ {vm_name} обновлена")
             else:
                 self.logger.info("Нет изменений для применения")
-
-            # Перечитываем домен после изменений
-            vm = self.conn.lookupByName(vm_name)
-
-            # Проверяем, что изменения применились
-            if vm_update.vcpus is not None:
-                # Получаем обновленную информацию
-                new_xml = vm.XMLDesc(0)
-                new_root = ET.fromstring(new_xml)
-                new_vcpu_elem = new_root.find("vcpu")
-
-                if new_vcpu_elem is not None:
-                    actual_vcpus = new_vcpu_elem.text
-                    self.logger.info(
-                        f"Фактическое количество vCPU после изменения: {actual_vcpus}"
-                    )
-
-                    if actual_vcpus != str(vm_update.vcpus):
-                        self.logger.warning(
-                            f"vCPU не изменилось: ожидалось {vm_update.vcpus}, получено {actual_vcpus}"
-                        )
 
             self.logger.info(f"ВМ {vm_name} успешно обновлена")
             self.ha_controller.sync_nfs_vm_configs()
@@ -1689,11 +1785,18 @@ class VmManager(LibvirtClient):
             info = domain.info()
             state = VMState(info[0])
             if display_logs:
-                self.logger.info(f"ВМ {domain.name()} найдена")
+                self.logger.info(f"ВМ {domain.name()} найдена : '{info}'")
             current_net_id, hostfwd = self.get_hostfwd_and_net_id(domain.name())
+            root = ET.fromstring(domain.XMLDesc(0))
+            description = (
+                root.find("description").text
+                if root.find("description") is not None
+                else None
+            )
 
             return VirtualMachine(
                 name=domain.name(),
+                description=description,
                 state=state,
                 id=domain.ID() if domain.ID() != -1 else -1,
                 net_id=current_net_id,
@@ -2295,7 +2398,8 @@ if __name__ == "__main__":
             # vm_manager.start_vm(vm.name)
             # vm_manager.shutoff_vm(vm.name, True)
             # if vm.state.value == VMState.SHUTOFF.value:
-            vm_manager.delete_vm_with_force(vm.name)
+            if vm.name != "VM-TEST-11049":
+                vm_manager.delete_vm_with_force(vm.name)
             print(
                 f"  - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}, HOST_FORWARD: {vm.hostfwd}"
             )

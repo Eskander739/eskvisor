@@ -14,6 +14,7 @@ from agent.client.cli import CLIControl
 from agent.client.hypervisor.ha.controller import HAController
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
+from agent.client.hypervisor.libvirt.models.vm import VmUpdateRequest
 from agent.client.hypervisor.libvirt.models.volume.disk import (
     BusType,
     CacheMode,
@@ -280,7 +281,7 @@ class StorageManager(LibvirtClient):
                 )
 
             disk_type = (
-                DiskType.EXTERNAL_DISK
+                (DiskType.CDROM if disk_create.disk_type == DiskType.CDROM else DiskType.EXTERNAL_DISK)
                 if disk_create.resource_pool is None
                 else DiskType.POOL_DISK
             )
@@ -1538,38 +1539,41 @@ class StorageManager(LibvirtClient):
 
 
 if __name__ == "__main__":
-    """
-    Пример использования StorageManager:
-    1. Создание диска в пуле
-    2. Создание файлового диска
-    3. Подключение диска к ВМ
-    4. Получение списка дисков
-    5. Конвертация формата диска
-    """
-
-    with StorageManager() as manager:
-        # Создание диска в пуле
-        # disk_create = DiskCreate(
-        #     name="test_disk",
-        #     size_gb=10,
-        #     format=DiskFormat.QCOW2,
-        #     pool="default"
-        # )
-        # disk = manager.create_disk(disk_create)
-        # if disk:
-        #     print(f"Диск создан: {disk.name}, размер: {disk.get_effective_size_gb()}GB")
-
-        # Получение списка всех дисков
-
-        for vm_disk in manager.get_disks_by_vm("VM-TEST-14265", str(uuid.uuid4())):
-            print(vm_disk)
-        disks = manager.list_disks()
-        for current_disk in disks:
-            print(
-                f"****************************************************************\n"
-                f"ИМЯ ДИСКА: {current_disk.name}\n"
-                f"ПУТЬ ДИСКА: {current_disk.path}\n"
-                f"TARGET_DEV: {current_disk.target_dev}\n"
-                f"К КАКОЙ ВМ ПОДКЛЮЧЕН ДИСК: {current_disk.vm_name}\n"
-            )
-        print(f"Всего дисков: {len(disks)}")
+    print(
+        [(key, param) for key, param in VmUpdateRequest().model_dump().items() if param]
+    )
+    # """
+    # Пример использования StorageManager:
+    # 1. Создание диска в пуле
+    # 2. Создание файлового диска
+    # 3. Подключение диска к ВМ
+    # 4. Получение списка дисков
+    # 5. Конвертация формата диска
+    # """
+    #
+    # with StorageManager() as manager:
+    #     # Создание диска в пуле
+    #     # disk_create = DiskCreate(
+    #     #     name="test_disk",
+    #     #     size_gb=10,
+    #     #     format=DiskFormat.QCOW2,
+    #     #     pool="default"
+    #     # )
+    #     # disk = manager.create_disk(disk_create)
+    #     # if disk:
+    #     #     print(f"Диск создан: {disk.name}, размер: {disk.get_effective_size_gb()}GB")
+    #
+    #     # Получение списка всех дисков
+    #
+    #     for vm_disk in manager.get_disks_by_vm("VM-TEST-14265", str(uuid.uuid4())):
+    #         print(vm_disk)
+    #     disks = manager.list_disks()
+    #     for current_disk in disks:
+    #         print(
+    #             f"****************************************************************\n"
+    #             f"ИМЯ ДИСКА: {current_disk.name}\n"
+    #             f"ПУТЬ ДИСКА: {current_disk.path}\n"
+    #             f"TARGET_DEV: {current_disk.target_dev}\n"
+    #             f"К КАКОЙ ВМ ПОДКЛЮЧЕН ДИСК: {current_disk.vm_name}\n"
+    #         )
+    #     print(f"Всего дисков: {len(disks)}")

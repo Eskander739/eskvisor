@@ -19,7 +19,8 @@ from agent.client.hypervisor.libvirt.managers.virsh import (
 from agent.client.hypervisor.libvirt.managers.vm import VmManager
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
+from agent.client.hypervisor.libvirt.models.network import VmNetAdapter, NetworkParameters, NetworkBridge, \
+    NetworkForward, NetworkDHCPRange
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
 )
@@ -266,7 +267,37 @@ def create_resource_pool_session():
             CommandMessagesEnum.rp_virtual_delete_success.name,
             CommandMessagesEnum.rp_virtual_not_found.name,
         ), delete_rp_info.note
+@pytest.fixture(scope="session")
+def create_nat_network_session():
+    with NetworkManager() as vn_manager:
+        network_name = f"network-name-{random.randint(10000, 99999)}"
+        nat_params = NetworkParameters(
+            name=network_name,
+            forward=NetworkForward(mode="nat"),
+            bridge=NetworkBridge(name="virbr-test-ntt", stp="on", delay=0),
+            ipv4_address="192.168.100.0/24",
+            dhcp_ranges=[
+                NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
+            ],
+            autostart=True,
+        )
+        network_name = nat_params.name
+        created_network_info = vn_manager.create_network(nat_params)
+        assert (
+                created_network_info.code
+                == CommandMessagesEnum.virtual_network_successfully_created.name
+        )
+        nat_network = created_network_info.net_info
+        assert nat_network.network_type.type == "nat"
+        assert nat_network.name == nat_params.name
+        assert nat_network.active is True
+        assert nat_network.autostart is True
+        yield network_name
 
+        if network_name is not None:
+            vn_manager.delete_network(network_name, True)
+            v_network = vn_manager.get_network_info(network_name)
+            assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
 
 @pytest.fixture(scope="session")
 def storage_session():

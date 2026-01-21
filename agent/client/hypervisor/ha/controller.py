@@ -279,14 +279,18 @@ class HAController:
 
     def delete_vm_from_nfs_config(self, vm_name: str):
         for nfs_storage in self.loaded_ha_nfs_storages.nfs_storages:
-            config_path = str(
-                Path(f"{nfs_storage.mount}/{self.nfs_vm_config_root}/{vm_name}.xml")
+            config_path = Path(
+                f"{nfs_storage.mount}/{self.nfs_vm_config_root}/{vm_name}.xml"
             )
-            config_autostart_path = (
+
+            config_autostart_path = Path(
                 f"{nfs_storage.mount}/{self.nfs_vm_config_root}/autostart/{vm_name}.xml"
             )
-            self.delete_file_or_path(config_path)
-            self.delete_file_or_path(config_autostart_path)
+
+            if config_path.exists():
+                os.remove(config_path)
+            if config_autostart_path.exists():
+                os.remove(config_autostart_path)
 
     def sync_nfs_vm_configs(self):
         """Синхронизирует только XML конфиги ВМ с удалением лишнего"""
@@ -336,12 +340,6 @@ class HAController:
 
             except Exception as e:
                 self.logger.error(f"Ошибка синхронизации {nfs_storage}: {e}")
-
-    def delete_file_or_path(self, path: str):
-        cmd_args = ["rm", "-r", path]
-        result = self.cli.execute(cmd_args)
-        self.logger.info(f"Результат удаления файла/директории: '{result}'")
-        return result
 
 
 if __name__ == "__main__":

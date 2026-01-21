@@ -1241,6 +1241,262 @@ class NetworkManager(LibvirtClient):
         except self.libvirtError:
             return False
 
+    def attach_vm_network_interface(
+        self,
+        vm_name: str,
+        network_name: str,
+        model: str = "virtio",
+        mac_address: str | None = None,
+        # driver_name: str | None = None,
+        driver_queues: int = 1,
+        driver_iommu: str = "off",
+        driver_txmode: str | None = None,
+        driver_rxmode: str | None = None,
+        link_state: str = "up",
+        boot_order: int | None = None,
+        rom_bar: str = "on",
+        filter_name: str | None = None,
+        filter_params: dict | None = None,
+        mtu_size: int | None = None,
+        target_dev: str | None = None,
+        persistent: bool = True,
+        live: bool = True,
+    ) -> NetworkMessage:
+        """
+        Добавление сетевого интерфейса к виртуальной машине
+
+        Args:
+            vm_name: Имя виртуальной машины
+            network_name: Имя виртуальной сети libvirt
+            model: Модель сетевого адаптера (virtio, e1000, rtl8139, vmxnet3)
+            mac_address: MAC-адрес (если None - будет сгенерирован автоматически)
+            # driver_name: Имя драйвера (если None - используется по умолчанию для модели)
+            driver_queues: Количество очередей (актуально для virtio)
+            driver_iommu: Включение IOMMU (on/off)
+            driver_txmode: Режим передачи
+            driver_rxmode: Режим приема
+            link_state: Состояние канала (up/down)
+            boot_order: Порядок загрузки (если None - не используется для загрузки)
+            rom_bar: Включение ROM (on/off)
+            filter_name: Имя сетевого фильтра
+            filter_params: Параметры фильтра
+            mtu_size: Размер MTU
+            target_dev: Имя интерфейса в гостевой ОС (vnetX)
+            persistent: Сохранять в конфигурации
+            live: Применить к запущенной ВМ
+
+        Returns:
+            NetworkMessage с результатом операции
+        """
+        try:
+            # Проверяем существование ВМ
+            try:
+                vm = self.conn.lookupByName(vm_name)
+            except libvirt.libvirtError as e:
+                self.logger.error(f"ВМ '{vm_name}' не найдена: {e}")
+                return NetworkMessage(
+                    code=CommandMessagesEnum.vm_found_error.name,
+                    success=False,
+                    note=f"VM not found: {e}",
+                )
+
+            # Проверяем существование сети
+            try:
+                network = self.conn.networkLookupByName(network_name)
+                if not network.isActive():
+                    self.logger.warning(f"Сеть '{network_name}' не активна")
+            except libvirt.libvirtError as e:
+                self.logger.error(f"Сеть '{network_name}' не найдена: {e}")
+                return NetworkMessage(
+                    code=CommandMessagesEnum.virtual_network_not_found.name,
+                    success=False,
+                    note=f"Network not found: {e}",
+                )
+
+            # Генерируем XML для интерфейса
+            interface_xml = self._generate_interface_xml(
+                network_name=network_name,
+                model=model,
+                mac_address=mac_address,
+                # driver_name=driver_name,
+                driver_queues=driver_queues,
+                driver_iommu=driver_iommu,
+                driver_txmode=driver_txmode,
+                driver_rxmode=driver_rxmode,
+                link_state=link_state,
+                boot_order=boot_order,
+                rom_bar=rom_bar,
+                filter_name=filter_name,
+                filter_params=filter_params,
+                mtu_size=mtu_size,
+                target_dev=target_dev,
+            )
+
+            self.logger.info(
+                f"Добавление сетевого интерфейса к ВМ '{vm_name}':\n"
+                f"  Сеть: {network_name}\n"
+                f"  Модель: {model}\n"
+                f"  MAC: {mac_address or 'авто'}\n"
+                f"  Режим: {'live+persistent' if live and persistent else 'persistent' if persistent else 'live'}"
+            )
+
+            # Определяем флаги для attachDevice
+            flags = 0
+            if persistent:
+                flags |= libvirt.VIR_DOMAIN_AFFECT_CONFIG
+            if live:
+                flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+            # Проверяем, можем ли мы добавить интерфейс к запущенной ВМ
+            if vm.isActive() and live:
+                try:
+                    vm.attachDeviceFlags(interface_xml, flags)
+                    self.logger.info(
+                        f"Сетевой интерфейс добавлен к запущенной ВМ '{vm_name}'"
+                    )
+                except libvirt.libvirtError as e:
+                    # Если не удалось добавить на лету, пробуем только в конфиг
+                    if "not supported" in str(e) or "unsupported" in str(e):
+                        self.logger.warning(
+                            f"Горячее добавление не поддерживается для ВМ '{vm_name}'. "
+                            f"Добавляем только в конфигурацию."
+                        )
+                        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+                        vm.attachDeviceFlags(interface_xml, flags)
+                        self.logger.info(
+                            f"Сетевой интерфейс добавлен в конфигурацию ВМ '{vm_name}'. "
+                            f"Требуется перезагрузка для применения."
+                        )
+                    else:
+                        raise
+            else:
+                # Для остановленной ВМ или без live-флага
+                vm.attachDeviceFlags(interface_xml, flags)
+                state_msg = "остановленной" if not vm.isActive() else "без live-режима"
+                self.logger.info(
+                    f"Сетевой интерфейс добавлен к {state_msg} ВМ '{vm_name}'"
+                )
+
+            # Получаем обновленную информацию о сетевых интерфейсах ВМ
+            network_info = self.get_vm_network_info(vm_name)
+
+            return NetworkMessage(
+                code=CommandMessagesEnum.virtual_network_interface_attached.name,
+                success=True,
+                net_info=network_info.net_info if network_info.success else None,
+                note="Network interface successfully attached",
+            )
+
+        except libvirt.libvirtError as e:
+            error_msg = str(e)
+            self.logger.error(
+                f"Ошибка добавления сетевого интерфейса к ВМ '{vm_name}': {error_msg}"
+            )
+            return NetworkMessage(
+                code=CommandMessagesEnum.virtual_network_interface_attach_error.name,
+                success=False,
+                note=error_msg,
+            )
+        except Exception as e:
+            self.logger.error(
+                f"Неожиданная ошибка при добавлении сетевого интерфейса: {e}"
+            )
+            return NetworkMessage(
+                code=CommandMessagesEnum.virtual_network_interface_attach_error.name,
+                success=False,
+                note=str(e),
+            )
+
+    def _generate_interface_xml(
+            self,
+            network_name: str,
+            model: str = "virtio",
+            mac_address: str | None = None,
+            driver_queues: int = 1,
+            driver_iommu: str = "off",
+            driver_txmode: str | None = None,
+            driver_rxmode: str | None = None,
+            link_state: str = "up",
+            boot_order: int | None = None,
+            rom_bar: str = "on",
+            filter_name: str | None = None,
+            filter_params: dict | None = None,
+            mtu_size: int | None = None,
+            target_dev: str | None = None,
+    ) -> str:
+        """
+        Генерация XML конфигурации сетевого интерфейса
+        """
+        # Создаем корневой элемент interface
+        interface = ET.Element("interface", type="network")
+
+        # Добавляем источник (подключение к сети)
+        source = ET.SubElement(interface, "source", network=network_name)
+
+        # Добавляем MAC-адрес (если указан)
+        if mac_address:
+            ET.SubElement(interface, "mac", address=mac_address)
+
+        # Добавляем модель - ЭТО ОБЯЗАТЕЛЬНО
+        ET.SubElement(interface, "model", type=model)
+
+        # Добавляем драйвер с ПРАВИЛЬНЫМИ атрибутами
+        driver_attrs = {}
+
+        # Для virtio модели можно указать queues
+        if model == "virtio" and driver_queues > 1:
+            driver_attrs["queues"] = str(driver_queues)
+
+        # IOMMU атрибут
+        if driver_iommu and driver_iommu != "off":
+            driver_attrs["iommu"] = driver_iommu
+
+        # Режимы передачи/приема
+        if driver_txmode:
+            driver_attrs["txmode"] = driver_txmode
+
+        if driver_rxmode:
+            driver_attrs["rxmode"] = driver_rxmode
+
+        # Добавляем элемент driver только если есть атрибуты
+        if driver_attrs:
+            ET.SubElement(interface, "driver", **driver_attrs)
+
+        # Добавляем состояние канала
+        if link_state and link_state != "up":
+            ET.SubElement(interface, "link", state=link_state)
+
+        # Добавляем порядок загрузки
+        if boot_order is not None:
+            ET.SubElement(interface, "boot", order=str(boot_order))
+
+        # Добавляем ROM
+        if rom_bar and rom_bar != "on":
+            ET.SubElement(interface, "rom", bar=rom_bar)
+
+        # Добавляем сетевой фильтр
+        if filter_name:
+            filterref = ET.SubElement(interface, "filterref", filter=filter_name)
+            if filter_params:
+                for param_name, param_value in filter_params.items():
+                    ET.SubElement(filterref, "parameter", name=param_name, value=str(param_value))
+
+        # Добавляем MTU
+        if mtu_size and mtu_size != 1500:
+            ET.SubElement(interface, "mtu", size=str(mtu_size))
+
+        # Добавляем target device (опционально)
+        if target_dev:
+            ET.SubElement(interface, "target", dev=target_dev)
+
+        # Преобразуем в XML строку
+        xml_str = ET.tostring(interface, encoding="unicode")
+
+        # Для отладки - логируем сгенерированный XML
+        self.logger.debug(f"Сгенерирован XML интерфейса:\n{xml_str}")
+
+        return xml_str
+
     def detach_vm_network_interface(
         self,
         vm_name: str,
@@ -1307,9 +1563,11 @@ class NetworkManager(LibvirtClient):
             self.logger.info(
                 f"Отключение сетевого интерфейса {mac_address} от ВМ {vm_name}"
             )
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = self.cli.execute(cmd, return_proc=True)
 
             if result.returncode == 0:
+                self.logger.warning(f"Результат отключения сетевого интерфейса: {result.stdout}")
+
                 self.logger.info(
                     f"Сетевой интерфейс {mac_address} успешно отключен от ВМ {vm_name}"
                 )

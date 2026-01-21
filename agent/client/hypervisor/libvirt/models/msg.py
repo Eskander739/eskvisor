@@ -76,6 +76,10 @@ class CommandMessagesEnum(Enum):
     disk_not_found_by_target_dev = "Disk not found by target_dev"
     disk_founded_by_target_dev = "Disk founded by target_dev"
     vm_edit_success = "VM successfully edited"
+    vm_edit_error_unsupport_update_this_params_on_live_mode = (
+        "Unsupport update this params on live mode"
+    )
+    vm_edit_error_in_shutoff_process = "VM edit error in shutoff process"
     vm_edit_error = "VM edit error"
     vm_edit_unexpected_error = "VM edit unexpected error"
     virtual_network_successfully_created = "Virtual network successfully created"
@@ -86,6 +90,8 @@ class CommandMessagesEnum(Enum):
     virtual_network_found = "Virtual network found"
     virtual_network_not_found = "Virtual network not found"
     virtual_network_interfaces_found = "Virtual network interfaces found"
+    virtual_network_interface_attach_error = "Virtual network interface attach error"
+    virtual_network_interface_attached = "Virtual network interface attached"
     virtual_network_interface_detached = (
         "Virtual network interface successfully detached"
     )
