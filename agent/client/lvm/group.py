@@ -1,4 +1,4 @@
-import json
+import orjson
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.models.volume.group import VolumeGroup
@@ -84,7 +84,7 @@ class VolumeGroupManager:
             self.logger.info(f"Группа томов не найдена: {volume_group_name}")
             return None
         self.logger.info(f"Группа томов найдена: {volume_group_name}")
-        return self._parse_dict_to_models(json.loads(result)).pop()
+        return self._parse_dict_to_models(orjson.loads(result)).pop()
 
     def get_volume_list(
         self,
@@ -121,7 +121,7 @@ class VolumeGroupManager:
         if options:
             cmd_args.extend(options)
         result = self.cli.execute(cmd_args)
-        vg_list = self._parse_dict_to_models(json.loads(result))
+        vg_list = self._parse_dict_to_models(orjson.loads(result))
         if vg_list:
             self.logger.info("Получен список групп томов")
         else:

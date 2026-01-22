@@ -327,10 +327,10 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
     # Запуск мониторинга
-    monitor = VMLiveMonitor("94df5b49-2da4-44d6-8fe1-9f910b775402", interval)
-    # for _ in range(10):
-    #     data = monitor.used_ram_and_cpu()
-    monitor.monitor_loop()
+    monitor = VMLiveMonitor("ESKA-VM-TEST", interval)
+    for _ in range(10):
+        data = monitor.used_ram_and_cpu()
+    # monitor.monitor_loop()
     # cpu_percent = monitor.calculate_cpu_usage(stats)
     # memory_usage = monitor.calculate_memory_usage(stats)
     # print(cpu_percent)

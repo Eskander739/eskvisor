@@ -108,7 +108,11 @@ class TaskHandler:
 
             return {
                 "success": True,
-                "result": result.model_dump_json(),
+                "result": (
+                    orjson.dumps(result)
+                    if isinstance(result, dict)
+                    else result.model_dump_json()
+                ),
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -517,7 +521,11 @@ class TaskWorker(threading.Thread):
                         result = TaskResponse(
                             request_id=task.request_id,
                             task=task,
-                            result=handle_result,
+                            result=(
+                                orjson.loads(handle_result)
+                                if not isinstance(handle_result, dict)
+                                else handle_result
+                            ),
                             status=TaskStatus.COMPLETED,
                             started_at=task.created_at,
                             completed_at=datetime.now(),

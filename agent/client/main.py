@@ -7,12 +7,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 
+from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
+from agent.client.hypervisor.libvirt.models.vm_stats.stats import CpuAndRamUsage
 from agent.client.logger_config import DefaultLogger
 from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.dispatcher import TaskDispatcher
 from agent.client.task_manager.models import TaskAdd, TaskType, TasksInfo
 from agent.client.task_manager.ws_notification import WebSocketNotificationHandler
-
+from agent.client.tools import get_quick_stats
 
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
 templates = Jinja2Templates(directory="templates")
@@ -23,6 +25,7 @@ queue_manager = RedisTaskManager()
 task_dispatcher = TaskDispatcher(queue_manager)
 ws_handler = WebSocketNotificationHandler(queue_manager)
 active_connections: list[WebSocket] = []
+vm_live_monitor = VMLiveMonitor
 
 
 app.add_middleware(
@@ -97,6 +100,7 @@ async def get_dashboard(request: Request):
     """Для тестирования управления задачами"""
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint для уведомлений"""
@@ -151,6 +155,53 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
 
                     task_dispatcher.submit_task(task)
+
+            except orjson.JSONDecodeError:
+                await websocket.send_json(
+                    {"type": "error", "message": "Неверный формат JSON"}
+                )
+
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+        logger.info(f"WebSocket отключен. Осталось: {len(active_connections)}")
+
+
+@app.websocket("/ws/system-stats")
+async def websocket_system_stats(websocket: WebSocket):
+    """WebSocket endpoint для получения статистики о системе"""
+    await websocket.accept()
+    active_connections.append(websocket)
+    logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections)}")
+
+    try:
+        while True:
+            # Обработка сообщений от клиента
+            data = await websocket.receive_text()
+
+            try:
+                message = orjson.loads(data)
+                object = message.get("object")
+
+                if object == "system":
+                    await websocket.send_json(get_quick_stats())
+
+                elif object == "vm":
+                    vm_name = message.get("vm_name")
+                    if not vm_name:
+                        await websocket.send_json(
+                            {"type": "error", "message": "Неверный формат JSON"}
+                        )
+                    vm_stats = vm_live_monitor(vm_name).used_ram_and_cpu()
+                    await websocket.send_json(
+                        vm_stats.model_dump_json()
+                        if vm_stats is not None
+                        else CpuAndRamUsage(
+                            cpu_core_count=0, cpu_usage_percent=0, memory=0
+                        ).model_dump_json()
+                    )
+
+                elif object == "storage":
+                    await websocket.send_json({"error": "Не реализовано"})
 
             except orjson.JSONDecodeError:
                 await websocket.send_json(

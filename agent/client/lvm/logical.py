@@ -1,6 +1,7 @@
-import json
 import os
 import re
+
+import orjson
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
@@ -256,7 +257,7 @@ class LogicalVolumeManager:
         result = self.cli.execute(cmd_args)
         if "Failed to find logical volume" in result:
             return None
-        volume = self._parse_dict_to_models(json.loads(result))
+        volume = self._parse_dict_to_models(orjson.loads(result))
         if volume:
             return volume.pop()
         return None
@@ -296,7 +297,7 @@ class LogicalVolumeManager:
         if options:
             cmd_args.extend(options)
         result = self.cli.execute(cmd_args)
-        return self._parse_dict_to_models(json.loads(result))
+        return self._parse_dict_to_models(orjson.loads(result))
 
     def _parse_dict_to_models(self, output: dict) -> list[LogicVolume]:
         result = output.get("report")[0].get("lv")
