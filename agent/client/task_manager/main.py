@@ -97,39 +97,6 @@ async def get_dashboard(request: Request):
     """Для тестирования управления задачами"""
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
-
-@app.get("/api/tasks")
-async def get_tasks():
-    """Получить список всех задач"""
-    try:
-        pending_tasks = queue_manager.get_all_tasks()
-        processing_tasks = queue_manager.get_process_tasks()
-        return TasksInfo(
-            pending=pending_tasks,
-            processing=processing_tasks,
-            total_pending=len(pending_tasks),
-            total_processing=len(processing_tasks),
-        )
-    except Exception as e:
-        logger.error(f"Ошибка получения задач: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-@app.get("/api/task/{request_id}")
-async def get_task_info(request_id: str):
-    """Получить информацию о конкретной задаче"""
-    try:
-        task_info = queue_manager.get_task_info(request_id)
-
-        if task_info:
-            return task_info
-        else:
-            return JSONResponse({"error": "Task not found"}, status_code=404)
-    except Exception as e:
-        logger.error(f"Ошибка получения задачи: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint для уведомлений"""
@@ -184,8 +151,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
 
                     task_dispatcher.submit_task(task)
-
-                    return task
 
             except orjson.JSONDecodeError:
                 await websocket.send_json(

@@ -327,8 +327,8 @@ if __name__ == "__main__":
         print("ЗАДАЧА В ОЖИДАНИИ: ", task)
         # rtm.execute_task()
 
-    print(
-        rtm.delete_task(
-            "ad7396db-5c10-4d20-b5ee-6e04052ac294", rtm.processing_queue_name
-        )
-    )
+    # print(
+    #     rtm.delete_task(
+    #         "ad7396db-5c10-4d20-b5ee-6e04052ac294", rtm.processing_queue_name
+    #     )
+    # )
