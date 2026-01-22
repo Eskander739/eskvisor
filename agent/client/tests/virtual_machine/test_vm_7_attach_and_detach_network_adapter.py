@@ -26,7 +26,9 @@ MAC_ADDRESSES = [
 
 
 @pytest.mark.tags("VM‑07", "Подключение/отключение сети")
-def test_vm_07_attach_and_detach_network_adapter(vm_session, network_session, create_nat_network_session):
+def test_vm_07_attach_and_detach_network_adapter(
+    vm_session, network_session, create_nat_network_session
+):
     """
     VM‑07: Подключение/отключение сети
 
@@ -34,6 +36,7 @@ def test_vm_07_attach_and_detach_network_adapter(vm_session, network_session, cr
     """
     vm_created = None
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
+
     def kb_to_mb(kb):
         return kb / 1024
 
@@ -46,7 +49,8 @@ def test_vm_07_attach_and_detach_network_adapter(vm_session, network_session, cr
             name=random_name,
             description=f"VM-TEST-{random.randint(10000, 99999)}-DESCRIPTION",
             disks=[DiskCreate(name=new_disk_name)],
-            memory_mb=512, autostart_vm=True
+            memory_mb=512,
+            autostart_vm=True,
         )
         create_vm_info = vm_session.create_vm(vm_template)
         assert create_vm_info.code == CommandMessagesEnum.vm_successfully_created.name
@@ -70,26 +74,46 @@ def test_vm_07_attach_and_detach_network_adapter(vm_session, network_session, cr
         # ____________________________________Проверка наличия нового сетевого интерфейса_________________________
         get_vm_info = network_session.get_vm_network_info(random_name)
         assert len(get_vm_info.net_info.network_interfaces.interfaces) == 2
-        for current_network_interface in get_vm_info.net_info.network_interfaces.interfaces:
-            vm_session.logger.warning(f"Интерфейс: {current_network_interface.model_dump_json()}")
-            if current_network_interface.mac_address == random_mac_address and current_network_interface.source.name == network_name:
+        for (
+            current_network_interface
+        ) in get_vm_info.net_info.network_interfaces.interfaces:
+            vm_session.logger.warning(
+                f"Интерфейс: {current_network_interface.model_dump_json()}"
+            )
+            if (
+                current_network_interface.mac_address == random_mac_address
+                and current_network_interface.source.name == network_name
+            ):
                 break
         else:
             raise AssertionError(f"Не найден подключенный сетевой интерфейс")
         # ____________________________________Отключение сетевого интерфейса_________________________
-        detach_network_info = network_session.detach_vm_network_interface(random_name, random_mac_address)
+        detach_network_info = network_session.detach_vm_network_interface(
+            random_name, random_mac_address
+        )
         vm_session.shutoff_vm(random_name, True)
-        vm_session.start_vm(random_name) # TODO: Отключение происходит только после destroy -> start
+        vm_session.start_vm(
+            random_name
+        )  # TODO: Отключение происходит только после destroy -> start
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
-        assert detach_network_info.code == CommandMessagesEnum.virtual_network_interface_detached.name
+        assert (
+            detach_network_info.code
+            == CommandMessagesEnum.virtual_network_interface_detached.name
+        )
         # ____________________________________Проверка отсутствия нового сетевого интерфейса_________________________
         get_net_info = network_session.get_vm_network_info(random_name)
         assert len(get_net_info.net_info.network_interfaces.interfaces) == 1
-        for current_network_interface in get_net_info.net_info.network_interfaces.interfaces:
-            vm_session.logger.warning(f"Интерфейс: {current_network_interface.model_dump_json()}")
-            if current_network_interface.mac_address == random_mac_address and current_network_interface.source.name == network_name:
-                raise AssertionError(
-                    f"Найден подключенный сетевой интерфейс")
+        for (
+            current_network_interface
+        ) in get_net_info.net_info.network_interfaces.interfaces:
+            vm_session.logger.warning(
+                f"Интерфейс: {current_network_interface.model_dump_json()}"
+            )
+            if (
+                current_network_interface.mac_address == random_mac_address
+                and current_network_interface.source.name == network_name
+            ):
+                raise AssertionError(f"Найден подключенный сетевой интерфейс")
 
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________

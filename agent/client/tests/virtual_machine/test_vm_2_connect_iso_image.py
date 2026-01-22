@@ -76,7 +76,11 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
             assert (
                 delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
             )
-            path = vm_template.disks[1].path if vm_template.disks[1].path != IMG_PATH else vm_template.disks[0].path
+            path = (
+                vm_template.disks[1].path
+                if vm_template.disks[1].path != IMG_PATH
+                else vm_template.disks[0].path
+            )
             disk_path = (
                 path
                 + "/"

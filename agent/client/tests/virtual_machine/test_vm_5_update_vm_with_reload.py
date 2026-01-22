@@ -22,7 +22,9 @@ def test_vm_05_upgrade_maxmemory_with_destroy_vm(vm_session):
     vm_created = None
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
     get_state = vm_session.get_vm_state_by_name
-    vm_resource = VmUpdateRequest(max_memory_mb=512, description="Восстание Роберта Баратеона")
+    vm_resource = VmUpdateRequest(
+        max_memory_mb=512, description="Восстание Роберта Баратеона"
+    )
     try:
         # ____________________________________Создание ВМ_________________________
         vm_template = VMCreateRequest(

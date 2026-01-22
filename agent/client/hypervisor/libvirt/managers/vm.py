@@ -40,7 +40,8 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VMCreateRequest,
     VmUpdateRequest,
     HostForward,
-    VirtualMachinesList, SecureBootVM,
+    VirtualMachinesList,
+    SecureBootVM,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -72,7 +73,6 @@ class VmManager(LibvirtClient):
         self.network_manager = NetworkManager()
         self.storage_manager.connect()
         self.network_manager.conn = self.storage_manager.conn
-
 
     def restart_vms_in_live_host(self):
         """
@@ -506,8 +506,6 @@ class VmManager(LibvirtClient):
             for i, device in enumerate(config.boot_devices):
                 boot_params.append(device)
 
-
-
         if config.boot_uefi:
             if not config.boot_devices:
                 boot_cmd = "--boot "
@@ -592,38 +590,41 @@ class VmManager(LibvirtClient):
             print(xml_desc)
 
             # Проверяем наличие UEFI
-            os_elem = root.find('.//os')
+            os_elem = root.find(".//os")
             if os_elem is not None:
                 # Проверяем наличие firmware
-                firmware_elem = os_elem.find('firmware')
-                if firmware_elem is not None and firmware_elem.get('efi') == 'yes':
+                firmware_elem = os_elem.find("firmware")
+                if firmware_elem is not None and firmware_elem.get("efi") == "yes":
                     result.has_uefi = True
 
                 # Проверяем наличие loader
-                loader_elem = os_elem.find('loader')
+                loader_elem = os_elem.find("loader")
                 if loader_elem is not None:
-                    loader_type = loader_elem.get('type', '')
+                    loader_type = loader_elem.get("type", "")
                     loader_path = loader_elem.text
                     result.loader_type = loader_type
                     result.secure_boot_loader = loader_path
 
                     # Проверяем, является ли загрузчик Secure Boot
-                    if loader_path and ('secboot' in loader_path.lower() or 'secure' in loader_path.lower()):
+                    if loader_path and (
+                        "secboot" in loader_path.lower()
+                        or "secure" in loader_path.lower()
+                    ):
                         result.has_secure_boot = True
 
                     # Проверяем атрибуты secure
-                    if loader_elem.get('secure') == 'yes':
+                    if loader_elem.get("secure") == "yes":
                         result.has_secure_boot = True
 
-            qemu_commandline = root.find('qemu:commandline', QEMU_NAMESPACE)
+            qemu_commandline = root.find("qemu:commandline", QEMU_NAMESPACE)
             if qemu_commandline is not None:
-                for arg in qemu_commandline.findall('qemu:arg', QEMU_NAMESPACE):
-                    value = arg.get('value', '')
-                    if 'secureboot=on' in value or 'loader_secure=yes' in value:
+                for arg in qemu_commandline.findall("qemu:arg", QEMU_NAMESPACE):
+                    value = arg.get("value", "")
+                    if "secureboot=on" in value or "loader_secure=yes" in value:
                         result.has_secure_boot = True
 
             # Проверяем наличие nvram
-            nvram_elem = os_elem.find('nvram') if os_elem is not None else None
+            nvram_elem = os_elem.find("nvram") if os_elem is not None else None
             if nvram_elem is not None:
                 result.has_uefi = True
 
@@ -1243,12 +1244,13 @@ class VmManager(LibvirtClient):
                 # Устанавливаем текст описания
                 description_elem.text = str(vm_update.description)
 
-
                 modified = True
-                
+
             # TODO: Реализовать изменение autostart(то что директория)
             # Изменение модели CPU (требует остановки ВМ)
-            if vm_update.cpu_model is not None and False == True: # Заглушка, не протестировано
+            if (
+                vm_update.cpu_model is not None and False == True
+            ):  # Заглушка, не протестировано
                 try:
                     cpu_config = vm_update.cpu_model
 
@@ -1258,14 +1260,23 @@ class VmManager(LibvirtClient):
 
                     # Проверяем обязательные поля для разных режимов
                     mode = cpu_config.get("mode", "host-passthrough")
-                    valid_modes = ["host-passthrough", "host-model", "custom", "maximum"]
+                    valid_modes = [
+                        "host-passthrough",
+                        "host-model",
+                        "custom",
+                        "maximum",
+                    ]
 
                     if mode not in valid_modes:
-                        raise ValueError(f"Недопустимый режим CPU: {mode}. Допустимо: {valid_modes}")
+                        raise ValueError(
+                            f"Недопустимый режим CPU: {mode}. Допустимо: {valid_modes}"
+                        )
 
                     # Для custom режима обязательна модель
                     if mode == "custom" and "model" not in cpu_config:
-                        raise ValueError("Для custom режима CPU требуется параметр 'model'")
+                        raise ValueError(
+                            "Для custom режима CPU требуется параметр 'model'"
+                        )
 
                     # Проверяем, что ВМ остановлена
                     try:
@@ -1333,8 +1344,15 @@ class VmManager(LibvirtClient):
                     if "features" in cpu_config:
                         features = cpu_config["features"]
                         for feature_name, feature_policy in features.items():
-                            if feature_policy not in ["require", "optional", "disable", "forbid"]:
-                                self.logger.warning(f"Некорректная политика фичи '{feature_name}': {feature_policy}")
+                            if feature_policy not in [
+                                "require",
+                                "optional",
+                                "disable",
+                                "forbid",
+                            ]:
+                                self.logger.warning(
+                                    f"Некорректная политика фичи '{feature_name}': {feature_policy}"
+                                )
                                 continue
 
                             feature_elem = ET.SubElement(cpu_elem, "feature")
@@ -1342,7 +1360,9 @@ class VmManager(LibvirtClient):
                             feature_elem.set("name", feature_name)
 
                     modified = True
-                    self.logger.info(f"Конфигурация CPU успешно обновлена: режим={mode}")
+                    self.logger.info(
+                        f"Конфигурация CPU успешно обновлена: режим={mode}"
+                    )
 
                 except ValueError as e:
                     self.logger.error(f"Ошибка валидации CPU конфигурации: {e}")
@@ -2444,7 +2464,9 @@ class VmManager(LibvirtClient):
                             disk_format = self.config.disk_format_by_path(new_path)
                             disk_name = base_name.replace(f".{disk_format.value}", "")
                             path = old_path.replace(f"/{base_name}", "")
-                            new_path = str(Path(path) / f"{new_name}.{disk_format.value}")
+                            new_path = str(
+                                Path(path) / f"{new_name}.{disk_format.value}"
+                            )
                             self.storage_manager.clone_disk(
                                 disk_name, path, disk_format, new_name
                             )

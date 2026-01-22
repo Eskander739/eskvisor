@@ -19,8 +19,13 @@ from agent.client.hypervisor.libvirt.managers.virsh import (
 from agent.client.hypervisor.libvirt.managers.vm import VmManager
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.network import VmNetAdapter, NetworkParameters, NetworkBridge, \
-    NetworkForward, NetworkDHCPRange
+from agent.client.hypervisor.libvirt.models.network import (
+    VmNetAdapter,
+    NetworkParameters,
+    NetworkBridge,
+    NetworkForward,
+    NetworkDHCPRange,
+)
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
 )
@@ -267,6 +272,8 @@ def create_resource_pool_session():
             CommandMessagesEnum.rp_virtual_delete_success.name,
             CommandMessagesEnum.rp_virtual_not_found.name,
         ), delete_rp_info.note
+
+
 @pytest.fixture(scope="session")
 def create_nat_network_session():
     with NetworkManager() as vn_manager:
@@ -284,8 +291,8 @@ def create_nat_network_session():
         network_name = nat_params.name
         created_network_info = vn_manager.create_network(nat_params)
         assert (
-                created_network_info.code
-                == CommandMessagesEnum.virtual_network_successfully_created.name
+            created_network_info.code
+            == CommandMessagesEnum.virtual_network_successfully_created.name
         )
         nat_network = created_network_info.net_info
         assert nat_network.network_type.type == "nat"
@@ -298,6 +305,7 @@ def create_nat_network_session():
             vn_manager.delete_network(network_name, True)
             v_network = vn_manager.get_network_info(network_name)
             assert v_network.code == CommandMessagesEnum.virtual_network_not_found.name
+
 
 @pytest.fixture(scope="session")
 def storage_session():

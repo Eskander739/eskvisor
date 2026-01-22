@@ -28,6 +28,7 @@ def test_vm_05_upgrade_maxmemory_with_destroy_vm(vm_session, vm_resource):
     """
     vm_created = None
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
+
     def kb_to_mb(kb):
         return kb / 1024
 

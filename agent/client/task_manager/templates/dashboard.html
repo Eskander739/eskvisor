@@ -5,6 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Диспетчер задач виртуализации</title>
     <style>
+        :root {
+            --black: #000000;
+            --dark: #0a0a0a;
+            --darker: #111111;
+            --gray-dark: #1a1a1a;
+            --gray: #2a2a2a;
+            --gray-light: #3a3a3a;
+            --red: #dc2626;
+            --red-dark: #b91c1c;
+            --red-light: #ef4444;
+            --red-gradient: linear-gradient(135deg, #dc2626 0%, #b91c1b 100%);
+            --white: #ffffff;
+            --light: #f5f5f5;
+            --light-gray: #a3a3a3;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.7);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --radius: 8px;
+            --radius-lg: 16px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,205 +33,383 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #333;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.7;
+            color: var(--light);
+            background: var(--black);
+            overflow-x: hidden;
+            font-weight: 400;
         }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
+        .background-animation {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -2;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(220, 38, 38, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(220, 38, 38, 0.02) 0%, transparent 50%);
         }
 
-        header {
-            background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+        h1, h2, h3, h4 {
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
         }
 
         h1 {
             font-size: 2.5rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            margin-bottom: 1.5rem;
+            font-weight: 800;
+            color: var(--white);
         }
 
-        .subtitle {
-            color: #b8e0ff;
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--white);
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--white);
+        }
+
+        p {
+            font-size: 1rem;
+            color: var(--light-gray);
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Навигация */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 1000;
+            padding: 1.25rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--white);
+            text-decoration: none;
+            letter-spacing: -0.03em;
+        }
+
+        .logo span {
+            color: var(--red);
+            font-weight: 800;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--light);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: var(--red);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--red);
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        /* Контент */
+        .dashboard-content {
+            padding-top: 6rem;
+            padding-bottom: 3rem;
+        }
+
+        .dashboard-title {
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--gray);
+            padding-bottom: 1rem;
+        }
+
+        .dashboard-title h1 {
+            margin-bottom: 0.5rem;
+        }
+
+        .dashboard-title p {
+            color: var(--light-gray);
             font-size: 1.1rem;
         }
 
-        .dashboard {
+        /* Карточки статистики */
+        .stats-cards {
             display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 20px;
-            padding: 30px;
-            min-height: 700px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
         }
 
-        .sidebar {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
+        .stat-card {
+            background: var(--gray-dark);
+            border-radius: var(--radius);
+            padding: 1.75rem;
+            border: 1px solid var(--gray-light);
+            transition: var(--transition);
+            text-align: center;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--red);
+            box-shadow: var(--shadow);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.75rem;
+            color: var(--light-gray);
+        }
+
+        .stat-card .value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--red);
+            line-height: 1;
+        }
+
+        /* Основной контент */
+        .dashboard-main {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            min-height: 600px;
+        }
+
+        /* Сайдбар */
+        .dashboard-sidebar {
+            background: var(--gray-dark);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            border: 1px solid var(--gray-light);
+            height: fit-content;
         }
 
         .control-panel {
-            margin-bottom: 30px;
+            margin-bottom: 2.5rem;
         }
 
         .control-panel h3 {
-            color: #3a0ca3;
-            margin-bottom: 15px;
-            font-size: 1.2rem;
-            border-bottom: 2px solid #4361ee;
-            padding-bottom: 8px;
+            color: var(--red);
+            margin-bottom: 1.25rem;
+            font-size: 1.1rem;
+            border-bottom: 2px solid var(--red);
+            padding-bottom: 0.75rem;
+            letter-spacing: 0.5px;
         }
 
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 1.25rem;
         }
 
         label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 0.5rem;
             font-weight: 600;
-            color: #555;
+            color: var(--light);
+            font-size: 0.9rem;
         }
 
         select, input, textarea {
             width: 100%;
-            padding: 10px 15px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
+            padding: 0.875rem 1rem;
+            background: var(--darker);
+            border: 1px solid var(--gray);
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            transition: var(--transition);
+            color: var(--light);
         }
 
         select:focus, input:focus, textarea:focus {
             outline: none;
-            border-color: #4361ee;
+            border-color: var(--red);
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
         }
 
         textarea {
-            min-height: 100px;
+            min-height: 120px;
             resize: vertical;
-            font-family: monospace;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
         }
 
+        /* Кнопки */
         .btn {
-            background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: transform 0.3s, box-shadow 0.3s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
             width: 100%;
-            margin-top: 5px;
+            padding: 1rem;
+            background: var(--red-gradient);
+            color: var(--white);
+            border: none;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+            margin-top: 0.25rem;
         }
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(67, 97, 238, 0.3);
+            box-shadow: 0 10px 25px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--gray);
+            color: var(--light);
+        }
+
+        .btn-outline:hover {
+            background: var(--gray-dark);
+            border-color: var(--red);
         }
 
         .btn-danger {
             background: linear-gradient(135deg, #ef476f 0%, #d90429 100%);
         }
 
-        .main-content {
+        /* Основная область */
+        .dashboard-content-area {
             display: grid;
             grid-template-rows: auto 1fr;
-            gap: 20px;
+            gap: 2rem;
         }
 
-        .stats-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            text-align: center;
-            transition: transform 0.3s;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-        }
-
-        .card h3 {
-            color: #666;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-        }
-
-        .card .value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #3a0ca3;
-        }
-
-        .task-lists {
+        .task-sections {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            height: 100%;
+            gap: 2rem;
+            margin-bottom: 2rem;
         }
 
         .task-section {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            background: var(--gray-dark);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            border: 1px solid var(--gray-light);
             overflow: hidden;
         }
 
         .task-section h3 {
-            color: #3a0ca3;
-            margin-bottom: 15px;
+            color: var(--red);
+            margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
             gap: 10px;
+            font-size: 1.1rem;
+        }
+
+        .task-section h3::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--red);
+            border-radius: 50%;
         }
 
         .task-list {
-            max-height: 400px;
+            max-height: 350px;
             overflow-y: auto;
             padding-right: 10px;
         }
 
+        /* Стилизация скроллбара */
+        .task-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .task-list::-webkit-scrollbar-track {
+            background: var(--darker);
+            border-radius: 3px;
+        }
+
+        .task-list::-webkit-scrollbar-thumb {
+            background: var(--gray);
+            border-radius: 3px;
+        }
+
+        .task-list::-webkit-scrollbar-thumb:hover {
+            background: var(--red);
+        }
+
         .task-item {
-            background: #f8f9fa;
-            border-left: 4px solid #4361ee;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            transition: background 0.3s;
+            background: var(--darker);
+            border-left: 3px solid var(--gray);
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            border-radius: var(--radius);
+            transition: var(--transition);
+            cursor: pointer;
         }
 
         .task-item:hover {
-            background: #e9ecef;
+            background: var(--gray);
+            transform: translateX(5px);
+        }
+
+        .task-item.pending {
+            border-left-color: var(--red-light);
         }
 
         .task-item.processing {
-            border-left-color: #ffd166;
+            border-left-color: #ffb347;
         }
 
         .task-item.completed {
@@ -223,94 +422,273 @@
 
         .task-id {
             font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
-            font-family: monospace;
+            color: var(--white);
+            margin-bottom: 0.5rem;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
         }
 
         .task-meta {
             display: flex;
             justify-content: space-between;
             font-size: 0.85rem;
-            color: #666;
+            color: var(--light-gray);
         }
 
-        .notifications {
-            background: #f1faee;
-            border: 2px solid #a8dadc;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 20px;
-            max-height: 300px;
-            overflow-y: auto;
+        .task-params {
+            margin-top: 0.75rem;
+            font-size: 0.8rem;
+            color: var(--light-gray);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem;
+            border-radius: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .notifications h3 {
-            color: #1d3557;
-            margin-bottom: 15px;
+        /* Уведомления */
+        .notifications-section {
+            background: var(--gray-dark);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            border: 1px solid var(--gray-light);
         }
 
-        .notification-item {
-            background: white;
-            padding: 10px 15px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            border-left: 4px solid #457b9d;
-            font-size: 0.9rem;
-        }
-
-        .status-connected {
-            color: #06d6a0;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .connection-status {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: white;
-            padding: 10px 20px;
-            border-radius: 50px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        .notifications-section h3 {
+            color: var(--red);
+            margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
             gap: 10px;
-            z-index: 1000;
+            font-size: 1.1rem;
+        }
+
+        .notifications-section h3::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--red);
+            border-radius: 50%;
+        }
+
+        #notificationsList {
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .notification-item {
+            background: var(--darker);
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-radius: var(--radius);
+            border-left: 3px solid #457b9d;
+            font-size: 0.9rem;
+            color: var(--light);
+            line-height: 1.5;
+        }
+
+        .notification-item.success {
+            border-left-color: #06d6a0;
+        }
+
+        .notification-item.error {
+            border-left-color: #ef476f;
+        }
+
+        .notification-item.warning {
+            border-left-color: #ffb347;
+        }
+
+        /* Статус соединения */
+        .connection-status {
+            position: fixed;
+            top: 1.25rem;
+            right: 2rem;
+            background: var(--gray-dark);
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 1001;
+            border: 1px solid var(--gray-light);
         }
 
         .status-dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: #ccc;
+            background: var(--light-gray);
         }
 
         .status-dot.connected {
-            background: #06d6a0;
+            background: var(--red);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        #connectionStatus {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        /* Пустые состояния */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--light-gray);
+        }
+
+        .empty-state h4 {
+            color: var(--light);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 1200px) {
+            .dashboard-main {
+                grid-template-columns: 280px 1fr;
+            }
+
+            .task-sections {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 992px) {
+            .dashboard-main {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-sidebar {
+                order: 2;
+            }
+
+            .dashboard-content-area {
+                order: 1;
+            }
+
+            .stats-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1.5rem;
+            }
+
+            .dashboard-content {
+                padding-top: 5rem;
+            }
+
+            .stats-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .connection-status {
+                right: 1.5rem;
+                padding: 0.5rem 1rem;
+                font-size: 0.85rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .container {
+                padding: 0 1rem;
+            }
+
+            .dashboard-content {
+                padding-top: 4.5rem;
+            }
+
+            .task-section {
+                padding: 1.5rem;
+            }
+
+            .dashboard-sidebar {
+                padding: 1.5rem;
+            }
+
+            .btn {
+                padding: 0.875rem;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Фон -->
+    <div class="background-animation"></div>
+
+    <!-- Статус соединения -->
     <div class="connection-status">
         <div class="status-dot" id="statusDot"></div>
         <span id="connectionStatus">Подключение...</span>
     </div>
 
-    <div class="container">
-        <header>
-            <h1>Диспетчер задач виртуализации</h1>
-            <p class="subtitle">Управление виртуальными машинами, сетями и хранилищами в реальном времени</p>
-        </header>
+    <!-- Навигация -->
+    <header>
+        <div class="container">
+            <nav>
+                <a href="#" class="logo">esk<span>visor</span> dashboard</a>
+                <div class="nav-links">
+                    <a href="#tasks">Задачи</a>
+                    <a href="#notifications">Уведомления</a>
+                    <a href="#stats">Статистика</a>
+                </div>
+            </nav>
+        </div>
+    </header>
 
-        <div class="dashboard">
-            <div class="sidebar">
+    <!-- Основной контент -->
+    <div class="dashboard-content container">
+        <div class="dashboard-title">
+            <h1>Диспетчер задач виртуализации</h1>
+            <p>Управление виртуальными машинами, сетями и хранилищами в реальном времени</p>
+        </div>
+
+        <!-- Карточки статистики -->
+        <div class="stats-cards">
+            <div class="stat-card">
+                <h3>Всего задач</h3>
+                <div class="value" id="totalTasks">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>В ожидании</h3>
+                <div class="value" id="pendingTasks">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>В обработке</h3>
+                <div class="value" id="processingTasks">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Активные соединения</h3>
+                <div class="value" id="wsConnections">0</div>
+            </div>
+        </div>
+
+        <!-- Основная область -->
+        <div class="dashboard-main">
+            <!-- Сайдбар -->
+            <div class="dashboard-sidebar">
                 <div class="control-panel">
-                    <h3>📋 Создать задачу</h3>
+                    <h3>Создать задачу</h3>
                     <div class="form-group">
                         <label for="taskType">Тип задачи:</label>
                         <select id="taskType">
@@ -338,79 +716,66 @@
                     <div class="form-group">
                         <label for="taskParams">Параметры (JSON):</label>
                         <textarea id="taskParams" placeholder='{"vm_name": "test-vm", "ram": 2048}'>
-{
-  "vm_name": "ubuntu-test",
-  "ram": 2048,
-  "cpu": 2
-}
+{"name":"ESKA-VM-TEST","install_method":"import","description":null,"architecture":"x86_64","emulator_type":"kvm","os_type":"linux","os_variant":"generic","noautoconsole":true,"memory_mb":256,"max_memory_mb":null,"vcpus":2,"max_vcpus":4,"cpu_features":[],"disks":[],"networks":[],"controllers":[],"graphics":"vnc","graphics_port":null,"graphics_listen":"0.0.0.0","console_type":"pty","autostart_vm":false,"autostart":false,"qemu_commandline":null,"boot_devices":null,"extra_args":null,"video_model":"qxl","boot_uefi":false,"secure_boot":false,"secure_boot_loader":null,"machine_type":"q35","features":{"acpi":"on","apic":"on"},"qemu_agent":false,"memballoon_model":"virtio","hyperv_features":{},"cpu_model":"host-model", "disks":[{"name":"VM-DISK","path":null,"size_gb":1.0,"format":"qcow2","description":null,"sparse":true,"disk_type":"external_disk","bus_type":null,"cache":"none","readonly":false,"shareable":false,"serial":null,"resource_pool":null,"size_bytes":1073741824}]}
                         </textarea>
                     </div>
 
                     <button class="btn" onclick="createTask()">
-                        🚀 Создать задачу
+                        <i class="fas fa-rocket"></i> Создать задачу
                     </button>
                 </div>
 
                 <div class="control-panel">
-                    <h3>⚙️ Управление</h3>
+                    <h3>Управление системой</h3>
                     <button class="btn" onclick="refreshTasks()">
-                        🔄 Обновить список
+                        <i class="fas fa-sync-alt"></i> Обновить список
+                    </button>
+                    <button class="btn btn-outline" onclick="testConnection()">
+                        <i class="fas fa-network-wired"></i> Проверить соединение
                     </button>
                     <button class="btn btn-danger" onclick="clearAllTasks()">
-                        🗑️ Очистить все задачи
+                        <i class="fas fa-trash-alt"></i> Очистить все задачи
                     </button>
                 </div>
 
                 <div class="control-panel">
-                    <h3>🔍 Поиск задачи</h3>
+                    <h3>Поиск задачи</h3>
                     <div class="form-group">
                         <label for="searchTaskId">ID задачи:</label>
                         <input type="text" id="searchTaskId" placeholder="Введите ID задачи...">
                     </div>
-                    <button class="btn" onclick="searchTask()">
-                        🔎 Найти задачу
+                    <button class="btn btn-outline" onclick="searchTask()">
+                        <i class="fas fa-search"></i> Найти задачу
                     </button>
                 </div>
             </div>
 
-            <div class="main-content">
-                <div class="stats-cards">
-                    <div class="card">
-                        <h3>Всего задач</h3>
-                        <div class="value" id="totalTasks">0</div>
-                    </div>
-                    <div class="card">
-                        <h3>В ожидании</h3>
-                        <div class="value" id="pendingTasks">0</div>
-                    </div>
-                    <div class="card">
-                        <h3>В обработке</h3>
-                        <div class="value" id="processingTasks">0</div>
-                    </div>
-                    <div class="card">
-                        <h3>Активные WS</h3>
-                        <div class="value" id="wsConnections">0</div>
-                    </div>
-                </div>
-
-                <div class="task-lists">
+            <!-- Основная область контента -->
+            <div class="dashboard-content-area">
+                <div class="task-sections">
                     <div class="task-section">
-                        <h3>📥 Ожидающие задачи</h3>
+                        <h3>Ожидающие задачи</h3>
                         <div class="task-list" id="pendingList">
-                            <!-- Сюда загружаются задачи -->
+                            <div class="empty-state">
+                                <h4>Нет задач в ожидании</h4>
+                                <p>Создайте новую задачу для начала работы</p>
+                            </div>
                         </div>
                     </div>
 
                     <div class="task-section">
-                        <h3>⚙️ Задачи в обработке</h3>
+                        <h3>Задачи в обработке</h3>
                         <div class="task-list" id="processingList">
-                            <!-- Сюда загружаются задачи -->
+                            <div class="empty-state">
+                                <h4>Нет активных задач</h4>
+                                <p>Система готова к обработке</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="notifications">
-                    <h3>🔔 Уведомления</h3>
+                <div class="notifications-section">
+                    <h3>Уведомления системы</h3>
                     <div id="notificationsList">
                         <div class="notification-item">
                             Система запущена. Ожидание задач...
@@ -422,27 +787,25 @@
     </div>
 
     <script>
+        // Остается тот же JavaScript код что был в оригинале,
+        // но адаптированный под новые классы
+
         let ws = null;
         let notificationWs = null;
         let reconnectAttempts = 0;
         const maxReconnectAttempts = 5;
 
-        // Инициализация WebSocket соединений
         function initWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws`;
             const notificationWsUrl = `${protocol}//${window.location.host}/ws/notifications`;
 
-            // Основной WebSocket для команд
             ws = new WebSocket(wsUrl);
-
             ws.onopen = () => {
                 updateConnectionStatus(true);
-                console.log('WebSocket подключен');
-                addNotification('✅ WebSocket подключен к серверу');
+                addNotification('WebSocket подключен к серверу', 'success');
                 refreshTasks();
             };
-
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
@@ -451,22 +814,17 @@
                     console.error('Ошибка парсинга сообщения:', e);
                 }
             };
-
             ws.onclose = () => {
                 updateConnectionStatus(false);
-                console.log('WebSocket отключен');
-                addNotification('❌ WebSocket отключен от сервера');
+                addNotification('WebSocket отключен от сервера', 'warning');
                 attemptReconnect();
             };
-
             ws.onerror = (error) => {
                 console.error('WebSocket ошибка:', error);
-                addNotification('⚠️ Ошибка WebSocket соединения');
+                addNotification('Ошибка WebSocket соединения', 'error');
             };
 
-            // WebSocket для уведомлений
             notificationWs = new WebSocket(notificationWsUrl);
-
             notificationWs.onmessage = (event) => {
                 try {
                     const notification = JSON.parse(event.data);
@@ -480,13 +838,12 @@
         function attemptReconnect() {
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
-                addNotification(`🔄 Попытка переподключения ${reconnectAttempts}/${maxReconnectAttempts}...`);
-
+                addNotification(`Попытка переподключения ${reconnectAttempts}/${maxReconnectAttempts}`, 'warning');
                 setTimeout(() => {
                     initWebSocket();
                 }, 3000);
             } else {
-                addNotification('⛔ Не удалось подключиться к серверу');
+                addNotification('Не удалось подключиться к серверу', 'error');
             }
         }
 
@@ -497,12 +854,12 @@
             if (connected) {
                 statusDot.className = 'status-dot connected';
                 statusText.textContent = 'Подключено';
-                statusText.style.color = '#06d6a0';
+                statusText.style.color = '#dc2626';
                 reconnectAttempts = 0;
             } else {
                 statusDot.className = 'status-dot';
                 statusText.textContent = 'Отключено';
-                statusText.style.color = '#ef476f';
+                statusText.style.color = '#a3a3a3';
             }
         }
 
@@ -512,10 +869,10 @@
                     updateTaskLists(data);
                     break;
                 case 'subscription':
-                    addNotification(data.message);
+                    addNotification(data.message, 'success');
                     break;
                 case 'error':
-                    addNotification(`Ошибка: ${data.message}`);
+                    addNotification(data.message, 'error');
                     break;
             }
         }
@@ -524,46 +881,46 @@
             console.log('Получено уведомление:', notification);
 
             let message = '';
-            let emoji = '🔔';
+            let type = 'success';
 
             switch (notification.notification_type) {
                 case 'task_created':
-                    emoji = '🆕';
                     message = `Создана новая задача: ${notification.request_id}`;
+                    type = 'success';
                     break;
                 case 'status_change':
-                    emoji = '🔄';
                     message = `Статус задачи ${notification.request_id} изменен на ${notification.status}`;
+                    type = 'warning';
                     break;
                 case 'result_ready':
-                    emoji = '✅';
                     message = `Задача ${notification.request_id} выполнена успешно`;
+                    type = 'success';
                     break;
                 case 'error_occurred':
-                    emoji = '❌';
                     message = `Ошибка в задаче ${notification.request_id}: ${notification.error || 'Неизвестная ошибка'}`;
+                    type = 'error';
                     break;
                 case 'task_completed':
-                    emoji = '🏁';
                     message = `Задача ${notification.request_id} завершена`;
+                    type = 'success';
                     break;
                 default:
-                    message = JSON.stringify(notification);
+                    message = `Уведомление: ${JSON.stringify(notification)}`;
+                    type = 'warning';
             }
 
-            addNotification(`${emoji} ${message}`);
-            refreshTasks(); // Обновляем список задач при уведомлении
+            addNotification(message, type);
+            refreshTasks();
         }
 
-        function addNotification(text) {
+        function addNotification(text, type = '') {
             const notificationsList = document.getElementById('notificationsList');
             const notification = document.createElement('div');
-            notification.className = 'notification-item';
+            notification.className = `notification-item ${type}`;
             notification.textContent = text;
 
             notificationsList.prepend(notification);
 
-            // Ограничиваем количество уведомлений
             if (notificationsList.children.length > 20) {
                 notificationsList.removeChild(notificationsList.lastChild);
             }
@@ -591,18 +948,18 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        addNotification(`❌ Ошибка создания задачи: ${data.error}`);
+                        addNotification(`Ошибка создания задачи: ${data.error}`, 'error');
                     } else {
-                        addNotification(`✅ Задача создана: ${data.request_id}`);
+                        addNotification(`Задача создана: ${data.request_id}`, 'success');
                         refreshTasks();
                     }
                 })
                 .catch(error => {
-                    addNotification(`❌ Ошибка: ${error.message}`);
+                    addNotification(`Ошибка: ${error.message}`, 'error');
                 });
 
             } catch (e) {
-                addNotification('❌ Ошибка в JSON параметрах');
+                addNotification('Ошибка в JSON параметрах', 'error');
             }
         }
 
@@ -610,24 +967,22 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ action: 'get_tasks' }));
             } else {
-                // Если WebSocket не доступен, используем REST API
                 fetch('/api/tasks')
                     .then(response => response.json())
                     .then(updateTaskLists)
                     .catch(error => {
                         console.error('Ошибка получения задач:', error);
+                        addNotification('Ошибка получения задач', 'error');
                     });
             }
         }
 
         function updateTaskLists(data) {
-            // Обновляем статистику
             document.getElementById('totalTasks').textContent =
                 (data.total_pending || 0) + (data.total_processing || 0);
             document.getElementById('pendingTasks').textContent = data.total_pending || 0;
             document.getElementById('processingTasks').textContent = data.total_processing || 0;
 
-            // Обновляем список ожидающих задач
             const pendingList = document.getElementById('pendingList');
             pendingList.innerHTML = '';
 
@@ -637,7 +992,6 @@
                         const task = JSON.parse(taskJson);
                         pendingList.appendChild(createTaskItem(task, 'pending'));
                     } catch (e) {
-                        // Если не JSON, отображаем как текст
                         const item = document.createElement('div');
                         item.className = 'task-item';
                         item.innerHTML = `
@@ -650,10 +1004,14 @@
                     }
                 });
             } else {
-                pendingList.innerHTML = '<div class="task-item">Нет задач в ожидании</div>';
+                pendingList.innerHTML = `
+                    <div class="empty-state">
+                        <h4>Нет задач в ожидании</h4>
+                        <p>Создайте новую задачу для начала работы</p>
+                    </div>
+                `;
             }
 
-            // Обновляем список задач в обработке
             const processingList = document.getElementById('processingList');
             processingList.innerHTML = '';
 
@@ -663,7 +1021,6 @@
                         const task = JSON.parse(taskJson);
                         processingList.appendChild(createTaskItem(task, 'processing'));
                     } catch (e) {
-                        // Если не JSON, отображаем как текст
                         const item = document.createElement('div');
                         item.className = 'task-item processing';
                         item.innerHTML = `
@@ -676,7 +1033,12 @@
                     }
                 });
             } else {
-                processingList.innerHTML = '<div class="task-item">Нет задач в обработке</div>';
+                processingList.innerHTML = `
+                    <div class="empty-state">
+                        <h4>Нет активных задач</h4>
+                        <p>Система готова к обработке</p>
+                    </div>
+                `;
             }
         }
 
@@ -690,8 +1052,8 @@
                     <span>${task.task_type.toUpperCase()} - ${task.action}</span>
                     <span>${new Date(task.created_at).toLocaleTimeString()}</span>
                 </div>
-                <div style="margin-top: 8px; font-size: 0.85rem; color: #666;">
-                    ${JSON.stringify(task.params).substring(0, 100)}...
+                <div class="task-params">
+                    ${JSON.stringify(task.params).substring(0, 80)}...
                 </div>
             `;
 
@@ -706,7 +1068,7 @@
             const taskId = document.getElementById('searchTaskId').value.trim();
 
             if (!taskId) {
-                addNotification('❌ Введите ID задачи для поиска');
+                addNotification('Введите ID задачи для поиска', 'warning');
                 return;
             }
 
@@ -714,10 +1076,9 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        addNotification(`❌ Задача не найдена: ${data.error}`);
+                        addNotification(`Задача не найдена: ${data.error}`, 'error');
                     } else {
-                        addNotification(`✅ Задача найдена: ${data.status}`);
-                        // Подписываемся на уведомления по этой задаче
+                        addNotification(`Задача найдена: ${data.status}`, 'success');
                         if (ws && ws.readyState === WebSocket.OPEN) {
                             ws.send(JSON.stringify({
                                 action: 'subscribe_task',
@@ -727,7 +1088,7 @@
                     }
                 })
                 .catch(error => {
-                    addNotification(`❌ Ошибка поиска: ${error.message}`);
+                    addNotification(`Ошибка поиска: ${error.message}`, 'error');
                 });
         }
 
@@ -754,13 +1115,28 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    addNotification(`✅ Удалено задач: ${data.deleted}`);
+                    addNotification(`Удалено задач: ${data.deleted}`, 'success');
                     refreshTasks();
                 })
                 .catch(error => {
-                    addNotification(`❌ Ошибка: ${error.message}`);
+                    addNotification(`Ошибка: ${error.message}`, 'error');
                 });
             }
+        }
+
+        function testConnection() {
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'healthy') {
+                        addNotification('Соединение с сервером установлено', 'success');
+                    } else {
+                        addNotification('Сервер работает некорректно', 'warning');
+                    }
+                })
+                .catch(() => {
+                    addNotification('Не удалось подключиться к серверу', 'error');
+                });
         }
 
         // Автоматическое обновление списка задач каждые 10 секунд
@@ -770,7 +1146,7 @@
         window.onload = () => {
             initWebSocket();
 
-            // Показываем количество активных WS соединений (для демонстрации)
+            // Отображение активных соединений
             setInterval(() => {
                 document.getElementById('wsConnections').textContent =
                     (ws && ws.readyState === WebSocket.OPEN ? 1 : 0) +

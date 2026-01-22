@@ -149,7 +149,10 @@ class StorageManager(LibvirtClient):
                     code=CommandMessagesEnum.rp_virtual_not_found.name,
                     note=str("Отсутствует ресурс пул для создания дисков в нем"),
                 )
-            disk_path = str(Path(disk_create.path) / f"{disk_create.name}.{disk_create.format.value}")
+            disk_path = str(
+                Path(disk_create.path)
+                / f"{disk_create.name}.{disk_create.format.value}"
+            )
             self.logger.info(
                 f"Создание файлового диска: {disk_path}, размер: {disk_create.size_gb}GB, ресурс пул: '{disk_create.resource_pool}'"
             )
@@ -280,7 +283,11 @@ class StorageManager(LibvirtClient):
                 )
 
             disk_type = (
-                (DiskType.CDROM if disk_create.disk_type == DiskType.CDROM else DiskType.EXTERNAL_DISK)
+                (
+                    DiskType.CDROM
+                    if disk_create.disk_type == DiskType.CDROM
+                    else DiskType.EXTERNAL_DISK
+                )
                 if disk_create.resource_pool is None
                 else DiskType.POOL_DISK
             )
@@ -570,7 +577,9 @@ class StorageManager(LibvirtClient):
                 self.logger.info(f"Выполнение команды: {' '.join(cmd)}")
 
                 result = self.cli.execute(cmd, return_proc=True)
-                self.logger.warning(f"Результат клонирования QCOW2 диска: '{result.stdout if result.returncode == 0 else result.stderr}'")
+                self.logger.warning(
+                    f"Результат клонирования QCOW2 диска: '{result.stdout if result.returncode == 0 else result.stderr}'"
+                )
                 if result.returncode != 0:
                     raise Exception(f"Ошибка qemu-img: {result.stderr}")
             else:

@@ -20,6 +20,7 @@ def test_vm_01_create_vm(vm_session, vm_state):
     """
     vm_created = None
     random_name = f"VM-TEST-{random.randint(10000, 99999)}"
+
     def kb_to_mb(kb):
         return kb / 1024
 
@@ -53,6 +54,7 @@ def test_vm_01_create_vm(vm_session, vm_state):
             if vm_state.value == vm_state.SHUTOFF.value:
                 delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
                 assert (
-                        delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+                    delete_vm_info.code
+                    == CommandMessagesEnum.vm_successfully_deleted.name
                 )
                 assert delete_vm_info.success is True

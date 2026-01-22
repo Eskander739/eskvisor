@@ -1,21 +1,18 @@
+import orjson
 from fastapi import FastAPI, WebSocket, Request, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 import uvicorn
-import logging
 from typing import List
-import json
 
+from starlette.middleware.cors import CORSMiddleware
+
+from agent.client.logger_config import DefaultLogger
 from agent.client.task_manager.ctl_queue import RedisTaskManager
-from agent.client.task_manager.models import TaskAdd, TaskType, TaskStatus
+from agent.client.task_manager.models import TaskAdd, TaskType, TaskStatus, TasksInfo
 from agent.client.task_manager.ws import WebSocketNotificationHandler
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("TaskManagerServer")
+logger = DefaultLogger("TaskManagerServer")
 
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
 
@@ -25,16 +22,74 @@ ws_handler = WebSocketNotificationHandler(queue_manager)
 
 # Настройка шаблонов
 templates = Jinja2Templates(directory="templates")
-
 # Список активных подключений
 active_connections: List[WebSocket] = []
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В продакшене укажите конкретные домены
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.on_event("startup")
-async def startup_event():
-    """Запуск обработчика уведомлений при старте"""
-    logger.info("Запуск WebSocket обработчика уведомлений...")
-    await ws_handler.start_listening()
+
+# Добавьте middleware для CSP заголовков
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    # Разрешаем только локальные скрипты и блокируем document.write
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "object-src 'none';"
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.delete("/api/tasks/clear")
+async def clear_all_tasks():
+    """Очистить все задачи из очереди"""
+    try:
+        # Получаем все задачи
+        pending_tasks = queue_manager.get_all_tasks()
+        processing_tasks = queue_manager.get_process_tasks()
+
+        # Преобразуем JSON строки обратно в объекты, если необходимо
+        all_tasks = []
+
+        # Обрабатываем pending задачи
+        for task_json in pending_tasks:
+            try:
+                task = orjson.loads(task_json.model_dump_json())
+                all_tasks.append(task.get("request_id"))
+            except:
+                pass
+
+        # Обрабатываем processing задачи
+        for task_json in processing_tasks:
+            try:
+                task = orjson.loads(task_json.model_dump_json())
+                all_tasks.append(task.get("request_id"))
+            except:
+                pass
+
+        deleted_count = queue_manager.delete_all_tasks()
+        deleted_count_working = queue_manager.delete_all_tasks(
+            queue_manager.processing_queue_name
+        )
+        deleted_count += deleted_count_working
+        logger.info(f"Удалено задач: {deleted_count}")
+
+        return JSONResponse(
+            {"deleted": deleted_count, "message": f"Удалено {deleted_count} задач"}
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка очистки задач: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -49,13 +104,12 @@ async def get_tasks():
     try:
         pending_tasks = queue_manager.get_all_tasks()
         processing_tasks = queue_manager.get_process_tasks()
-
-        return JSONResponse({
-            "pending": pending_tasks,
-            "processing": processing_tasks,
-            "total_pending": len(pending_tasks),
-            "total_processing": len(processing_tasks)
-        })
+        return TasksInfo(
+            pending=pending_tasks,
+            processing=processing_tasks,
+            total_pending=len(pending_tasks),
+            total_processing=len(processing_tasks),
+        )
     except Exception as e:
         logger.error(f"Ошибка получения задач: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -66,16 +120,9 @@ async def get_task_info(request_id: str):
     """Получить информацию о конкретной задаче"""
     try:
         task_info = queue_manager.get_task_info(request_id)
-        task_status = queue_manager.get_task_status(request_id)
-        task_result = queue_manager.get_task_result(request_id)
 
         if task_info:
-            return JSONResponse({
-                "request_id": request_id,
-                "status": task_status.value if task_status else None,
-                "result": task_result,
-                "info": task_info.model_dump()
-            })
+            return task_info
         else:
             return JSONResponse({"error": "Task not found"}, status_code=404)
     except Exception as e:
@@ -91,23 +138,18 @@ async def create_task(task_data: dict):
 
         task = TaskAdd(
             task_type=TaskType(task_data.get("task_type", "vm")),
-            action=task_data.get("action", "list"),
+            action=task_data.get("action"),
             params=task_data.get("params", {}),
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
 
         # Импортируем диспетчер для создания задачи
         from agent.client.task_manager.dispatcher import TaskDispatcher
+
         dispatcher = TaskDispatcher(queue_manager, worker_count=1)
+        dispatcher.submit_task(task)
 
-        request_id = dispatcher.submit_task(task)
-
-        return JSONResponse({
-            "message": "Task created successfully",
-            "request_id": request_id,
-            "task_type": task.task_type.value,
-            "action": task.action
-        })
+        return task
     except Exception as e:
         logger.error(f"Ошибка создания задачи: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -126,33 +168,42 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
 
             try:
-                message = json.loads(data)
+                message = orjson.loads(data)
                 action = message.get("action")
 
                 if action == "get_tasks":
                     # Отправляем список задач
-                    pending_tasks = queue_manager.get_all_tasks()
-                    processing_tasks = queue_manager.get_process_tasks()
+                    pending_tasks = [
+                        current_task.model_dump_json()
+                        for current_task in queue_manager.get_all_tasks()
+                    ]
+                    processing_tasks = [
+                        current_task.model_dump_json()
+                        for current_task in queue_manager.get_process_tasks()
+                    ]
 
-                    await websocket.send_json({
-                        "type": "tasks_list",
-                        "pending": pending_tasks,
-                        "processing": processing_tasks
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "tasks_list",
+                            "pending": pending_tasks,
+                            "processing": processing_tasks,
+                        }
+                    )
 
                 elif action == "subscribe_task":
                     request_id = message.get("request_id")
-                    await websocket.send_json({
-                        "type": "subscription",
-                        "message": f"Подписан на задачу {request_id}",
-                        "request_id": request_id
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "subscription",
+                            "message": f"Подписан на задачу {request_id}",
+                            "request_id": request_id,
+                        }
+                    )
 
-            except json.JSONDecodeError:
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "Неверный формат JSON"
-                })
+            except orjson.JSONDecodeError:
+                await websocket.send_json(
+                    {"type": "error", "message": "Неверный формат JSON"}
+                )
 
     except WebSocketDisconnect:
         active_connections.remove(websocket)
@@ -179,10 +230,4 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="127.0.0.1",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, log_level="info")

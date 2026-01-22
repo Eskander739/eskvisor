@@ -1,20 +1,10 @@
 import asyncio
-import json
-import logging
-from typing import Set
 
-from fastapi import WebSocket, WebSocketDisconnect
-from starlette.templating import Jinja2Templates
-
+import orjson
+from fastapi import WebSocket
+from agent.client.logger_config import DefaultLogger
 from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.models import TaskNotification
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("WebSocketHandler")
-templates = Jinja2Templates(directory="/templates")
 
 
 class WebSocketNotificationHandler:
@@ -22,42 +12,114 @@ class WebSocketNotificationHandler:
 
     def __init__(self, queue_manager: RedisTaskManager):
         self.queue_manager = queue_manager
-        self.active_connections: Set[WebSocket] = set()
+        self.logger = DefaultLogger("WSNotification")
+        self.active_connections: set[WebSocket] = set()
         self.pubsub = None
+        self.listening_task = None
+        self.running = False
 
     async def connect(self, websocket: WebSocket):
         """Подключение клиента WebSocket"""
         await websocket.accept()
         self.active_connections.add(websocket)
-        logger.info(f"Новое WebSocket подключение. Всего: {len(self.active_connections)}")
+
+        # Запускаем прослушивание при первом подключении
+        if not self.running:
+            await self.start_listening()
+
+        self.logger.info(
+            f"Новое WebSocket подключение. Всего: {len(self.active_connections)}"
+        )
 
     def disconnect(self, websocket: WebSocket):
         """Отключение клиента WebSocket"""
         self.active_connections.remove(websocket)
-        logger.info(f"WebSocket отключен. Осталось: {len(self.active_connections)}")
+        self.logger.info(
+            f"WebSocket отключен. Осталось: {len(self.active_connections)}"
+        )
+
+        # Если нет активных подключений, останавливаем прослушивание
+        if not self.active_connections and self.running:
+            self.stop_listening()
 
     async def start_listening(self):
         """Запуск прослушивания уведомлений из Redis"""
-        if not self.pubsub:
+        try:
+            if self.running:
+                return
+
+            self.logger.info("Запуск прослушивания Redis Pub/Sub...")
+            self.running = True
+
+            # Создаем PubSub подключение
             self.pubsub = self.queue_manager.subscribe_to_notifications()
 
-        # Запускаем фоновую задачу для обработки сообщений
-        asyncio.create_task(self._process_notifications())
+            # Запускаем фоновую задачу для обработки сообщений
+            self.listening_task = asyncio.create_task(self._process_notifications())
+            self.logger.info("Прослушивание Redis Pub/Sub запущено")
+
+        except Exception as e:
+            self.logger.error(f"Ошибка запуска прослушивания: {e}")
+            self.running = False
+
+    def stop_listening(self):
+        """Остановка прослушивания уведомлений"""
+        self.logger.info("Остановка прослушивания Redis Pub/Sub...")
+        self.running = False
+
+        if self.pubsub:
+            try:
+                self.pubsub.unsubscribe()
+                self.pubsub.close()
+            except Exception as e:
+                self.logger.error(f"Ошибка при закрытии PubSub: {e}")
+
+        if self.listening_task:
+            self.listening_task.cancel()
+
+        self.pubsub = None
+        self.logger.info("Прослушивание Redis Pub/Sub остановлено")
 
     async def _process_notifications(self):
         """Обработка уведомлений из Redis Pub/Sub"""
-        for message in self.pubsub.listen():
-            if message['type'] == 'message':
+        try:
+            while self.running and self.pubsub:
                 try:
-                    # Валидируем уведомление через Pydantic
-                    notification_data = json.loads(message['data'])
-                    notification = TaskNotification(**notification_data)
+                    # Получаем сообщение с таймаутом, чтобы можно было проверить self.running
+                    message = self.pubsub.get_message(timeout=1.0)
 
-                    # Отправляем всем подключенным клиентам
-                    await self.broadcast_notification(notification)
+                    if message and message["type"] == "message":
+                        self.logger.debug(f"Получено сообщение из Redis: {message}")
+
+                        try:
+                            # Валидируем уведомление через Pydantic
+                            notification_data = orjson.loads(message["data"])
+                            notification = TaskNotification(**notification_data)
+
+                            # Отправляем всем подключенным клиентам
+                            await self.broadcast_notification(notification)
+
+                        except orjson.JSONDecodeError as e:
+                            self.logger.error(
+                                f"Ошибка декодирования JSON: {e}, данные: {message['data']}"
+                            )
+                        except Exception as e:
+                            self.logger.error(f"Ошибка обработки уведомления: {e}")
+
+                    # Небольшая пауза для предотвращения busy waiting
+                    await asyncio.sleep(0.1)
 
                 except Exception as e:
-                    logger.error(f"Ошибка обработки уведомления: {e}")
+                    self.logger.error(f"Ошибка при получении сообщения: {e}")
+                    await asyncio.sleep(1)
+
+        except asyncio.CancelledError:
+            self.logger.info("Задача прослушивания отменена")
+            raise
+        except Exception as e:
+            self.logger.error(f"Критическая ошибка в задаче прослушивания: {e}")
+        finally:
+            self.running = False
 
     async def broadcast_notification(self, notification: TaskNotification):
         """Отправка уведомления всем подключенным клиентам"""
@@ -65,69 +127,18 @@ class WebSocketNotificationHandler:
             return
 
         disconnected = set()
-        notification_json = notification.model_dump_json()
-
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(notification_json)
-            except Exception as e:
-                logger.error(f"Ошибка отправки клиенту: {e}")
-                disconnected.add(connection)
-
-        for connection in disconnected:
-            self.disconnect(connection)
-
-    async def handle_client(self, websocket: WebSocket):
-        """Обработчик клиентского соединения"""
-        await self.connect(websocket)
-
         try:
-            while True:
-                # Клиент может отправлять команды (например, подписку на конкретную задачу)
-                data = await websocket.receive_text()
-                await self._handle_client_message(websocket, data)
+            notification_json = notification.model_dump_json()
 
-        except WebSocketDisconnect:
-            self.disconnect(websocket)
+            for connection in self.active_connections:
+                try:
+                    await connection.send_text(notification_json)
+                except Exception as e:
+                    self.logger.error(f"Ошибка отправки клиенту: {e}")
+                    disconnected.add(connection)
+
+            for connection in disconnected:
+                self.disconnect(connection)
+
         except Exception as e:
-            logger.error(f"Ошибка в обработчике клиента: {e}")
-            self.disconnect(websocket)
-
-    async def _handle_client_message(self, websocket: WebSocket, message: str):
-        """Обработка сообщений от клиента"""
-        try:
-            data = json.loads(message)
-            action = data.get("action")
-
-            if action == "subscribe_task":
-                # Клиент подписывается на конкретную задачу
-                request_id = data.get("request_id")
-                # Здесь можно добавить логику фильтрации уведомлений
-                await websocket.send_text(
-                    json.dumps({
-                        "status": "subscribed",
-                        "request_id": request_id
-                    })
-                )
-
-            elif action == "get_task_info":
-                # Запрос информации о задаче
-                request_id = data.get("request_id")
-                task_info = self.queue_manager.get_task_info(request_id)
-
-                await websocket.send_text(
-                    json.dumps({
-                        "action": "task_info",
-                        "request_id": request_id,
-                        "data": task_info.model_dump() if task_info else None
-                    })
-                )
-
-        except json.JSONDecodeError:
-            await websocket.send_text(
-                json.dumps({"error": "Invalid JSON format"})
-            )
-        except Exception as e:
-            await websocket.send_text(
-                json.dumps({"error": str(e)})
-            )
+            self.logger.error(f"Ошибка при подготовке уведомления: {e}")

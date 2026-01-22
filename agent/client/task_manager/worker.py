@@ -14,7 +14,6 @@ from agent.client.hypervisor.libvirt.models.msg import (
 )
 from agent.client.hypervisor.libvirt.models.network import (
     NetworkParameters,
-    NetworkInfo,
 )
 from agent.client.hypervisor.libvirt.models.snapshots import (
     SnapshotCreateRequest,
@@ -33,7 +32,12 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     Disk,
 )
 from agent.client.task_manager.ctl_queue import RedisTaskManager
-from agent.client.task_manager.models import TaskType, TaskResponse, TaskStatus, TaskNotificationType
+from agent.client.task_manager.models import (
+    TaskType,
+    TaskResponse,
+    TaskStatus,
+    TaskNotificationType,
+)
 from agent.client.hypervisor.libvirt.managers.vm import VmManager
 from agent.client.hypervisor.libvirt.managers.network import NetworkManager
 from agent.client.hypervisor.libvirt.managers.snapshot import SnapshotManager
@@ -82,7 +86,7 @@ class TaskHandler:
         """
         try:
             logger.info(f"Обработка задачи: {task_type.value}.{action}")
-
+            print(params)
             if task_type == TaskType.VM:
                 result = self._handle_vm_task(action, params)
             elif task_type == TaskType.NETWORK:
@@ -123,7 +127,7 @@ class TaskHandler:
             # Создание ВМ
             vm_config = VMCreateRequest(**params)
             result = self.vm_manager.create_vm(vm_config)
-
+            print(params)
             if hasattr(result, "model_dump"):
                 return result
             return result
@@ -164,8 +168,14 @@ class TaskHandler:
             vm_name = params["vm_name"]
             dest_uri = params["dest_uri"]
             live = params.get("live") if params.get("live") else False
-            undefine_source = params.get("undefine_source") if params.get("undefine_source") else False
-            result = self.vm_manager.migrate_vm(vm_name, dest_uri,  live, undefine_source)
+            undefine_source = (
+                params.get("undefine_source")
+                if params.get("undefine_source")
+                else False
+            )
+            result = self.vm_manager.migrate_vm(
+                vm_name, dest_uri, live, undefine_source
+            )
             return result
 
         elif action == "list":
@@ -474,6 +484,7 @@ class TaskWorker(threading.Thread):
         while not self.stop_event.is_set():
             try:
                 task = self.queue_manager.execute_task()
+                print("ТАААААААААААААААСК: ", task)
 
                 if not task:
                     time.sleep(3)
@@ -490,7 +501,7 @@ class TaskWorker(threading.Thread):
                     request_id=task.request_id,
                     task_type=task.task_type,
                     status=TaskStatus.PROCESSING,
-                    data={"worker": self.name}
+                    data={"worker": self.name},
                 )
 
                 try:
@@ -499,7 +510,7 @@ class TaskWorker(threading.Thread):
                         action=task.action,
                         params=task.params,
                     )
-
+                    print("РЕЗАААААААААААААААААЛТ: ", result.get("result"))
                     handle_result = (
                         orjson.loads(result.get("result"))
                         if isinstance(result.get("result"), str)

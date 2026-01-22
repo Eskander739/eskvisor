@@ -3,6 +3,8 @@ import os
 import re
 
 from agent.client.cli import CLIControl
+from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
+from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,
     LogicVolume,
@@ -414,6 +416,7 @@ class LogicalVolumeManager:
 
 
 if __name__ == "__main__":
+    print(DiskCreate(name="VM-DISK").model_dump_json())
     manager = LogicalVolumeManager()
     # manager.create_volume("ESKA", 1.5, "vg_eskvisor_01")
     # manager.delete_all_volume("vg_eskvisor_01")

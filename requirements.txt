@@ -10,3 +10,6 @@ isort==7.0.0
 orjson==3.11.5
 dotenv==0.9.9
 pytest-sugar==1.1.1
+uvicorn==0.38.0
+starlette==0.50.0
+fastapi==0.124.4

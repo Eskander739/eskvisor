@@ -115,11 +115,15 @@ class VMCreateRequest(BaseModel):
     video_model: str = "qxl"
     boot_uefi: bool = False
     secure_boot: bool = False
-    secure_boot_loader: str | None = None  # например, "/usr/share/OVMF/OVMF_CODE_MS.fd" Тип загрузчика Secure Boot (опционально)
+    secure_boot_loader: str | None = (
+        None  # например, "/usr/share/OVMF/OVMF_CODE_MS.fd" Тип загрузчика Secure Boot (опционально)
+    )
 
     machine_type: MachineType = Field(
         default=(
-            MachineType.Q35 if architecture == Architecture.X86_64 else MachineType.PC_I440FX
+            MachineType.Q35
+            if architecture == Architecture.X86_64
+            else MachineType.PC_I440FX
         ),
         description="Тип эмулируемой машины",
     )
@@ -147,10 +151,19 @@ class VMCreateRequest(BaseModel):
     def validate_disk_type_constraints(self):
         """Проверка условно обязательных полей в зависимости от типа"""
 
-        if self.secure_boot and not self.boot_uefi or self.secure_boot_loader and not self.boot_uefi:
-            raise ValueError("Secure Boot требует включения UEFI загрузки, включите boot_uefi или отключите secure_boot")
+        if (
+            self.secure_boot
+            and not self.boot_uefi
+            or self.secure_boot_loader
+            and not self.boot_uefi
+        ):
+            raise ValueError(
+                "Secure Boot требует включения UEFI загрузки, включите boot_uefi или отключите secure_boot"
+            )
         if not self.secure_boot and self.secure_boot_loader:
-            raise ValueError("Secure Boot Loader требует включения Secure Boot загрузки, включите Secure Boot или отключите Secure Boot Loader")
+            raise ValueError(
+                "Secure Boot Loader требует включения Secure Boot загрузки, включите Secure Boot или отключите Secure Boot Loader"
+            )
 
         if self.boot_devices:
             for current_disk in self.disks:
@@ -329,6 +342,7 @@ class VirtualMachine(BaseModel):
 class VirtualMachinesList(BaseModel):
     total: int
     items: list[VirtualMachine]
+
 
 class SecureBootVM(BaseModel):
     vm_name: str

@@ -59,7 +59,9 @@ def test_vm_11_clone_vm(vm_session, storage_session, vm_state):
         assert vm_info.description == vm_template.description
         assert vm_info.uuid != create_vm_info.vm_info.uuid
         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
-        assert wait_while_not(lambda: get_state(cloned_vm_name) == VMState.SHUTOFF.value, timeout=5)
+        assert wait_while_not(
+            lambda: get_state(cloned_vm_name) == VMState.SHUTOFF.value, timeout=5
+        )
         disk_info = storage_session.get_disks_by_vm(cloned_vm_name)
         assert len(disk_info) == 1
         disk_info = disk_info.pop()

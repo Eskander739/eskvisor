@@ -31,7 +31,8 @@ def test_vm_01_create_vm(vm_session, vm_state, boot_uefi):
             name=random_name,
             description=f"VM-TEST-{random.randint(10000, 99999)}-DESCRIPTION",
             disks=[DiskCreate(name=new_disk_name)],
-            memory_mb=512, boot_uefi=boot_uefi,
+            memory_mb=512,
+            boot_uefi=boot_uefi,
             **autostart,
         )
         create_vm_info = vm_session.create_vm(vm_template)

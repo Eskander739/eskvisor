@@ -1408,21 +1408,21 @@ class NetworkManager(LibvirtClient):
             )
 
     def _generate_interface_xml(
-            self,
-            network_name: str,
-            model: str = "virtio",
-            mac_address: str | None = None,
-            driver_queues: int = 1,
-            driver_iommu: str = "off",
-            driver_txmode: str | None = None,
-            driver_rxmode: str | None = None,
-            link_state: str = "up",
-            boot_order: int | None = None,
-            rom_bar: str = "on",
-            filter_name: str | None = None,
-            filter_params: dict | None = None,
-            mtu_size: int | None = None,
-            target_dev: str | None = None,
+        self,
+        network_name: str,
+        model: str = "virtio",
+        mac_address: str | None = None,
+        driver_queues: int = 1,
+        driver_iommu: str = "off",
+        driver_txmode: str | None = None,
+        driver_rxmode: str | None = None,
+        link_state: str = "up",
+        boot_order: int | None = None,
+        rom_bar: str = "on",
+        filter_name: str | None = None,
+        filter_params: dict | None = None,
+        mtu_size: int | None = None,
+        target_dev: str | None = None,
     ) -> str:
         """
         Генерация XML конфигурации сетевого интерфейса
@@ -1479,7 +1479,9 @@ class NetworkManager(LibvirtClient):
             filterref = ET.SubElement(interface, "filterref", filter=filter_name)
             if filter_params:
                 for param_name, param_value in filter_params.items():
-                    ET.SubElement(filterref, "parameter", name=param_name, value=str(param_value))
+                    ET.SubElement(
+                        filterref, "parameter", name=param_name, value=str(param_value)
+                    )
 
         # Добавляем MTU
         if mtu_size and mtu_size != 1500:
@@ -1566,7 +1568,9 @@ class NetworkManager(LibvirtClient):
             result = self.cli.execute(cmd, return_proc=True)
 
             if result.returncode == 0:
-                self.logger.warning(f"Результат отключения сетевого интерфейса: {result.stdout}")
+                self.logger.warning(
+                    f"Результат отключения сетевого интерфейса: {result.stdout}"
+                )
 
                 self.logger.info(
                     f"Сетевой интерфейс {mac_address} успешно отключен от ВМ {vm_name}"

@@ -1,10 +1,17 @@
-import json
 import os
 
+import orjson
 import redis
 
-from agent.client.task_manager.models import TaskStatus, TaskInfo, Task, TaskResponse, TaskNotification, \
-    TaskNotificationType, TaskType
+from agent.client.task_manager.models import (
+    TaskStatus,
+    TaskInfo,
+    Task,
+    TaskResponse,
+    TaskNotification,
+    TaskNotificationType,
+    TaskType,
+)
 
 
 class RedisTaskManager:
@@ -68,18 +75,18 @@ class RedisTaskManager:
 
     def get_all_tasks(
         self, queue_name: str | None = None, start: int = 0, end: int = -1
-    ) -> list[str]:
+    ) -> list[Task]:
         """
         Возвращает список всех задач в Redis
         """
         queue_name = self.queue_name if queue_name is None else queue_name
         redis_connect = self.redis_session()
         tasks = redis_connect.lrange(queue_name, start, end)
-        return [current_task for current_task in tasks]
+        return [Task(**orjson.loads(current_task)) for current_task in tasks]
 
     def get_process_tasks(
         self, processing_queue_name: str | None = None, start: int = 0, end: int = -1
-    ) -> list[str]:
+    ) -> list[Task]:
         """
         Возвращает список всех задач в работе в Redis
         """
@@ -90,7 +97,7 @@ class RedisTaskManager:
         )
         redis_connect = self.redis_session()
         tasks = redis_connect.lrange(queue_name, start, end)
-        return [current_task for current_task in tasks]
+        return [Task(**orjson.loads(current_task)) for current_task in tasks]
 
     def get_task_info(self, request_id: str) -> TaskInfo | None:
         status = self.get_task_status(request_id)
@@ -120,9 +127,7 @@ class RedisTaskManager:
         return None
 
     def set_status(self, request_id: str, task_status: TaskStatus):
-        self.redis_session().hset(
-            "status", request_id, task_status.value
-        )
+        self.redis_session().hset("status", request_id, task_status.value)
 
     def set_result(self, request_id: str, result: str):
         self.redis_session().hset("result", request_id, result)
@@ -149,14 +154,14 @@ class RedisTaskManager:
             request_id=task.request_id,
             task_type=task.task_type,
             status=TaskStatus.PENDING,
-            data={"action": task.action}
+            data={"action": task.action},
         )
 
         # Добавляем в очередь
         return redis_connect.lpush(queue_name, task.model_dump_json())
 
     def execute_task(
-            self, queue_name: str | None = None, processing_queue_name: str | None = None
+        self, queue_name: str | None = None, processing_queue_name: str | None = None
     ) -> Task | None:
         """
         Выполнить задачу с публикацией уведомлений
@@ -171,7 +176,7 @@ class RedisTaskManager:
         cached_data = redis_connect.rpoplpush(queue_name, processing_queue_name)
 
         if cached_data:
-            task = Task(**json.loads(json.loads(json.dumps(cached_data))))
+            task = Task(**orjson.loads(cached_data))
 
             # Устанавливаем статус и публикуем уведомление
             self.set_status(task.request_id, TaskStatus.PROCESSING)
@@ -179,7 +184,7 @@ class RedisTaskManager:
                 notification_type=TaskNotificationType.STATUS_CHANGE,
                 request_id=task.request_id,
                 task_type=task.task_type,
-                status=TaskStatus.PROCESSING
+                status=TaskStatus.PROCESSING,
             )
 
             return task
@@ -187,13 +192,13 @@ class RedisTaskManager:
         return None
 
     def complete_task(
-            self, result: TaskResponse, processing_queue_name: str | None = None
+        self, result: TaskResponse, processing_queue_name: str | None = None
     ) -> int:
         """
         Завершить выполнение задачи с публикацией уведомлений
         """
         if isinstance(result, dict):
-            result = json.dumps(result)
+            result = orjson.dumps(result)
         elif result is None:
             result = "null"
 
@@ -211,7 +216,7 @@ class RedisTaskManager:
                 request_id=result.request_id,
                 task_type=result.task.task_type,
                 status=TaskStatus.COMPLETED,
-                data={"result": result.result}
+                data={"result": result.result},
             )
         else:
             self.publish_notification(
@@ -219,11 +224,12 @@ class RedisTaskManager:
                 request_id=result.request_id,
                 task_type=result.task.task_type,
                 status=TaskStatus.FAILED,
-                error=str(result.result.get("error", "Unknown error"))
-                if result.result and isinstance(result.result, dict)
-                else str(result.result)
+                error=(
+                    str(result.result.get("error", "Unknown error"))
+                    if result.result and isinstance(result.result, dict)
+                    else str(result.result)
+                ),
             )
-
         # Устанавливаем финальный статус
         if result.status == TaskStatus.COMPLETED:
             self.set_status(result.request_id, TaskStatus.COMPLETED)
@@ -231,17 +237,26 @@ class RedisTaskManager:
             self.set_status(result.request_id, TaskStatus.FAILED)
 
         self.set_result(result.request_id, result.model_dump_json())
-
         # Публикуем финальное уведомление
-        self.publish_notification(
-            notification_type=TaskNotificationType.TASK_COMPLETED,
-            request_id=result.request_id,
-            task_type=result.task.task_type,
-            status=result.status
+        if result.status == TaskStatus.COMPLETED:
+            self.publish_notification(
+                notification_type=TaskNotificationType.TASK_COMPLETED,
+                request_id=result.request_id,
+                task_type=result.task.task_type,
+                status=result.status,
+            )
+        else:
+            self.publish_notification(
+                notification_type=TaskNotificationType.ERROR_OCCURRED,
+                request_id=result.request_id,
+                task_type=result.task.task_type,
+                status=result.status,
+            )
+        lrem = redis_connect.lrem(
+            processing_queue_name, 1, result.task.model_dump_json()
         )
-
         # Удаляем из очереди обработки
-        return redis_connect.lrem(processing_queue_name, 1, result.request_id)
+        return lrem
 
     def delete_task(self, request_id: str, queue_name: str | None = None) -> int:
         """
@@ -262,13 +277,13 @@ class RedisTaskManager:
         return deleted_tasks
 
     def publish_notification(
-            self,
-            notification_type: TaskNotificationType,
-            request_id: str,
-            task_type: TaskType,
-            status: TaskStatus,
-            data: dict | None = None,
-            error: str | None = None
+        self,
+        notification_type: TaskNotificationType,
+        request_id: str,
+        task_type: TaskType,
+        status: TaskStatus,
+        data: dict | None = None,
+        error: str | None = None,
     ) -> int:
         """
         Публикация уведомления в канал Pub/Sub
@@ -279,13 +294,12 @@ class RedisTaskManager:
             task_type=task_type,
             status=status,
             data=data,
-            error=error
+            error=error,
         )
 
         redis_connect = self.redis_session()
         return redis_connect.publish(
-            self.notification_channel,
-            notification.model_dump_json()
+            self.notification_channel, notification.model_dump_json()
         )
 
     def subscribe_to_notifications(self) -> redis.client.PubSub:
@@ -312,3 +326,9 @@ if __name__ == "__main__":
     for task in rtm.get_all_tasks():
         print("ЗАДАЧА В ОЖИДАНИИ: ", task)
         # rtm.execute_task()
+
+    print(
+        rtm.delete_task(
+            "ad7396db-5c10-4d20-b5ee-6e04052ac294", rtm.processing_queue_name
+        )
+    )
