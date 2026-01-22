@@ -92,7 +92,6 @@ class VMCreateRequest(BaseModel):
     max_memory_mb: int | None = None
     vcpus: int = 2
     max_vcpus: int | None = 4
-    cpu_model: str | None = None
     cpu_features: list[str] | None = None
 
     # Устройства
@@ -120,7 +119,7 @@ class VMCreateRequest(BaseModel):
 
     machine_type: MachineType = Field(
         default=(
-            MachineType.Q35 if architecture == Architecture.X86_64 else MachineType.VIRT
+            MachineType.Q35 if architecture == Architecture.X86_64 else MachineType.PC_I440FX
         ),
         description="Тип эмулируемой машины",
     )

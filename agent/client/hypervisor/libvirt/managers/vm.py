@@ -73,6 +73,27 @@ class VmManager(LibvirtClient):
         self.storage_manager.connect()
         self.network_manager.conn = self.storage_manager.conn
 
+
+    def restart_vms_in_live_host(self):
+        """
+        Что будет с виртуальными машинами и их дисками в ресурс пулах ?
+        (помечаем для пользователя что хранилища ресурс пулов не доступны в режиме HA, но доступно ограничение ресурсов)
+
+        Какую команду backend будет отправлять целевому хосту для перезапуска всех ВМ на новом хосте ?
+
+        # 1. Проверить доступность дисков(mount -o remount /nfs/storage)
+        # 2. Очистить возможные блокировки(virsh pool-refresh nfs_pool)
+        # 3. Зарегистрировать ВМ(через define)
+        # 4. Проверить целостность диска (опционально)(qemu-img check /nfs/vms/vm1/disk.qcow2)
+        # 5. Запустить
+
+        Если сломанный хост восстановится и попытается перезапустить у себя все ВМ, какой сценарий у него должен сработать?
+
+
+        Реализовать после первого пилотного клиента
+        """
+        raise NotImplementedError
+
     def create_vm(
         self, config: VMCreateRequest, dry_run: bool = False
     ) -> dict | VmError | VmMessage:

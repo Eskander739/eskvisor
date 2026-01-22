@@ -38,7 +38,6 @@ class RedisTaskManager:
         self.host = os.environ.get("REDIS_HOST")
         self.port = os.environ.get("REDIS_PORT")
         self.db = os.environ.get("REDIS_DB_NUMBER")
-        self.db_for_requests = os.environ.get("REDIS_CACHE_REQUESTS_DB_NUMBER")
         self.password = None
         # self.password = os.environ.get("REDIS_DB_PASSWORD")
         self.queue_name = "task_queue"
@@ -61,7 +60,7 @@ class RedisTaskManager:
         Возвращает список всех задач в Redis
         """
         queue_name = self.queue_name if queue_name is None else queue_name
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         task_len = redis_connect.llen(queue_name)
         return task_len
 
@@ -72,7 +71,7 @@ class RedisTaskManager:
         Возвращает список всех задач в Redis
         """
         queue_name = self.queue_name if queue_name is None else queue_name
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         tasks = redis_connect.lrange(queue_name, start, end)
         return [current_task for current_task in tasks]
 
@@ -87,7 +86,7 @@ class RedisTaskManager:
             if processing_queue_name is None
             else processing_queue_name
         )
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         tasks = redis_connect.lrange(queue_name, start, end)
         return [current_task for current_task in tasks]
 
@@ -100,42 +99,42 @@ class RedisTaskManager:
         return TaskInfo(status=status, result=result, error=error)
 
     def get_task_status(self, request_id: str) -> TaskStatus | None:
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         task_status = redis_connect.hget("status", request_id)
         if task_status is not None:
             return TaskStatus(task_status)
         return task_status
 
     def get_task_result(self, request_id: str) -> str:
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         task_result = redis_connect.hget("result", request_id)
         return task_result if task_result else "not_found"
 
     def get_task_error(self, request_id: str) -> bool | None:
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         task_error = redis_connect.hget("error", request_id)
         if task_error is not None:
             return task_error == "true"
         return None
 
     def set_status(self, request_id: str, task_status: TaskStatus):
-        self.redis_session(self.db_for_requests).hset(
+        self.redis_session().hset(
             "status", request_id, task_status.value
         )
 
     def set_result(self, request_id: str, result: str):
-        self.redis_session(self.db_for_requests).hset("result", request_id, result)
+        self.redis_session().hset("result", request_id, result)
 
     def set_error(self, request_id: str, error: bool):
         error = "null" if error else "true"
-        self.redis_session(self.db_for_requests).hset("error", request_id, error)
+        self.redis_session().hset("error", request_id, error)
 
     def add_task(self, task: Task, queue_name: str | None = None):
         """
         Добавляет задачу в очередь
         """
         queue_name = self.queue_name if queue_name is None else queue_name
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         self.set_status(task.request_id, TaskStatus.COMPLETED)
         self.set_result(task.request_id, "null")
         self.set_error(task.request_id, False)
@@ -153,7 +152,7 @@ class RedisTaskManager:
             if processing_queue_name is None
             else processing_queue_name
         )
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         cached_data = redis_connect.rpoplpush(queue_name, processing_queue_name)
         if cached_data:
             data = json.loads(json.loads(json.dumps(cached_data)))
@@ -177,7 +176,7 @@ class RedisTaskManager:
             if processing_queue_name is None
             else processing_queue_name
         )
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         if result.status == TaskStatus.COMPLETED:
             self.set_status(result.request_id, TaskStatus.COMPLETED)
         else:
@@ -192,7 +191,7 @@ class RedisTaskManager:
         """
 
         queue_name = self.queue_name if queue_name is None else queue_name
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         return redis_connect.lrem(queue_name, 1, request_id)
 
     def delete_all_tasks(self, queue_name: str | None = None) -> int:
@@ -200,7 +199,7 @@ class RedisTaskManager:
         Удалить все задачи
         """
         queue_name = self.queue_name if queue_name is None else queue_name
-        redis_connect = self.redis_session(self.db_for_requests)
+        redis_connect = self.redis_session()
         deleted_tasks = redis_connect.delete(queue_name)
         return deleted_tasks
 

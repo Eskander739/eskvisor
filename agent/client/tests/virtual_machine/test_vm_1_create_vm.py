@@ -50,8 +50,9 @@ def test_vm_01_create_vm(vm_session, vm_state):
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________
         if vm_created is not None:
-            delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
-            assert (
-                delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
-            )
-            assert delete_vm_info.success is True
+            if vm_state.value == vm_state.SHUTOFF.value:
+                delete_vm_info = vm_session.delete_vm_with_force(name=random_name)
+                assert (
+                        delete_vm_info.code == CommandMessagesEnum.vm_successfully_deleted.name
+                )
+                assert delete_vm_info.success is True

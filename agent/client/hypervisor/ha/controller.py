@@ -293,7 +293,7 @@ class HAController:
                 os.remove(config_autostart_path)
 
     def sync_nfs_vm_configs(self):
-        """Синхронизирует только XML конфиги ВМ с удалением лишнего"""
+        """Синхронизирует только XML конфиги ВМ с исключением лишнего"""
         if not self.loaded_ha_nfs_storages_path:
             return
 
