@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Диспетчер задач виртуализации</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .subtitle {
+            color: #b8e0ff;
+            font-size: 1.1rem;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            padding: 30px;
+            min-height: 700px;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .control-panel {
+            margin-bottom: 30px;
+        }
+
+        .control-panel h3 {
+            color: #3a0ca3;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            border-bottom: 2px solid #4361ee;
+            padding-bottom: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        select, input, textarea {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            outline: none;
+            border-color: #4361ee;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: monospace;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.3s, box-shadow 0.3s;
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(67, 97, 238, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef476f 0%, #d90429 100%);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 20px;
+        }
+
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h3 {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #3a0ca3;
+        }
+
+        .task-lists {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 100%;
+        }
+
+        .task-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .task-section h3 {
+            color: #3a0ca3;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-list {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .task-item {
+            background: #f8f9fa;
+            border-left: 4px solid #4361ee;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .task-item:hover {
+            background: #e9ecef;
+        }
+
+        .task-item.processing {
+            border-left-color: #ffd166;
+        }
+
+        .task-item.completed {
+            border-left-color: #06d6a0;
+        }
+
+        .task-item.failed {
+            border-left-color: #ef476f;
+        }
+
+        .task-id {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            font-family: monospace;
+        }
+
+        .task-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .notifications {
+            background: #f1faee;
+            border: 2px solid #a8dadc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .notifications h3 {
+            color: #1d3557;
+            margin-bottom: 15px;
+        }
+
+        .notification-item {
+            background: white;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #457b9d;
+            font-size: 0.9rem;
+        }
+
+        .status-connected {
+            color: #06d6a0;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .status-dot.connected {
+            background: #06d6a0;
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="connectionStatus">Подключение...</span>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Диспетчер задач виртуализации</h1>
+            <p class="subtitle">Управление виртуальными машинами, сетями и хранилищами в реальном времени</p>
+        </header>
+
+        <div class="dashboard">
+            <div class="sidebar">
+                <div class="control-panel">
+                    <h3>📋 Создать задачу</h3>
+                    <div class="form-group">
+                        <label for="taskType">Тип задачи:</label>
+                        <select id="taskType">
+                            <option value="vm">Виртуальная машина</option>
+                            <option value="network">Сеть</option>
+                            <option value="storage">Хранилище</option>
+                            <option value="snapshot">Снапшот</option>
+                            <option value="resource_pool">Ресурсный пул</option>
+                            <option value="stats">Статистика</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskAction">Действие:</label>
+                        <select id="taskAction">
+                            <option value="list">Список</option>
+                            <option value="create">Создать</option>
+                            <option value="start">Запустить</option>
+                            <option value="stop">Остановить</option>
+                            <option value="delete">Удалить</option>
+                            <option value="info">Информация</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskParams">Параметры (JSON):</label>
+                        <textarea id="taskParams" placeholder='{"vm_name": "test-vm", "ram": 2048}'>
+{
+  "vm_name": "ubuntu-test",
+  "ram": 2048,
+  "cpu": 2
+}
+                        </textarea>
+                    </div>
+
+                    <button class="btn" onclick="createTask()">
+                        🚀 Создать задачу
+                    </button>
+                </div>
+
+                <div class="control-panel">
+                    <h3>⚙️ Управление</h3>
+                    <button class="btn" onclick="refreshTasks()">
+                        🔄 Обновить список
+                    </button>
+                    <button class="btn btn-danger" onclick="clearAllTasks()">
+                        🗑️ Очистить все задачи
+                    </button>
+                </div>
+
+                <div class="control-panel">
+                    <h3>🔍 Поиск задачи</h3>
+                    <div class="form-group">
+                        <label for="searchTaskId">ID задачи:</label>
+                        <input type="text" id="searchTaskId" placeholder="Введите ID задачи...">
+                    </div>
+                    <button class="btn" onclick="searchTask()">
+                        🔎 Найти задачу
+                    </button>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="stats-cards">
+                    <div class="card">
+                        <h3>Всего задач</h3>
+                        <div class="value" id="totalTasks">0</div>
+                    </div>
+                    <div class="card">
+                        <h3>В ожидании</h3>
+                        <div class="value" id="pendingTasks">0</div>
+                    </div>
+                    <div class="card">
+                        <h3>В обработке</h3>
+                        <div class="value" id="processingTasks">0</div>
+                    </div>
+                    <div class="card">
+                        <h3>Активные WS</h3>
+                        <div class="value" id="wsConnections">0</div>
+                    </div>
+                </div>
+
+                <div class="task-lists">
+                    <div class="task-section">
+                        <h3>📥 Ожидающие задачи</h3>
+                        <div class="task-list" id="pendingList">
+                            <!-- Сюда загружаются задачи -->
+                        </div>
+                    </div>
+
+                    <div class="task-section">
+                        <h3>⚙️ Задачи в обработке</h3>
+                        <div class="task-list" id="processingList">
+                            <!-- Сюда загружаются задачи -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="notifications">
+                    <h3>🔔 Уведомления</h3>
+                    <div id="notificationsList">
+                        <div class="notification-item">
+                            Система запущена. Ожидание задач...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let notificationWs = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        // Инициализация WebSocket соединений
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            const notificationWsUrl = `${protocol}//${window.location.host}/ws/notifications`;
+
+            // Основной WebSocket для команд
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                updateConnectionStatus(true);
+                console.log('WebSocket подключен');
+                addNotification('✅ WebSocket подключен к серверу');
+                refreshTasks();
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    console.error('Ошибка парсинга сообщения:', e);
+                }
+            };
+
+            ws.onclose = () => {
+                updateConnectionStatus(false);
+                console.log('WebSocket отключен');
+                addNotification('❌ WebSocket отключен от сервера');
+                attemptReconnect();
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket ошибка:', error);
+                addNotification('⚠️ Ошибка WebSocket соединения');
+            };
+
+            // WebSocket для уведомлений
+            notificationWs = new WebSocket(notificationWsUrl);
+
+            notificationWs.onmessage = (event) => {
+                try {
+                    const notification = JSON.parse(event.data);
+                    handleNotification(notification);
+                } catch (e) {
+                    console.error('Ошибка парсинга уведомления:', e);
+                }
+            };
+        }
+
+        function attemptReconnect() {
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                addNotification(`🔄 Попытка переподключения ${reconnectAttempts}/${maxReconnectAttempts}...`);
+
+                setTimeout(() => {
+                    initWebSocket();
+                }, 3000);
+            } else {
+                addNotification('⛔ Не удалось подключиться к серверу');
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('connectionStatus');
+
+            if (connected) {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = 'Подключено';
+                statusText.style.color = '#06d6a0';
+                reconnectAttempts = 0;
+            } else {
+                statusDot.className = 'status-dot';
+                statusText.textContent = 'Отключено';
+                statusText.style.color = '#ef476f';
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'tasks_list':
+                    updateTaskLists(data);
+                    break;
+                case 'subscription':
+                    addNotification(data.message);
+                    break;
+                case 'error':
+                    addNotification(`Ошибка: ${data.message}`);
+                    break;
+            }
+        }
+
+        function handleNotification(notification) {
+            console.log('Получено уведомление:', notification);
+
+            let message = '';
+            let emoji = '🔔';
+
+            switch (notification.notification_type) {
+                case 'task_created':
+                    emoji = '🆕';
+                    message = `Создана новая задача: ${notification.request_id}`;
+                    break;
+                case 'status_change':
+                    emoji = '🔄';
+                    message = `Статус задачи ${notification.request_id} изменен на ${notification.status}`;
+                    break;
+                case 'result_ready':
+                    emoji = '✅';
+                    message = `Задача ${notification.request_id} выполнена успешно`;
+                    break;
+                case 'error_occurred':
+                    emoji = '❌';
+                    message = `Ошибка в задаче ${notification.request_id}: ${notification.error || 'Неизвестная ошибка'}`;
+                    break;
+                case 'task_completed':
+                    emoji = '🏁';
+                    message = `Задача ${notification.request_id} завершена`;
+                    break;
+                default:
+                    message = JSON.stringify(notification);
+            }
+
+            addNotification(`${emoji} ${message}`);
+            refreshTasks(); // Обновляем список задач при уведомлении
+        }
+
+        function addNotification(text) {
+            const notificationsList = document.getElementById('notificationsList');
+            const notification = document.createElement('div');
+            notification.className = 'notification-item';
+            notification.textContent = text;
+
+            notificationsList.prepend(notification);
+
+            // Ограничиваем количество уведомлений
+            if (notificationsList.children.length > 20) {
+                notificationsList.removeChild(notificationsList.lastChild);
+            }
+        }
+
+        function createTask() {
+            const taskType = document.getElementById('taskType').value;
+            const taskAction = document.getElementById('taskAction').value;
+            const taskParams = document.getElementById('taskParams').value;
+
+            try {
+                const params = JSON.parse(taskParams);
+
+                fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        task_type: taskType,
+                        action: taskAction,
+                        params: params
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        addNotification(`❌ Ошибка создания задачи: ${data.error}`);
+                    } else {
+                        addNotification(`✅ Задача создана: ${data.request_id}`);
+                        refreshTasks();
+                    }
+                })
+                .catch(error => {
+                    addNotification(`❌ Ошибка: ${error.message}`);
+                });
+
+            } catch (e) {
+                addNotification('❌ Ошибка в JSON параметрах');
+            }
+        }
+
+        function refreshTasks() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action: 'get_tasks' }));
+            } else {
+                // Если WebSocket не доступен, используем REST API
+                fetch('/api/tasks')
+                    .then(response => response.json())
+                    .then(updateTaskLists)
+                    .catch(error => {
+                        console.error('Ошибка получения задач:', error);
+                    });
+            }
+        }
+
+        function updateTaskLists(data) {
+            // Обновляем статистику
+            document.getElementById('totalTasks').textContent =
+                (data.total_pending || 0) + (data.total_processing || 0);
+            document.getElementById('pendingTasks').textContent = data.total_pending || 0;
+            document.getElementById('processingTasks').textContent = data.total_processing || 0;
+
+            // Обновляем список ожидающих задач
+            const pendingList = document.getElementById('pendingList');
+            pendingList.innerHTML = '';
+
+            if (data.pending && data.pending.length > 0) {
+                data.pending.forEach(taskJson => {
+                    try {
+                        const task = JSON.parse(taskJson);
+                        pendingList.appendChild(createTaskItem(task, 'pending'));
+                    } catch (e) {
+                        // Если не JSON, отображаем как текст
+                        const item = document.createElement('div');
+                        item.className = 'task-item';
+                        item.innerHTML = `
+                            <div class="task-id">${taskJson.substring(0, 50)}...</div>
+                            <div class="task-meta">
+                                <span>Неизвестный формат</span>
+                            </div>
+                        `;
+                        pendingList.appendChild(item);
+                    }
+                });
+            } else {
+                pendingList.innerHTML = '<div class="task-item">Нет задач в ожидании</div>';
+            }
+
+            // Обновляем список задач в обработке
+            const processingList = document.getElementById('processingList');
+            processingList.innerHTML = '';
+
+            if (data.processing && data.processing.length > 0) {
+                data.processing.forEach(taskJson => {
+                    try {
+                        const task = JSON.parse(taskJson);
+                        processingList.appendChild(createTaskItem(task, 'processing'));
+                    } catch (e) {
+                        // Если не JSON, отображаем как текст
+                        const item = document.createElement('div');
+                        item.className = 'task-item processing';
+                        item.innerHTML = `
+                            <div class="task-id">${taskJson.substring(0, 50)}...</div>
+                            <div class="task-meta">
+                                <span>Неизвестный формат</span>
+                            </div>
+                        `;
+                        processingList.appendChild(item);
+                    }
+                });
+            } else {
+                processingList.innerHTML = '<div class="task-item">Нет задач в обработке</div>';
+            }
+        }
+
+        function createTaskItem(task, status) {
+            const item = document.createElement('div');
+            item.className = `task-item ${status}`;
+
+            item.innerHTML = `
+                <div class="task-id">${task.request_id}</div>
+                <div class="task-meta">
+                    <span>${task.task_type.toUpperCase()} - ${task.action}</span>
+                    <span>${new Date(task.created_at).toLocaleTimeString()}</span>
+                </div>
+                <div style="margin-top: 8px; font-size: 0.85rem; color: #666;">
+                    ${JSON.stringify(task.params).substring(0, 100)}...
+                </div>
+            `;
+
+            item.onclick = () => {
+                getTaskInfo(task.request_id);
+            };
+
+            return item;
+        }
+
+        function searchTask() {
+            const taskId = document.getElementById('searchTaskId').value.trim();
+
+            if (!taskId) {
+                addNotification('❌ Введите ID задачи для поиска');
+                return;
+            }
+
+            fetch(`/api/task/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        addNotification(`❌ Задача не найдена: ${data.error}`);
+                    } else {
+                        addNotification(`✅ Задача найдена: ${data.status}`);
+                        // Подписываемся на уведомления по этой задаче
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                action: 'subscribe_task',
+                                request_id: taskId
+                            }));
+                        }
+                    }
+                })
+                .catch(error => {
+                    addNotification(`❌ Ошибка поиска: ${error.message}`);
+                });
+        }
+
+        function getTaskInfo(taskId) {
+            fetch(`/api/task/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(`Ошибка: ${data.error}`);
+                    } else {
+                        alert(`Информация о задаче:\n\n` +
+                              `ID: ${data.request_id}\n` +
+                              `Статус: ${data.status}\n` +
+                              `Результат: ${data.result || 'Нет'}\n` +
+                              `Тип: ${data.info?.task_type || 'Неизвестно'}`);
+                    }
+                });
+        }
+
+        function clearAllTasks() {
+            if (confirm('Вы уверены, что хотите удалить все задачи?')) {
+                fetch('/api/tasks/clear', {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    addNotification(`✅ Удалено задач: ${data.deleted}`);
+                    refreshTasks();
+                })
+                .catch(error => {
+                    addNotification(`❌ Ошибка: ${error.message}`);
+                });
+            }
+        }
+
+        // Автоматическое обновление списка задач каждые 10 секунд
+        setInterval(refreshTasks, 10000);
+
+        // Инициализация при загрузке страницы
+        window.onload = () => {
+            initWebSocket();
+
+            // Показываем количество активных WS соединений (для демонстрации)
+            setInterval(() => {
+                document.getElementById('wsConnections').textContent =
+                    (ws && ws.readyState === WebSocket.OPEN ? 1 : 0) +
+                    (notificationWs && notificationWs.readyState === WebSocket.OPEN ? 1 : 0);
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

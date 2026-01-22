@@ -27,6 +27,6 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=8001,
         reload=True,
-        ssl_keyfile="./key.pem",
-        ssl_certfile="./cert.pem",
+        # ssl_keyfile="./key.pem",
+        # ssl_certfile="./cert.pem",
     )

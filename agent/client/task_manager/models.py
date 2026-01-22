@@ -1,4 +1,5 @@
 import datetime
+import uuid
 from enum import Enum
 from typing import Any
 
@@ -70,3 +71,24 @@ class WorkerStats(BaseModel):
     total_workers: int = 0
     active_workers: int = 0
     workers: list[WorkerModel] = []
+
+
+class TaskNotificationType(str, Enum):
+    """Типы уведомлений о задачах"""
+    STATUS_CHANGE = "status_change"
+    RESULT_READY = "result_ready"
+    ERROR_OCCURRED = "error_occurred"
+    TASK_CREATED = "task_created"
+    TASK_COMPLETED = "task_completed"
+
+
+class TaskNotification(BaseModel):
+    """Модель уведомления о задаче"""
+    notification_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    notification_type: TaskNotificationType
+    request_id: str
+    task_type: TaskType
+    status: TaskStatus
+    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now)
+    data: dict | None = Field(default=None, description="Дополнительные данные")
+    error: str | None = Field(default=None, description="Сообщение об ошибке")

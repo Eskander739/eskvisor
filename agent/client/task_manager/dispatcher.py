@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 
+from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.models import (
     Task,
     TaskType,
@@ -12,9 +13,9 @@ from agent.client.task_manager.models import (
     WorkerModel,
     WorkerStats,
 )
-from ctl_queue import RedisTaskManager
-from worker import TaskWorker, TaskHandler
 import uuid
+
+from agent.client.task_manager.worker import TaskWorker, TaskHandler
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

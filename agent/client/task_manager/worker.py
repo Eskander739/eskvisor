@@ -32,8 +32,8 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskDetach,
     Disk,
 )
-from agent.client.task_manager.models import TaskType, TaskResponse, TaskStatus
-from ctl_queue import RedisTaskManager
+from agent.client.task_manager.ctl_queue import RedisTaskManager
+from agent.client.task_manager.models import TaskType, TaskResponse, TaskStatus, TaskNotificationType
 from agent.client.hypervisor.libvirt.managers.vm import VmManager
 from agent.client.hypervisor.libvirt.managers.network import NetworkManager
 from agent.client.hypervisor.libvirt.managers.snapshot import SnapshotManager
@@ -483,17 +483,29 @@ class TaskWorker(threading.Thread):
                 self.current_request_id = task.request_id
 
                 logger.info(f"Воркер {self.name} обрабатывает задачу {task.request_id}")
+
+                # Публикуем уведомление о начале обработки
+                self.queue_manager.publish_notification(
+                    notification_type=TaskNotificationType.STATUS_CHANGE,
+                    request_id=task.request_id,
+                    task_type=task.task_type,
+                    status=TaskStatus.PROCESSING,
+                    data={"worker": self.name}
+                )
+
                 try:
                     result = self.task_handler.handle_task(
                         task_type=task.task_type,
                         action=task.action,
                         params=task.params,
                     )
+
                     handle_result = (
                         orjson.loads(result.get("result"))
                         if isinstance(result.get("result"), str)
                         else result.get("result")
                     )
+
                     if result.get("success", False):
                         result = TaskResponse(
                             request_id=task.request_id,
