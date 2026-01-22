@@ -111,9 +111,12 @@ class VMCreateRequest(BaseModel):
     autostart: bool = False
     qemu_commandline: NetQemuCommandline | None = None
     boot_devices: list[str] | None = None
+    # boot_devices: list[str] | None = ["hd", "cdrom", "network", "fd"]
     extra_args: str | None = None
     video_model: str = "qxl"
     boot_uefi: bool = False
+    secure_boot: bool = False
+    secure_boot_loader: str | None = None  # например, "/usr/share/OVMF/OVMF_CODE_MS.fd" Тип загрузчика Secure Boot (опционально)
 
     machine_type: MachineType = Field(
         default=(
@@ -144,6 +147,11 @@ class VMCreateRequest(BaseModel):
     @model_validator(mode="after")
     def validate_disk_type_constraints(self):
         """Проверка условно обязательных полей в зависимости от типа"""
+
+        if self.secure_boot and not self.boot_uefi or self.secure_boot_loader and not self.boot_uefi:
+            raise ValueError("Secure Boot требует включения UEFI загрузки, включите boot_uefi или отключите secure_boot")
+        if not self.secure_boot and self.secure_boot_loader:
+            raise ValueError("Secure Boot Loader требует включения Secure Boot загрузки, включите Secure Boot или отключите Secure Boot Loader")
 
         if self.boot_devices:
             for current_disk in self.disks:
@@ -322,3 +330,11 @@ class VirtualMachine(BaseModel):
 class VirtualMachinesList(BaseModel):
     total: int
     items: list[VirtualMachine]
+
+class SecureBootVM(BaseModel):
+    vm_name: str
+    has_uefi: bool = False
+    has_secure_boot: bool = False
+    secure_boot_loader: str | None = None
+    loader_type: str | None = None
+    errors: list[str] = []

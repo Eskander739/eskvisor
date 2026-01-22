@@ -8,6 +8,7 @@ sudo apt install numactl
 sudo apt install nfs-kernel-server
 sudo apt install nfs-common
 sudo apt install virt-viewer
+sudo apt install ovmf
 
 # Для CentOS/RHEL/ALT Linux:
 sudo yum install -y qemu-kvm libvirt libvirt-client virt-install
@@ -16,6 +17,7 @@ sudo yum install numactl
 sudo yum install nfs-kernel-server
 sudo yum install nfs-common
 sudo yum install virt-viewer
+sudo yum install edk2-ovmf
 
 # Для Fedora:
 sudo dnf install -y qemu-kvm libvirt libvirt-client virt-install
@@ -24,6 +26,7 @@ sudo dnf install numactl
 sudo dnf install nfs-kernel-server
 sudo dnf install nfs-common
 sudo dnf install virt-viewer
+sudo dnf install edk2-ovmf
 
 sudo systemctl start libvirtd
 sudo systemctl enable nfs-server

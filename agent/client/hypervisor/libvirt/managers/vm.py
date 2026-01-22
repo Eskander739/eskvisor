@@ -40,7 +40,7 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VMCreateRequest,
     VmUpdateRequest,
     HostForward,
-    VirtualMachinesList,
+    VirtualMachinesList, SecureBootVM,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -333,6 +333,7 @@ class VmManager(LibvirtClient):
             Строка команды для выполнения
         """
         cmd_parts = ["virt-install --connect qemu:///system"]
+        boot_cmd = ""
         controller_params = []
         graphics_params = []
         boot_params = []
@@ -481,16 +482,33 @@ class VmManager(LibvirtClient):
         if config.boot_devices:
             boot_cmd = "--boot "
 
-            if config.boot_uefi:
-                boot_params.append("uefi")  # Добавляем к другим параметрам
-
             for i, device in enumerate(config.boot_devices):
                 boot_params.append(device)
 
-            boot_params.append("menu=on")
 
+
+        if config.boot_uefi:
+            if not config.boot_devices:
+                boot_cmd = "--boot "
+            uefi_param = "uefi"
+
+            if config.secure_boot:
+                if config.secure_boot_loader:
+                    uefi_param += f",loader={config.secure_boot_loader}"
+                else:
+                    # TODO: Проверить базовые загрузчики для разных OS
+                    uefi_param += ",loader=/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd"
+                uefi_param += ",loader_secure=on"
+            else:
+                uefi_param += ",loader_secure=off"
+
+            boot_params.append(uefi_param)
+
+        if boot_cmd:
+            boot_params.append("menu=on")
             boot_cmd += ",".join(boot_params)
             cmd_parts.append(boot_cmd)
+
         if config.autostart:
             cmd_parts.append("--autostart")
 
@@ -532,6 +550,70 @@ class VmManager(LibvirtClient):
             cmd_parts.append(config.qemu_commandline.qemu_commandline_string)
 
         return " ".join(cmd_parts)
+
+    def get_vm_secure_boot_status(self, vm_name: str) -> SecureBootVM:
+        """
+        Проверяет, включен ли Secure Boot у конкретной ВМ
+
+        Args:
+            vm_name: Имя виртуальной машины
+
+        Returns:
+            Словарь с информацией о Secure Boot ВМ
+        """
+        try:
+            domain = self.conn.lookupByName(vm_name)
+            xml_desc = domain.XMLDesc(0)
+
+            result = SecureBootVM(vm_name=vm_name)
+
+            root = ET.fromstring(xml_desc)
+            print(xml_desc)
+
+            # Проверяем наличие UEFI
+            os_elem = root.find('.//os')
+            if os_elem is not None:
+                # Проверяем наличие firmware
+                firmware_elem = os_elem.find('firmware')
+                if firmware_elem is not None and firmware_elem.get('efi') == 'yes':
+                    result.has_uefi = True
+
+                # Проверяем наличие loader
+                loader_elem = os_elem.find('loader')
+                if loader_elem is not None:
+                    loader_type = loader_elem.get('type', '')
+                    loader_path = loader_elem.text
+                    result.loader_type = loader_type
+                    result.secure_boot_loader = loader_path
+
+                    # Проверяем, является ли загрузчик Secure Boot
+                    if loader_path and ('secboot' in loader_path.lower() or 'secure' in loader_path.lower()):
+                        result.has_secure_boot = True
+
+                    # Проверяем атрибуты secure
+                    if loader_elem.get('secure') == 'yes':
+                        result.has_secure_boot = True
+
+            qemu_commandline = root.find('qemu:commandline', QEMU_NAMESPACE)
+            if qemu_commandline is not None:
+                for arg in qemu_commandline.findall('qemu:arg', QEMU_NAMESPACE):
+                    value = arg.get('value', '')
+                    if 'secureboot=on' in value or 'loader_secure=yes' in value:
+                        result.has_secure_boot = True
+
+            # Проверяем наличие nvram
+            nvram_elem = os_elem.find('nvram') if os_elem is not None else None
+            if nvram_elem is not None:
+                result.has_uefi = True
+
+            return result
+
+        except libvirt.libvirtError as e:
+            self.logger.error(f"ВМ {vm_name} не найдена: {e}")
+            return SecureBootVM(vm_name=vm_name, errors=[f"ВМ не найдена: '{str(e)}'"])
+        except Exception as e:
+            self.logger.error(f"Ошибка проверки Secure Boot для ВМ {vm_name}: {e}")
+            return SecureBootVM(vm_name=vm_name, errors=[str(e)])
 
     def migrate_vm(
         self,
