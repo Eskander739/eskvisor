@@ -216,7 +216,7 @@ class RedisTaskManager:
                 request_id=result.request_id,
                 task_type=result.task.task_type,
                 status=TaskStatus.COMPLETED,
-                data={"result": result.result},
+                data=result.result,
             )
         else:
             self.publish_notification(

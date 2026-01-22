@@ -716,7 +716,7 @@
                     <div class="form-group">
                         <label for="taskParams">Параметры (JSON):</label>
                         <textarea id="taskParams" placeholder='{"vm_name": "test-vm", "ram": 2048}'>
-{"name":"ESKA-VM-TEST","install_method":"import","description":null,"architecture":"x86_64","emulator_type":"kvm","os_type":"linux","os_variant":"generic","noautoconsole":true,"memory_mb":256,"max_memory_mb":null,"vcpus":2,"max_vcpus":4,"cpu_features":[],"disks":[],"networks":[],"controllers":[],"graphics":"vnc","graphics_port":null,"graphics_listen":"0.0.0.0","console_type":"pty","autostart_vm":false,"autostart":false,"qemu_commandline":null,"boot_devices":null,"extra_args":null,"video_model":"qxl","boot_uefi":false,"secure_boot":false,"secure_boot_loader":null,"machine_type":"q35","features":{"acpi":"on","apic":"on"},"qemu_agent":false,"memballoon_model":"virtio","hyperv_features":{},"cpu_model":"host-model", "disks":[{"name":"VM-DISK","path":null,"size_gb":1.0,"format":"qcow2","description":null,"sparse":true,"disk_type":"external_disk","bus_type":null,"cache":"none","readonly":false,"shareable":false,"serial":null,"resource_pool":null,"size_bytes":1073741824}]}
+{"name":"ESKA-VM-TEST","install_method":"import","description":null,"architecture":"x86_64","emulator_type":"kvm","os_type":"linux","os_variant":"generic","noautoconsole":true,"memory_mb":256,"max_memory_mb":null,"vcpus":2,"max_vcpus":4,"cpu_features":[],"disks":[],"networks":[],"controllers":[],"graphics":"vnc","graphics_port":null,"graphics_listen":"0.0.0.0","console_type":"pty","autostart_vm":false,"autostart":false,"qemu_commandline":null,"boot_devices":null,"extra_args":null,"video_model":"qxl","boot_uefi":false,"secure_boot":false,"secure_boot_loader":null,"machine_type":"q35","features":{"acpi":"on","apic":"on"},"qemu_agent":false,"memballoon_model":"virtio","hyperv_features":{},"cpu_model":"host-model", "disks":[{"name":"VM-DISK2","path":null,"size_gb":1.0,"format":"qcow2","description":null,"sparse":true,"disk_type":"external_disk","bus_type":null,"cache":"none","readonly":false,"shareable":false,"serial":null,"resource_pool":null,"size_bytes":1073741824}]}
                         </textarea>
                     </div>
 
@@ -787,9 +787,6 @@
     </div>
 
     <script>
-        // Остается тот же JavaScript код что был в оригинале,
-        // но адаптированный под новые классы
-
         let ws = null;
         let notificationWs = null;
         let reconnectAttempts = 0;
@@ -874,6 +871,14 @@
                 case 'error':
                     addNotification(data.message, 'error');
                     break;
+                case 'task_created':
+                    if (data.request_id) {
+                        addNotification(`Задача создана: ${data.request_id}`, 'success');
+                        refreshTasks();
+                    }
+                    break;
+                default:
+                    console.log('Неизвестный тип сообщения:', data);
             }
         }
 
@@ -934,33 +939,64 @@
             try {
                 const params = JSON.parse(taskParams);
 
-                fetch('/api/tasks', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        task_type: taskType,
-                        action: taskAction,
-                        params: params
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        addNotification(`Ошибка создания задачи: ${data.error}`, 'error');
-                    } else {
-                        addNotification(`Задача создана: ${data.request_id}`, 'success');
-                        refreshTasks();
-                    }
-                })
-                .catch(error => {
-                    addNotification(`Ошибка: ${error.message}`, 'error');
-                });
+                // Проверяем подключение WebSocket
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    addNotification('WebSocket не подключен. Пытаемся подключиться...', 'warning');
+                    initWebSocket();
+
+                    // Ждем подключения и отправляем задачу
+                    setTimeout(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            sendTaskViaWebSocket(taskType, taskAction, params);
+                        } else {
+                            addNotification('Не удалось подключиться через WebSocket. Используем HTTP API', 'error');
+                            sendTaskViaHTTP(taskType, taskAction, params);
+                        }
+                    }, 1000);
+                } else {
+                    sendTaskViaWebSocket(taskType, taskAction, params);
+                }
 
             } catch (e) {
-                addNotification('Ошибка в JSON параметрах', 'error');
+                addNotification('Ошибка в JSON параметрах: ' + e.message, 'error');
             }
+        }
+
+        function sendTaskViaWebSocket(taskType, taskAction, params) {
+            const taskData = {
+                task_type: taskType,
+                action: taskAction,
+                params: params
+            };
+
+            ws.send(JSON.stringify(taskData));
+            addNotification(`Задача отправлена через WebSocket: ${taskAction}`, 'success');
+        }
+
+        function sendTaskViaHTTP(taskType, taskAction, params) {
+            fetch('/api/tasks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    task_type: taskType,
+                    action: taskAction,
+                    params: params
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    addNotification(`Ошибка создания задачи: ${data.error}`, 'error');
+                } else {
+                    addNotification(`Задача создана через HTTP: ${data.request_id}`, 'success');
+                    refreshTasks();
+                }
+            })
+            .catch(error => {
+                addNotification(`Ошибка HTTP: ${error.message}`, 'error');
+            });
         }
 
         function refreshTasks() {

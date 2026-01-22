@@ -1,29 +1,29 @@
+from datetime import datetime
+
 import orjson
+import uvicorn
 from fastapi import FastAPI, WebSocket, Request, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-import uvicorn
-from typing import List
-
 from starlette.middleware.cors import CORSMiddleware
 
 from agent.client.logger_config import DefaultLogger
 from agent.client.task_manager.ctl_queue import RedisTaskManager
-from agent.client.task_manager.models import TaskAdd, TaskType, TaskStatus, TasksInfo
-from agent.client.task_manager.ws import WebSocketNotificationHandler
+from agent.client.task_manager.dispatcher import TaskDispatcher
+from agent.client.task_manager.models import TaskAdd, TaskType, TasksInfo
+from agent.client.task_manager.ws_notification import WebSocketNotificationHandler
 
-logger = DefaultLogger("TaskManagerServer")
 
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
-
-# Инициализация менеджеров
-queue_manager = RedisTaskManager()
-ws_handler = WebSocketNotificationHandler(queue_manager)
-
-# Настройка шаблонов
 templates = Jinja2Templates(directory="templates")
-# Список активных подключений
-active_connections: List[WebSocket] = []
+
+
+logger = DefaultLogger("TaskManagerServer")
+queue_manager = RedisTaskManager()
+task_dispatcher = TaskDispatcher(queue_manager)
+ws_handler = WebSocketNotificationHandler(queue_manager)
+active_connections: list[WebSocket] = []
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,7 +94,7 @@ async def clear_all_tasks():
 
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard(request: Request):
-    """Главная страница управления задачами"""
+    """Для тестирования управления задачами"""
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
@@ -127,31 +127,6 @@ async def get_task_info(request_id: str):
             return JSONResponse({"error": "Task not found"}, status_code=404)
     except Exception as e:
         logger.error(f"Ошибка получения задачи: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-@app.post("/api/tasks")
-async def create_task(task_data: dict):
-    """Создать новую задачу"""
-    try:
-        from datetime import datetime
-
-        task = TaskAdd(
-            task_type=TaskType(task_data.get("task_type", "vm")),
-            action=task_data.get("action"),
-            params=task_data.get("params", {}),
-            created_at=datetime.now(),
-        )
-
-        # Импортируем диспетчер для создания задачи
-        from agent.client.task_manager.dispatcher import TaskDispatcher
-
-        dispatcher = TaskDispatcher(queue_manager, worker_count=1)
-        dispatcher.submit_task(task)
-
-        return task
-    except Exception as e:
-        logger.error(f"Ошибка создания задачи: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -199,6 +174,18 @@ async def websocket_endpoint(websocket: WebSocket):
                             "request_id": request_id,
                         }
                     )
+
+                else:
+                    task = TaskAdd(
+                        task_type=TaskType(message.get("task_type", "vm")),
+                        action=message.get("action"),
+                        params=message.get("params", {}),
+                        created_at=datetime.now(),
+                    )
+
+                    task_dispatcher.submit_task(task)
+
+                    return task
 
             except orjson.JSONDecodeError:
                 await websocket.send_json(

@@ -86,7 +86,6 @@ class TaskHandler:
         """
         try:
             logger.info(f"Обработка задачи: {task_type.value}.{action}")
-            print(params)
             if task_type == TaskType.VM:
                 result = self._handle_vm_task(action, params)
             elif task_type == TaskType.NETWORK:
@@ -127,7 +126,6 @@ class TaskHandler:
             # Создание ВМ
             vm_config = VMCreateRequest(**params)
             result = self.vm_manager.create_vm(vm_config)
-            print(params)
             if hasattr(result, "model_dump"):
                 return result
             return result
@@ -484,7 +482,6 @@ class TaskWorker(threading.Thread):
         while not self.stop_event.is_set():
             try:
                 task = self.queue_manager.execute_task()
-                print("ТАААААААААААААААСК: ", task)
 
                 if not task:
                     time.sleep(3)
@@ -510,7 +507,6 @@ class TaskWorker(threading.Thread):
                         action=task.action,
                         params=task.params,
                     )
-                    print("РЕЗАААААААААААААААААЛТ: ", result.get("result"))
                     handle_result = (
                         orjson.loads(result.get("result"))
                         if isinstance(result.get("result"), str)
