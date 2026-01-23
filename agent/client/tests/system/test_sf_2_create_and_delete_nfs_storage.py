@@ -28,6 +28,7 @@ def test_sf_02_create_and_delete_nfs_storage(
     """
     disk_path = None
     time.sleep(5)
+    nfs_path, _ = create_nfs_storage_session
     try:
         # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)
@@ -37,7 +38,7 @@ def test_sf_02_create_and_delete_nfs_storage(
             format=disk_format,
             sparse=sparse,
             description="Create disk description",
-            path=create_nfs_storage_session,
+            path=nfs_path,
         )
         attach_disk = storage_session.create_disk(attach_disk_create)
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
@@ -65,7 +66,7 @@ def test_sf_02_create_and_delete_nfs_storage(
         else:
             assert round(vm_disk.capacity_bytes / (1024**3), 2) < 0.1
         assert vm_disk.file_path_exists is True
-        assert create_nfs_storage_session == vm_disk.path
+        assert nfs_path == vm_disk.path
     finally:
         # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:

@@ -75,6 +75,12 @@ def volume_session():
 
 
 @pytest.fixture(scope="session")
+def cli_session():
+    cli = CLIControl()
+    return cli
+
+
+@pytest.fixture(scope="session")
 def create_nfs_storage_session():
     cli = CLIControl()
     nfs_stg = NFSStorageManager()
@@ -98,7 +104,7 @@ def create_nfs_storage_session():
     cli.execute(mkdir_local)
     nfs_stg.mount(f"127.0.0.1:{nfs_path}", nfs_mount_path)
 
-    yield nfs_mount_path
+    yield nfs_mount_path, cli
 
     # Отмонтировать принудительно
     nfs_stg.umount(nfs_mount_path)

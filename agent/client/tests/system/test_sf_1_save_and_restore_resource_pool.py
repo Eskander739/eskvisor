@@ -20,14 +20,13 @@ RESTORE_SCRIPT = str(CURRENT_PATH / "restore.sh")
     "SF‑01",
     "Сохранение и восстановление ресурс пула через скрипт агента",
 )
-def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
+def test_sf_01_save_and_restore_resource_pool(resource_pool_session, cli_session):
     """
     SF-01: Сохранение и восстановление ресурс пула через скрипт агента
 
     Необходимо проверить скрипт сохранения и восстановления ресурс пула в cgroup v2
     """
     random_name = None
-    cli = resource_pool_session.cli
     try:
         # ____________________________________Создание пула ресурсов______________
         random_name = f"resource_pool_{random.randint(10000, 99999)}"
@@ -68,7 +67,7 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
 
         # ____________________________________Сохранение пула ресурсов через скрипт______________
         cmd_args = ["bash", SAVE_SCRIPT]
-        cli.execute(cmd_args)
+        cli_session.execute(cmd_args)
 
         # ______________________________Удаление пула ресурсов_______
         delete_rp_info = resource_pool_session.delete_virtual_resource_pool(
@@ -86,7 +85,7 @@ def test_sf_01_save_and_restore_resource_pool(resource_pool_session):
 
         # ____________________________________Восстановление пула ресурсов через скрипт______________
         cmd_args = ["bash", RESTORE_SCRIPT]
-        result = cli.execute(cmd_args)
+        result = cli_session.execute(cmd_args)
         print("Результат выполнения команды восстановления ресурс пула: ", result)
 
         # ____________________________________Проверка восстановления ресурс пула______________
