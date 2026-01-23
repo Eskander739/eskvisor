@@ -44,11 +44,7 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
         )
         vm_disk = vm_disk.disk_info
         disk_path = (
-            vm_disk.path
-            + "/"
-            + disk_create.name
-            + "."
-            + disk_create.format.value
+            vm_disk.path + "/" + disk_create.name + "." + disk_create.format.value
         )
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value

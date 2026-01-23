@@ -19,10 +19,11 @@ def test_vn_03_create_bridge_network(network_session):
     network_name = None
     try:
         # ____________________________________Создание виртуальной Bridge сети____
+        random_int = random.randint(1000, 9999)
         bridge_params = NetworkParameters(
-            name=f"bridge-{random.randint(1000, 9999)}",
+            name=f"bridge-{random_int}",
             forward=NetworkForward(mode="bridge"),
-            bridge=NetworkBridge(name="virbr-test-bridge"),
+            bridge=NetworkBridge(name=f"virbr-test-{random_int}"),
             autostart=True,
         )
         network_name = bridge_params.name

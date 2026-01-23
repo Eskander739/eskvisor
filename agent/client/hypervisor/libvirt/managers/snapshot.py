@@ -1,7 +1,7 @@
 import os
 import shutil
 import uuid
-import xml.etree.ElementTree as ElementTree
+from xml.etree import ElementTree
 
 import libvirt
 

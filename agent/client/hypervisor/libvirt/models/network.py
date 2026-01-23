@@ -1,3 +1,6 @@
+from datetime import datetime
+from ipaddress import IPv4Network, IPv6Network
+
 from pydantic import (
     BaseModel,
     Field,
@@ -58,8 +61,8 @@ class NetworkTypeInfo(BaseModel):
 
 # Модели Pydantic для валидации параметров
 class NetworkDHCPRange(BaseModel):
-    start: IPvAnyAddress
-    end: IPvAnyAddress
+    start: IPvAnyAddress | str = Field(..., description="Стартовый диапазон IP адресов")
+    end: IPvAnyAddress | str = Field(..., description="Конечный диапазон IP адресов")
 
     @model_validator(mode="after")
     def validate_mode(self):
@@ -94,21 +97,39 @@ class NetworkForward(BaseModel):
 
 
 class NetworkBridge(BaseModel):
-    name: str | None = None
-    stp: str | None = Field(None, pattern="^(on|off)$")  # default="on"
-    delay: int | None = Field(None, ge=0)  # default=0
-    zone: str | None = None
+    name: str | None = Field(
+        default=None, description="Имя bridge-интерфейса на хосте (например, virbr0)"
+    )
+    stp: str | None = Field(
+        None,
+        pattern="^(on|off)$",
+        description="Spanning Tree Protocol (вкл/выкл) для защиты от петель в сети",
+    )  # default="on"
+    delay: int | None = Field(
+        None, ge=0, description="Задержка перед активацией порта bridge (секунды)"
+    )  # default=0
+    zone: str | None = Field(
+        default=None,
+        description=" Зона фаервола для bridge (например, trusted, public)",
+    )
 
 
 class NetworkRoute(BaseModel):
-    address: IPvAnyNetwork
-    gateway: IPvAnyAddress | None = None
-    metric: str | None = Field(default=1, ge=1)
+    address: IPvAnyNetwork = Field(..., description="IP адрес роутера")
+    gateway: IPvAnyAddress | None = Field(
+        default=None,
+        description="это IP-адрес устройства (обычно роутера), через которое ваша сеть общается с внешним миром",
+    )
+    metric: str | None = Field(
+        default=1,
+        ge=1,
+        description="Число от 1 до ∞, которое показывает 'стоимость' маршрута. Чем меньше метрика — тем предпочтительнее маршрут",
+    )
 
 
 class NetworkDNSHost(BaseModel):
     ip: IPvAnyAddress
-    hostnames: list[str] | None = None
+    hostname: str | None = None
 
     @model_validator(mode="after")
     def validate_mode(self):
@@ -119,51 +140,131 @@ class NetworkDNSHost(BaseModel):
         return self
 
 
-class NetworkDNSTXT(BaseModel):
-    name: str
-    value: str
-
-
 class NetworkDNSSRV(BaseModel):
-    service: str
-    protocol: str = Field(pattern="^(tcp|udp)$")
-    target: str
-    port: int | None = Field(default=None, ge=1, le=65535)
-    priority: int | None = Field(default=0, ge=0)
-    weight: int | None = Field(default=0, ge=0)
+    """DNS SRV (Service) запись - указывает расположение сетевых сервисов"""
+
+    service: str = Field(
+        description="Имя сервиса без подчеркивания: ldap, kerberos, minecraft, sip"
+    )
+    protocol: str = Field(
+        "tcp", pattern="^(tcp|udp)$", description="Транспортный протокол: tcp или udp"
+    )
+    target: str = Field(
+        description="Полное доменное имя (FQDN) хоста, предоставляющего сервис"
+    )
+    port: int | None = Field(
+        default=None,
+        ge=1,
+        le=65535,
+        description="Номер порта сервиса (1-65535). Обязателен для большинства сервисов",
+    )
+    priority: int | None = Field(
+        default=0,
+        ge=0,
+        description="Приоритет сервера (0-65535). Меньше = выше приоритет. Клиент выбирает сервер с наименьшим значением",
+    )
+    weight: int | None = Field(
+        default=0,
+        ge=0,
+        description="Вес для балансировки нагрузки (0-65535). Используется при равных приоритетах для распределения трафика",
+    )
 
 
 class NetworkDNS(BaseModel):
-    forwarders: list[IPvAnyAddress] | None = None
-    hosts: list[NetworkDNSHost] | None = None
-    txt_records: list[NetworkDNSTXT] | None = None
-    srv_records: list[NetworkDNSSRV] | None = None
-    domain: str | None = None
-    local_only: bool | None = False
+    forwarders: list[IPvAnyAddress] | None = Field(
+        default=None,
+        description="Список пробросов сетевого трафика из виртуальной сети наружу",
+    )
+    hosts: list[NetworkDNSHost] | None = Field(
+        default=None,
+        description="Статические записи 'имя → IP' для всех ВМ в сети (как общий /etc/hosts",
+    )
+    txt_records: list[DNSTXT] | None = Field(
+        default=None,
+        description="Текстовые записи DNS для верификации, SPF-почты и метаданных",
+    )
+    srv_records: list[NetworkDNSSRV] | None = Field(
+        default=None,
+        description="Указывает, где находятся сетевые сервисы (не только IP, но и порт, протокол, приоритет)",
+    )
+    domain_name: str | None = Field(
+        default=None,
+        description="Добавляет домен к любым коротким именам (hostnames), которые разрешаются через DNS в этой виртуальной сети",
+    )
+    local_only: bool | None = Field(
+        default=False, description="блокировка внешнего DNS (только локальные записи)"
+    )
 
 
 class NetworkParameters(BaseModel):
-    name: str
-    uuid: str | None = None
-    bridge: NetworkBridge | None = None
-    forward: NetworkForward | None = None
-    ipv4: bool | None = True  # включен ли этот тип сетей
-    ipv6: bool | None = False  # включен ли этот тип сетей
-    ipv4_address: IPvAnyNetwork | None = None
-    ipv6_address: IPvAnyNetwork | None = None
-    dhcp_ranges: list[NetworkDHCPRange] | None = None
-    dhcp_hosts: list[NetworkDHCPHost] | None = None
-    routes: list[NetworkRoute] | None = None
-    dns: NetworkDNS | None = None
-    mtu: int | None = Field(default=1500, ge=68, le=65535)
-    trust_guest_rx_filters: bool | None = False
-    isolated: bool | None = False
-    domain_name: str | None = None
-    gateway: str | None = None
-    dns_forwarders: list[DNSForwarder] | None = None
-    dns_hosts: list[DNSHost] | None = None
-    dns_txts: list[DNSTXT] | None = None
-    autostart: bool = False
+    name: str = Field(..., description="Имя виртуальной сети")
+    uuid: str | None = Field(
+        default=None, description="Индентификатор виртуальной сети"
+    )
+    bridge: NetworkBridge | None = Field(
+        default=None,
+        description="Соединяет виртуальные машины напрямую с физической сетью хоста",
+    )
+    forward: NetworkForward | None = Field(
+        default=None, description="Проброс сетевого трафика из виртуальной сети наружу"
+    )
+    ipv4: bool | None = Field(default=True, description="Включен ли режим IPv4 сети")
+    ipv6: bool | None = Field(default=Field(), description="Включен ли режим IPv6 сети")
+    ipv4_address: IPv4Network | None = Field(default=None, description="IPv4 адрес")
+    ipv6_address: IPv6Network | None = Field(default=None, description="IPv6 адрес")
+    dhcp_ranges: list[NetworkDHCPRange] | None = Field(
+        default=None,
+        description="Доступный диапазон адресов для устройств в вирутальной сети",
+    )
+    dhcp_hosts: list[NetworkDHCPHost] | None = Field(
+        default=None,
+        description="Статическая DHCP-резервация в рамках виртуальной сети для закрепления статичных ip за конкретными сервисами в рамках DHCP",
+    )
+    routes: list[NetworkRoute] | None = Field(
+        default=None,
+        description="Статический маршрут, который автоматически добавляется всем ВМ в виртуальной сети. Он говорит: 'Трафик в такую-то подсеть отправляй через такой-то шлюз'",
+    )
+    dns: NetworkDNS | None = Field(
+        default=None,
+        description="DNS в libvirt - это локальный DNS-сервер для виртуальной сети, который: разрешает имена между ВМ, форвардит запросы наружу, хранит локальные записи",
+    )
+    mtu: int | None = Field(
+        default=1500,
+        ge=68,
+        le=65535,
+        description="MTU - это максимальный размер пакета данных, который может быть передан по сети за один раз",
+    )
+    trust_guest_rx_filters: bool | None = Field(
+        default=False,
+        description="Это параметр безопасности виртуальной сети в libvirt, который контролирует, доверять ли настройкам фильтрации трафика от гостевой ОС (ВМ)",
+    )
+    isolated: bool | None = Field(
+        default=False,
+        description="Полностью изолированная виртуальная сеть - ВМ могут общаться только друг с другом внутри сети, без какого-либо доступа наружу",
+    )
+    domain_name: str | None = Field(
+        default=None,
+        description="Добавляет домен к любым коротким именам (hostnames), которые разрешаются через DNS в этой виртуальной сети",
+    )
+    gateway: str | None = Field(
+        default=None,
+        description="это IP-адрес устройства (обычно роутера), через которое ваша сеть общается с внешним миром",
+    )
+    dns_forwarders: list[DNSForwarder] | None = Field(
+        default=None,
+        description="Внешние DNS-серверы, куда перенаправлять запросы из виртуальной сети",
+    )
+    dns_hosts: list[DNSHost] | None = Field(
+        default=None, description="Локальные записи для имён в виртуальной сети"
+    )
+    dns_txts: list[DNSTXT] | None = Field(
+        default=None,
+        description="Текстовые записи DNS для верификации, SPF-почты и метаданных",
+    )
+    autostart: bool = Field(
+        default=False,
+        description="Автозапуск виртуальной сети работает только при перезагрузке самого хоста",
+    )
 
     @model_validator(mode="after")
     def validate_mode(self):
@@ -220,20 +321,43 @@ class NetworkParameters(BaseModel):
 
 
 class NetworkInfo(BaseModel):
-    name: str
-    uuid: str
-    bridge_name: str | None = None
-    active: bool
-    persistent: bool
-    autostart: bool
-    network_type: NetworkTypeInfo
-    xml: str
-    gateway: str | None = None
-    dns_forwarders: list[DNSForwarder]
-    dns_hosts: list[DNSHost]
-    dns_txts: list[DNSTXT]
-    ipv4_address: str | None = None
-    dhcp_ranges: list[NetworkDHCPRange] | None = None
+    name: str = Field(..., description="Имя виртуальной сети")
+    uuid: str = Field(..., description="Идентификатор виртуальной сети")
+    bridge_name: str | None = Field(
+        default=None, description="Имя bridge-интерфейса на хосте (например, virbr0)"
+    )
+    active: bool = Field(
+        ..., description="Сеть, которая в данный момент запущена и готова к работе."
+    )
+    persistent: bool = Field(
+        ...,
+        description="Сеть, которая сохраняется в конфигурации libvirt после перезагрузки хоста.",
+    )
+    autostart: bool = Field(
+        ...,
+        description="Автозапуск виртуальной сети работает только при перезагрузке самого хоста",
+    )
+    network_type: NetworkTypeInfo = Field(..., description="Тип виртуальной сети")
+    xml: str = Field(..., description="XML конфигурация виртуальной сети")
+    gateway: str | None = Field(
+        default=None,
+        description="это IP-адрес устройства (обычно роутера), через которое ваша сеть общается с внешним миром",
+    )
+    dns_forwarders: list[DNSForwarder] = Field(
+        ...,
+        description="Внешние DNS-серверы, куда перенаправлять запросы из виртуальной сети",
+    )
+    dns_hosts: list[DNSHost] = Field(
+        ..., description="Локальные записи для имён в виртуальной сети"
+    )
+    dns_txts: list[DNSTXT] = Field(
+        ..., description="Текстовые записи DNS для верификации, SPF-почты и метаданных"
+    )
+    ipv4_address: IPvAnyNetwork | None = Field(default=None, description="IPv4 адрес")
+    dhcp_ranges: list[NetworkDHCPRange] | None = Field(
+        default=None,
+        description="Диапазоны IP адресов, например от 192.168.0.2 до 192.168.0.100",
+    )
 
 
 class NetworkList(BaseModel):
@@ -242,35 +366,24 @@ class NetworkList(BaseModel):
 
 
 class VmNetAdapter(BaseModel):
-    """
-    for i, net in enumerate(config.networks):
-    net_cmd = f"--network "
+    """Сетевой адаптер виртуальной машины для конфигурации подключения"""
 
-    net_params = []
-
-    if net.network_type == NetworkType.BRIDGE:
-        net_params.append(f"bridge={net.source}")
-    elif net.network_type == NetworkType.NETWORK:
-        net_params.append(f"network={net.source}")
-    elif net.network_type == NetworkType.USER:
-        net_params.append("user")
-    elif net.network_type == NetworkType.DIRECT:
-        net_params.append(f"direct={net.source}")
-
-    if net.model:
-        net_params.append(f"model={net.model.value}")
-
-    if net.mac_address:
-        net_params.append(f"mac={net.mac_address}")
-
-    net_cmd += ",".join(net_params)
-    cmd_parts.append(net_cmd)
-    """
-
-    network_type: NetworkType = NetworkType.NETWORK
-    model: NetworkModelEnum = NetworkModelEnum.VIRTIO
-    mac_address: str | None = None
-    source: str | None = "default"
+    network_type: NetworkType = Field(
+        default=NetworkType.NETWORK,
+        description="Тип сетевого подключения: NETWORK (виртуальная сеть), BRIDGE (мост), DIRECT (прямой доступ) и др.",
+    )
+    model: NetworkModelEnum = Field(
+        default=NetworkModelEnum.VIRTIO,
+        description="Модель виртуального сетевого адаптера: VIRTIO (высокопроизводительный), E1000, RTL8139, VMXNET3",
+    )
+    mac_address: str | None = Field(
+        default=None,
+        description="MAC-адрес адаптера. Если не указан, будет сгенерирован автоматически",
+    )
+    source: str | None = Field(
+        default="default",
+        description="Источник подключения: имя виртуальной сети, bridge или физического интерфейса",
+    )
 
 
 class VmInfo(BaseModel):
@@ -328,19 +441,49 @@ class NetworkInterfaceCoalescing(BaseModel):
 
 
 class NetworkInterface(BaseModel):
-    interface_type: NetworkType
-    mac_address: str | None = None
-    model: str
-    source: NetworkInterfaceSource
-    host_interface: str
-    driver: NetworkInterfaceDriver
-    link_state: NetworkInterfaceLinkState
-    boot_order: str | None = None
-    boot_order_description: str | None = None
-    rom_bar: NetworkInterfaceRomBar
-    filter: NetworkInterfaceFilter
-    mtu: NetworkInterfaceMtu
-    coalescing: NetworkInterfaceCoalescing
+    """Сетевой интерфейс виртуальной машины"""
+
+    interface_type: NetworkType = Field(
+        description="Тип интерфейса: network (виртуальная сеть), bridge (мост), direct (прямой доступ) и др."
+    )
+    mac_address: str | None = Field(
+        default=None,
+        description="MAC-адрес интерфейса. Если не указан, генерируется автоматически",
+    )
+    model: str = Field(
+        description="Модель виртуального сетевого адаптера: virtio, e1000, rtl8139, vmxnet3"
+    )
+    source: NetworkInterfaceSource = Field(
+        description="Источник подключения интерфейса: имя сети, bridge или физического интерфейса"
+    )
+    host_interface: str = Field(
+        description="Имя интерфейса на хосте (например, vnet0) для данного подключения"
+    )
+    driver: NetworkInterfaceDriver = Field(
+        description="Настройки драйвера сетевого адаптера: имя, очереди, iommu"
+    )
+    link_state: NetworkInterfaceLinkState = Field(
+        description="Состояние сетевого канала (up/down) и его описание"
+    )
+    boot_order: str | None = Field(
+        default=None,
+        description="Порядок загрузки для сетевой загрузки (PXE). None = не используется для загрузки",
+    )
+    boot_order_description: str | None = Field(
+        default=None, description="Текстовое описание порядка загрузки интерфейса"
+    )
+    rom_bar: NetworkInterfaceRomBar = Field(
+        description="Настройки ROM: включение/выключение и путь к файлу ROM"
+    )
+    filter: NetworkInterfaceFilter = Field(
+        description="Сетевой фильтр для трафика: имя фильтра и его параметры"
+    )
+    mtu: NetworkInterfaceMtu = Field(
+        description="Maximum Transmission Unit (максимальный размер пакета) интерфейса"
+    )
+    coalescing: NetworkInterfaceCoalescing = Field(
+        description="Настройки коалесцирования прерываний для повышения производительности"
+    )
 
 
 class NetworkInterfacesList(BaseModel):
@@ -351,3 +494,13 @@ class NetworkInterfacesList(BaseModel):
 class NetworkInterfacesInfo(BaseModel):
     vm_info: VmInfo
     network_interfaces: NetworkInterfacesList
+
+
+class NetworkBackup(BaseModel):
+    name: str
+    xml_config: str
+    net_uuid: str
+    autostart: bool
+    was_active: bool
+    bridge_name: str | None = Field(default=None)
+    created_at: datetime

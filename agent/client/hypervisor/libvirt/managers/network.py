@@ -1,3 +1,4 @@
+import datetime
 import ipaddress
 import subprocess
 from typing import Any
@@ -23,6 +24,7 @@ from agent.client.hypervisor.libvirt.models.network import (
     NetworkTypeInfo,
     VmInfo,
     NetworkList,
+    NetworkBackup,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -110,31 +112,81 @@ class NetworkManager(LibvirtClient):
                 note=str(e),
             )
 
-    def _has_vms_connected_to_network(self, network_name: str) -> bool:
-        """
-        Простая проверка через список всех ВМ с фильтрацией по сети
-        """
+    def create_backup(self, network_name: str) -> NetworkBackup:
+        """Создание бэкапа сети"""
         try:
-            # Получаем все запущенные ВМ
-            domains = self.conn.listAllDomains(libvirt.VIR_CONNECT_LIST_DOMAINS_RUNNING)
+            current_network = self.conn.networkLookupByName(network_name)
+
+            backup = NetworkBackup(
+                name=network_name,
+                xml_config=current_network.XMLDesc(0),
+                net_uuid=current_network.UUIDString(),
+                autostart=current_network.autostart(),
+                was_active=current_network.isActive(),
+                bridge_name=(
+                    current_network.bridgeName()
+                    if hasattr(current_network, "bridgeName")
+                    else None
+                ),
+                created_at=datetime.datetime.now(),
+            )
+
+            return backup
+        except self.libvirtError as e:
+            raise self.libvirtError(
+                f"Не удалось создать бэкап сети {network_name}: {e}"
+            )
+
+    def restore_network(self, backup: NetworkBackup) -> bool:
+        """Восстановление сети из бэкапа"""
+        try:
+            try:
+                existing_network = self.conn.networkLookupByName(backup.name)
+                if existing_network.isActive():
+                    existing_network.destroy()
+                existing_network.undefine()
+            except self.libvirtError:
+                pass
+
+            # 1. Создаем сеть из XML бэкапа
+            restored_network = self.conn.networkDefineXML(backup.xml_config)
+
+            # 2. Восстанавливаем состояние
+            restored_network.setAutostart(backup.autostart)
+
+            # 3. Запускаем, если сеть была активна
+            if backup.was_active:
+                restored_network.create()
+
+            return True
+
+        except libvirt.libvirtError as e:
+            self.logger.error(f"Ошибка восстановления сети {backup.name}: {e}")
+            return False
+
+    def has_vms_connected_to_network(self, network_name: str) -> bool:
+        """Проверка наличия ВМ, подключенных к сети"""
+        try:
+            domains = self.conn.listAllDomains()
 
             for domain in domains:
-                # Получаем XML ВМ
                 xml_desc = domain.XMLDesc(0)
+                root = ElementTree.fromstring(xml_desc)
 
-                # Быстрая проверка строкой
-                if f"<source network='{network_name}'" in xml_desc:
-                    return True
-
-                # Альтернативный формат (без кавычек)
-                if f"<source network={network_name}" in xml_desc:
-                    return True
+                interfaces = root.findall(".//devices/interface")
+                for iface in interfaces:
+                    source = iface.find("source")
+                    if source is not None:
+                        if source.get("network") == network_name:
+                            return True
+                        # Проверка других типов подключения
+                        if source.get("bridge") == network_name:
+                            return True
 
             return False
-
         except Exception as e:
-            self.logger.debug(f"Ошибка проверки ВМ в сети '{network_name}': {e}")
-            return False
+            self.logger.error(f"Ошибка проверки подключенных ВМ: {e}")
+            return True
 
     def delete_network(
         self,
@@ -148,7 +200,7 @@ class NetworkManager(LibvirtClient):
 
             # Получаем информацию о типе сети перед удалением
             network_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
-            if self._has_vms_connected_to_network(network_name) and not approve_admin:
+            if self.has_vms_connected_to_network(network_name) and not approve_admin:
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) не может быть удалена с подключенными ВМ без подтверждения администратора"
                 )
@@ -197,7 +249,7 @@ class NetworkManager(LibvirtClient):
             network_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
 
             # Проверяем, есть ли подключенные ВМ (если не force)
-            if not force and self._has_vms_connected_to_network(network_name):
+            if not force and self.has_vms_connected_to_network(network_name):
                 self.logger.warning(
                     f"Сеть '{network_name}' имеет подключенные ВМ. Используйте force=True для принудительного перезапуска"
                 )
@@ -363,7 +415,11 @@ class NetworkManager(LibvirtClient):
                 dns_forwarders=parsed_settings.get("dns_forwarders", []),
                 dns_hosts=parsed_settings.get("dns_hosts", []),
                 dns_txts=parsed_settings.get("dns_txts", []),
-                ipv4_address=parsed_settings.get("ipv4_address"),
+                ipv4_address=(
+                    parsed_settings.get("ipv4_address")
+                    if parsed_settings.get("ipv4_address")
+                    else None
+                ),
                 dhcp_ranges=parsed_settings.get("dhcp_ranges", []),
             )
 
@@ -773,7 +829,11 @@ class NetworkManager(LibvirtClient):
                         dns_forwarders=parsed_settings.get("dns_forwarders", []),
                         dns_hosts=parsed_settings.get("dns_hosts", []),
                         dns_txts=parsed_settings.get("dns_txts", []),
-                        ipv4_address=parsed_settings.get("ipv4_address"),
+                        ipv4_address=(
+                            parsed_settings.get("ipv4_address")
+                            if parsed_settings.get("ipv4_address")
+                            else None
+                        ),
                         dhcp_ranges=parsed_settings.get("dhcp_ranges", []),
                     )
 
@@ -1516,7 +1576,6 @@ class NetworkManager(LibvirtClient):
     ) -> NetworkMessage:
         """Отключение сетевого интерфейса от виртуальной машины"""
         try:
-            # Проверяем существование ВМ
             try:
                 vm = self.conn.lookupByName(vm_name)
             except libvirt.libvirtError as e:
@@ -1524,21 +1583,17 @@ class NetworkManager(LibvirtClient):
                 return NetworkMessage(
                     code=CommandMessagesEnum.vm_found_error.name,
                     success=False,
-                    note=f"VM not found: {e}",
                 )
 
-            # Проверяем существование интерфейса с указанным MAC
             xml_desc = vm.XMLDesc(0)
             root = ElementTree.fromstring(xml_desc)
 
-            interface_found = False
             for iface in root.findall(".//devices/interface"):
                 mac_elem = iface.find("mac")
                 if mac_elem is not None and mac_elem.get("address") == mac_address:
-                    interface_found = True
+                    interface_xml = self.xml_string_from_object(iface)
                     break
-
-            if not interface_found:
+            else:
                 self.logger.error(
                     f"Сетевой интерфейс с MAC '{mac_address}' не найден у ВМ '{vm_name}'"
                 )
@@ -1548,38 +1603,20 @@ class NetworkManager(LibvirtClient):
                     note=f"Network interface with MAC {mac_address} not found",
                 )
 
-            # Строим команду virsh detach-interface
-            cmd = [
-                "virsh",
-                "--connect",
-                self.connection_uri,
-                "detach-interface",
-                vm_name,
-                "network",
-            ]
-
-            if mac_address:
-                cmd.extend(["--mac", mac_address])
-
-            if persistent:
-                cmd.append("--persistent")
-
-            if live:
-                cmd.append("--live")
-            else:
-                cmd.append("--config")
-
             # Выполняем команду
             self.logger.info(
                 f"Отключение сетевого интерфейса {mac_address} от ВМ {vm_name}"
             )
-            result = self.cli.execute(cmd, return_proc=True)
+            # Определяем флаги
+            flags = 0
+            if persistent:
+                flags |= libvirt.VIR_DOMAIN_AFFECT_CONFIG
+            if live:
+                flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-            if result.returncode == 0:
-                self.logger.warning(
-                    f"Результат отключения сетевого интерфейса: {result.stdout}"
-                )
-
+            # Отключаем через API
+            result = vm.detachDeviceFlags(interface_xml, flags)
+            if result == 0:
                 self.logger.info(
                     f"Сетевой интерфейс {mac_address} успешно отключен от ВМ {vm_name}"
                 )

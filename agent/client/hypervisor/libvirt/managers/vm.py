@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 import uuid
-import xml.etree.ElementTree as ET
+from xml.etree import ElementTree
 from pathlib import Path
 from typing import Any
 
@@ -87,7 +87,7 @@ class VmManager(LibvirtClient):
     def restart_vms_in_live_host(self):
         """
         Что будет с виртуальными машинами и их дисками в ресурс пулах ?
-        (помечаем для пользователя что хранилища ресурс пулов не доступны в режиме HA, но доступно ограничение ресурсов)
+        (помечаем для пользователя, что хранилища ресурс пулов не доступны в режиме HA, но доступно ограничение ресурсов)
 
         Какую команду backend будет отправлять целевому хосту для перезапуска всех ВМ на новом хосте ?
 
@@ -111,7 +111,7 @@ class VmManager(LibvirtClient):
         Создание виртуальной машины через virt-install
 
 
-        U.P.D - Порядок загрузки дисков происходит в соответствии с их порядком в переданном списке
+        Дополнительно - Порядок загрузки дисков происходит в соответствии с их порядком в переданном списке
 
         Args:
             config: Конфигурация ВМ
@@ -599,7 +599,7 @@ class VmManager(LibvirtClient):
 
             result = SecureBootVM(vm_name=vm_name)
 
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
             print(xml_desc)
 
             # Проверяем наличие UEFI
@@ -924,7 +924,7 @@ class VmManager(LibvirtClient):
             xml_desc = domain.XMLDesc()
 
             # Проверяем совместимость CPU
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
             cpu_elem = root.find(".//cpu")
             if cpu_elem is not None:
                 cpu_mode = cpu_elem.get("mode", "host-model")
@@ -1058,12 +1058,12 @@ class VmManager(LibvirtClient):
             Имя свободного устройства (hdc, hdd и т.д.)
         """
         try:
-            vm = self.conn.lookupByName(vm_name)
-            xml_desc = vm.XMLDesc()
+            current_vm = self.conn.lookupByName(vm_name)
+            xml_desc = current_vm.XMLDesc()
 
             # Ищем используемые CDROM устройства
             used_devices = set()
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             for disk in root.findall(".//disk"):
                 if disk.get("device") == "cdrom":
@@ -1170,7 +1170,7 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка создания ВМ из XML, \nerr: {e}")
             return False
 
-    def _set_autostart(self, vm_name: str, enabled: bool) -> bool:
+    def _set_autostart(self, vm_name: str | libvirt.virDomain, enabled: bool) -> bool:
         """
         Включение/выключение автостарта ВМ
 
@@ -1182,7 +1182,10 @@ class VmManager(LibvirtClient):
             Успех операции
         """
         try:
-            domain = self.conn.lookupByName(vm_name)
+            if isinstance(vm_name, str):
+                domain = self.conn.lookupByName(vm_name)
+            else:
+                domain = vm_name
             domain.setAutostart(1 if enabled else 0)
             self.logger.info(f"Автостарт для ВМ '{vm_name}' установлен в {enabled}")
             return True
@@ -1199,8 +1202,8 @@ class VmManager(LibvirtClient):
             self.logger.info(f"Редактирование свойств ВМ {vm_name}")
 
             # Получаем домен
-            vm = self.conn.lookupByName(vm_name)
-            state, _ = vm.state()
+            current_vm = self.conn.lookupByName(vm_name)
+            state, _ = current_vm.state()
             is_running = state == libvirt.VIR_DOMAIN_RUNNING
 
             self.logger.info(
@@ -1208,11 +1211,11 @@ class VmManager(LibvirtClient):
             )
 
             # Получаем текущую XML конфигурацию
-            xml_desc = vm.XMLDesc(0)
+            xml_desc = current_vm.XMLDesc(0)
             self.logger.debug(f"Текущий XML: {xml_desc[:500]}...")
 
             # Парсим XML
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
             modified = False
 
             # Изменение vCPU
@@ -1222,7 +1225,7 @@ class VmManager(LibvirtClient):
                 # Находим или создаем элемент vcpu
                 vcpu_elem = root.find("vcpu")
                 if vcpu_elem is None:
-                    vcpu_elem = ET.SubElement(root, "vcpu")
+                    vcpu_elem = ElementTree.SubElement(root, "vcpu")
 
                 # Устанавливаем значение
                 vcpu_elem.text = str(vm_update.vcpus)
@@ -1234,7 +1237,7 @@ class VmManager(LibvirtClient):
                     # Обновляем топологию CPU
                     topology: Any = cpu_elem.find("topology")
                     if topology is None:
-                        topology = ET.SubElement(cpu_elem, "topology")
+                        topology = ElementTree.SubElement(cpu_elem, "topology")
 
                     # Устанавливаем простую топологию: sockets = vcpus, cores = 1, threads
                     # = 1
@@ -1252,14 +1255,15 @@ class VmManager(LibvirtClient):
                 description_elem = root.find("description")
                 if description_elem is None:
                     # Создаем элемент description если его нет
-                    description_elem = ET.SubElement(root, "description")
+                    description_elem = ElementTree.SubElement(root, "description")
 
                 # Устанавливаем текст описания
                 description_elem.text = str(vm_update.description)
 
                 modified = True
 
-            # TODO: Реализовать изменение autostart(то что директория)
+            if vm_update.autostart is not None:
+                self._set_autostart(current_vm, vm_update.autostart)
             # Изменение модели CPU (требует остановки ВМ)
             if vm_update.cpu_model is not None:  # Заглушка, не протестировано
                 try:
@@ -1290,16 +1294,12 @@ class VmManager(LibvirtClient):
                         )
 
                     # Проверяем, что ВМ остановлена
-                    try:
-                        current_dom = self.conn.lookupByName(vm_name)
-                        if current_dom.isActive():
-                            raise ValueError(
-                                f"Нельзя изменить модель CPU у запущенной ВМ '{vm_name}'. "
-                                f"Сначала остановите ВМ: virsh destroy {vm_name}"
-                            )
-                    except libvirt.libvirtError:
-                        # ВМ не найдена - это нормально при создании
-                        pass
+                    current_dom = self.conn.lookupByName(vm_name)
+                    if current_dom.isActive():
+                        return VmMessage(
+                            success=False,
+                            code=CommandMessagesEnum.can_not_change_cpu_model_on_running_vm.name,
+                        )
 
                     self.logger.info(f"Изменение модели CPU на режим '{mode}'")
 
@@ -1310,10 +1310,10 @@ class VmManager(LibvirtClient):
                         memory_elem = root.find("memory")
                         if memory_elem is not None:
                             index = list(root).index(memory_elem) + 1
-                            cpu_elem = ET.Element("cpu")
+                            cpu_elem = ElementTree.Element("cpu")
                             root.insert(index, cpu_elem)
                         else:
-                            cpu_elem = ET.SubElement(root, "cpu")
+                            cpu_elem = ElementTree.SubElement(root, "cpu")
                     else:
                         # Очищаем старую конфигурацию
                         for child in list(cpu_elem):
@@ -1333,14 +1333,14 @@ class VmManager(LibvirtClient):
                     # Добавляем модель для custom/host-model
                     if mode in ["custom", "host-model"] and "model" in cpu_config:
                         cpu_model = str(cpu_config["model"])
-                        model_elem = ET.SubElement(cpu_elem, "model")
+                        model_elem = ElementTree.SubElement(cpu_elem, "model")
                         model_elem.text = cpu_model
                         model_elem.set("fallback", cpu_config.get("fallback", "allow"))
 
                     # Добавляем топологию
                     if "topology" in cpu_config:
                         topology: Any = cpu_config["topology"]
-                        topology_elem = ET.SubElement(cpu_elem, "topology")
+                        topology_elem = ElementTree.SubElement(cpu_elem, "topology")
 
                         # Валидация топологии
                         sockets = int(topology.get("sockets", 1))
@@ -1369,7 +1369,7 @@ class VmManager(LibvirtClient):
                                 )
                                 continue
 
-                            feature_elem = ET.SubElement(cpu_elem, "feature")
+                            feature_elem = ElementTree.SubElement(cpu_elem, "feature")
                             feature_elem.set("policy", feature_policy)
                             feature_elem.set("name", feature_name)
 
@@ -1395,7 +1395,7 @@ class VmManager(LibvirtClient):
                 # Находим или создаем элемент memory
                 memory_elem = root.find("memory")
                 if memory_elem is None:
-                    memory_elem = ET.SubElement(root, "memory")
+                    memory_elem = ElementTree.SubElement(root, "memory")
 
                 # Устанавливаем значение
                 memory_elem.text = str(memory_kb)
@@ -1404,7 +1404,7 @@ class VmManager(LibvirtClient):
                 # Обновляем currentMemory если есть
                 current_elem = root.find("currentMemory")
                 if current_elem is None:
-                    current_elem = ET.SubElement(root, "currentMemory")
+                    current_elem = ElementTree.SubElement(root, "currentMemory")
 
                 current_elem.text = str(memory_kb)
                 current_elem.set("unit", "KiB")
@@ -1417,7 +1417,7 @@ class VmManager(LibvirtClient):
 
                 vcpu_elem = root.find("vcpu")
                 if vcpu_elem is None:
-                    vcpu_elem = ET.SubElement(root, "vcpu")
+                    vcpu_elem = ElementTree.SubElement(root, "vcpu")
 
                 # Для max_vcpus используем placement="static"
                 vcpu_elem.set("placement", "static")
@@ -1435,7 +1435,7 @@ class VmManager(LibvirtClient):
             # Если были изменения, сохраняем новую конфигурацию
             if modified:
                 # Конвертируем XML обратно в строку
-                new_xml = ET.tostring(root, encoding="unicode", method="xml")
+                new_xml = ElementTree.tostring(root, encoding="unicode", method="xml")
                 self.logger.info(f"Новый XML: {new_xml[:500]}...")
 
                 if not is_running:
@@ -1458,7 +1458,7 @@ class VmManager(LibvirtClient):
                                 )
                         if vm_update.vcpus is not None:
                             try:
-                                vm.setVcpusFlags(
+                                current_vm.setVcpusFlags(
                                     vm_update.vcpus, libvirt.VIR_DOMAIN_AFFECT_LIVE
                                 )
                                 self.logger.info("vCPU изменены на лету")
@@ -1594,12 +1594,12 @@ class VmManager(LibvirtClient):
         self, vm_name: str, vm_update: VmUpdateRequest, is_running: bool
     ) -> bool:
         try:
-            vm = self.conn.lookupByName(vm_name)
-            current_xml = vm.XMLDesc()
-            root = ET.fromstring(current_xml)
+            current_vm = self.conn.lookupByName(vm_name)
+            current_xml = current_vm.XMLDesc()
+            root = ElementTree.fromstring(current_xml)
 
             self._modify_xml(root, vm_update)
-            new_xml = ET.tostring(root, encoding="unicode")
+            new_xml = ElementTree.tostring(root, encoding="unicode")
 
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".xml", delete=False
@@ -1630,22 +1630,23 @@ class VmManager(LibvirtClient):
             self.logger.exception(f"Ошибка при модификации XML: {e}")
             return False
 
-    def _modify_xml(self, root: ET.Element, vm_update: VmUpdateRequest):
+    @staticmethod
+    def _modify_xml(root: ElementTree.Element, vm_update: VmUpdateRequest):
         devices_elem = root.find("./devices")
         if devices_elem is None:
-            devices_elem = ET.SubElement(root, "devices")
+            devices_elem = ElementTree.SubElement(root, "devices")
 
         if vm_update.cpu_model is not None or vm_update.cpu_features is not None:
             cpu_elem = root.find("./cpu")
             if cpu_elem is None:
-                cpu_elem = ET.SubElement(root, "cpu")
+                cpu_elem = ElementTree.SubElement(root, "cpu")
                 cpu_elem.set("mode", "custom")
                 cpu_elem.set("match", "exact")
 
             if vm_update.cpu_model is not None:
                 model_elem = cpu_elem.find("./model")
                 if model_elem is None:
-                    model_elem = ET.SubElement(cpu_elem, "model")
+                    model_elem = ElementTree.SubElement(cpu_elem, "model")
                     model_elem.set("fallback", "allow")
                 model_elem.text = vm_update.cpu_model
 
@@ -1653,7 +1654,7 @@ class VmManager(LibvirtClient):
                 for feature in cpu_elem.findall("./feature"):
                     cpu_elem.remove(feature)
                 for feature_name in vm_update.cpu_features:
-                    feature_elem = ET.SubElement(cpu_elem, "feature")
+                    feature_elem = ElementTree.SubElement(cpu_elem, "feature")
                     feature_elem.set("policy", "require")
                     feature_elem.set("name", feature_name)
 
@@ -1661,7 +1662,7 @@ class VmManager(LibvirtClient):
             for graphics in devices_elem.findall("./graphics"):
                 devices_elem.remove(graphics)
 
-            graphics_elem = ET.SubElement(devices_elem, "graphics")
+            graphics_elem = ElementTree.SubElement(devices_elem, "graphics")
             graphics_type = vm_update.graphics.get("type", "vnc")
             graphics_elem.set("type", graphics_type)
 
@@ -1679,8 +1680,8 @@ class VmManager(LibvirtClient):
             for video in devices_elem.findall("./video"):
                 devices_elem.remove(video)
 
-            video_elem = ET.SubElement(devices_elem, "video")
-            model_elem = ET.SubElement(video_elem, "model")
+            video_elem = ElementTree.SubElement(devices_elem, "video")
+            model_elem = ElementTree.SubElement(video_elem, "model")
             model_elem.set("type", vm_update.video_model)
 
         if vm_update.machine_type is not None:
@@ -1688,7 +1689,7 @@ class VmManager(LibvirtClient):
             if os_elem is not None:
                 type_elem = os_elem.find("./type")
                 if type_elem is None:
-                    type_elem = ET.SubElement(os_elem, "type")
+                    type_elem = ElementTree.SubElement(os_elem, "type")
                     type_elem.set("arch", "x86_64")
                     type_elem.text = "hvm"
                 type_elem.set("machine", vm_update.machine_type)
@@ -1698,14 +1699,14 @@ class VmManager(LibvirtClient):
             if os_elem is not None:
                 variant_elem = os_elem.find("./variant")
                 if variant_elem is None:
-                    variant_elem = ET.SubElement(os_elem, "variant")
+                    variant_elem = ElementTree.SubElement(os_elem, "variant")
                 variant_elem.text = vm_update.os_variant
 
         if vm_update.boot_devices is not None:
             os_elem = root.find("./os")
             if os_elem is None:
-                os_elem = ET.SubElement(root, "os")
-                type_elem = ET.SubElement(os_elem, "type")
+                os_elem = ElementTree.SubElement(root, "os")
+                type_elem = ElementTree.SubElement(os_elem, "type")
                 type_elem.set("arch", "x86_64")
                 type_elem.text = "hvm"
 
@@ -1713,48 +1714,48 @@ class VmManager(LibvirtClient):
                 os_elem.remove(boot)
 
             for device in vm_update.boot_devices:
-                boot_elem = ET.SubElement(os_elem, "boot")
+                boot_elem = ElementTree.SubElement(os_elem, "boot")
                 boot_elem.set("dev", device)
 
         if vm_update.features is not None:
             features_elem = root.find("./features")
             if features_elem is None:
-                features_elem = ET.SubElement(root, "features")
+                features_elem = ElementTree.SubElement(root, "features")
 
             for feature in features_elem:
                 features_elem.remove(feature)
 
             for feature_name, feature_value in vm_update.features.items():
-                feature_elem = ET.SubElement(features_elem, feature_name)
+                feature_elem = ElementTree.SubElement(features_elem, feature_name)
                 feature_elem.set("state", feature_value)
 
         if vm_update.memballoon_model is not None:
             for memballoon in devices_elem.findall("./memballoon"):
                 devices_elem.remove(memballoon)
 
-            memballoon_elem = ET.SubElement(devices_elem, "memballoon")
+            memballoon_elem = ElementTree.SubElement(devices_elem, "memballoon")
             memballoon_elem.set("model", vm_update.memballoon_model)
 
         if vm_update.hyperv_features is not None:
             features_elem = root.find("./features")
             if features_elem is None:
-                features_elem = ET.SubElement(root, "features")
+                features_elem = ElementTree.SubElement(root, "features")
 
             hyperv_elem = features_elem.find("./hyperv")
             if hyperv_elem is not None:
                 features_elem.remove(hyperv_elem)
 
-            hyperv_elem = ET.SubElement(features_elem, "hyperv")
+            hyperv_elem = ElementTree.SubElement(features_elem, "hyperv")
 
             for feature_name, feature_value in vm_update.hyperv_features.items():
                 if feature_name == "relaxed":
-                    relaxed_elem = ET.SubElement(hyperv_elem, "relaxed")
+                    relaxed_elem = ElementTree.SubElement(hyperv_elem, "relaxed")
                     relaxed_elem.set("state", feature_value)
                 elif feature_name == "vapic":
-                    vapic_elem = ET.SubElement(hyperv_elem, "vapic")
+                    vapic_elem = ElementTree.SubElement(hyperv_elem, "vapic")
                     vapic_elem.set("state", feature_value)
                 elif feature_name == "spinlocks":
-                    spinlocks_elem = ET.SubElement(hyperv_elem, "spinlocks")
+                    spinlocks_elem = ElementTree.SubElement(hyperv_elem, "spinlocks")
                     spinlocks_elem.set("state", feature_value)
 
         if vm_update.qemu_agent is not None:
@@ -1764,11 +1765,11 @@ class VmManager(LibvirtClient):
                     devices_elem.remove(channel)
 
             if vm_update.qemu_agent:
-                channel_elem = ET.SubElement(devices_elem, "channel")
+                channel_elem = ElementTree.SubElement(devices_elem, "channel")
                 channel_elem.set("type", "unix")
-                source_elem = ET.SubElement(channel_elem, "source")
+                source_elem = ElementTree.SubElement(channel_elem, "source")
                 source_elem.set("mode", "bind")
-                target_elem = ET.SubElement(channel_elem, "target")
+                target_elem = ElementTree.SubElement(channel_elem, "target")
                 target_elem.set("type", "virtio")
                 target_elem.set("name", "org.qemu.guest_agent.0")
 
@@ -1805,31 +1806,35 @@ class VmManager(LibvirtClient):
         if not self.conn:
             raise ConnectionError("Сначала подключитесь к гипервизору")
 
-        vms = []
+        virtual_machines = []
         try:
             if only_active:
                 domain_ids = self.conn.listDomainsID()
                 for domain_id in domain_ids:
                     domain = self.conn.lookupByID(domain_id)
-                    vms.append(self.get_vm_info(domain))
+                    virtual_machines.append(self.get_vm_info(domain))
             else:
                 domains = self.conn.listAllDomains(0)
                 for domain in domains:
-                    vms.append(self.get_vm_info(domain))
+                    virtual_machines.append(self.get_vm_info(domain))
 
         except self.libvirtError as e:
             self.logger.error(f"Ошибка получения списка ВМ, \nerr: {e}")
 
-        if vms:
+        if virtual_machines:
             return VmMessage(
                 success=True,
                 code=CommandMessagesEnum.vm_list_found.name,
-                vm_info=VirtualMachinesList(items=vms, total=len(vms)),
+                vm_info=VirtualMachinesList(
+                    items=virtual_machines, total=len(virtual_machines)
+                ),
             )
         return VmMessage(
             success=False,
             code=CommandMessagesEnum.vm_list_not_found.name,
-            vm_info=VirtualMachinesList(items=vms, total=len(vms)),
+            vm_info=VirtualMachinesList(
+                items=virtual_machines, total=len(virtual_machines)
+            ),
         )
 
     @staticmethod
@@ -1890,7 +1895,7 @@ class VmManager(LibvirtClient):
             domain = self.conn.lookupByName(vm_name)
         else:
             raise ValueError(f"Некорректный тип данных: '{type(vm_name)}'")
-        root = ET.fromstring(domain.XMLDesc())
+        root = ElementTree.fromstring(domain.XMLDesc())
 
         qemu_commandline = root.find("qemu:commandline", QEMU_NAMESPACE)
         if not qemu_commandline:
@@ -1923,7 +1928,7 @@ class VmManager(LibvirtClient):
             if display_logs:
                 self.logger.info(f"ВМ {domain.name()} найдена : '{info}'")
             current_net_id, hostfwd = self.get_hostfwd_and_net_id(domain.name())
-            root = ET.fromstring(domain.XMLDesc(0))
+            root = ElementTree.fromstring(domain.XMLDesc(0))
             description = (
                 root.find("description").text
                 if root.find("description") is not None
@@ -2215,7 +2220,7 @@ class VmManager(LibvirtClient):
         """
         disk_paths = []
         try:
-            root = ET.fromstring(xml_config)
+            root = ElementTree.fromstring(xml_config)
 
             for disk in root.findall(".//disk"):
                 source = disk.find("source")
@@ -2306,19 +2311,10 @@ class VmManager(LibvirtClient):
                 note=str(e),
             )
 
-    def get_vm_xml(self, name: str) -> str | None:
-        """Получение XML конфигурации ВМ"""
-        try:
-            domain = self.conn.lookupByName(name)
-            return domain.XMLDesc(0)
-        except self.libvirtError as e:
-            self.logger.error(f"Ошибка получения XML для ВМ {name}, \nerr: {e}")
-            return None
-
     def delete_vm_with_force(self, name: str, delete_disks: bool = True):
         """
-        Вспомогательная функция для принудительного удаления ВМ
-        Используйте эту функцию если обычное удаление не работает
+        Вспомогательная функция для принудительного удаления ВМ,
+        используйте эту функцию если обычное удаление не работает
 
         Args:
             name: Имя ВМ
@@ -2368,7 +2364,7 @@ class VmManager(LibvirtClient):
             Путь к файлу NVRAM или None если не используется
         """
         try:
-            root = ET.fromstring(xml_config)
+            root = ElementTree.fromstring(xml_config)
             os_element = root.find(".//os")
 
             if os_element is not None:
@@ -2395,7 +2391,7 @@ class VmManager(LibvirtClient):
         try:
             source_domain = self.conn.lookupByName(source_name)
             xml_config = source_domain.XMLDesc(0)
-            root = ET.fromstring(xml_config)
+            root = ElementTree.fromstring(xml_config)
 
             # Обновляем имя ВМ
             name_elem = root.find("name")
@@ -2442,7 +2438,7 @@ class VmManager(LibvirtClient):
                     # Создаем новый nvram элемент
                     os_elem = root.find(".//os")
                     if os_elem is not None:
-                        new_nvram_elem = ET.SubElement(os_elem, "nvram")
+                        new_nvram_elem = ElementTree.SubElement(os_elem, "nvram")
                         new_nvram_path = (
                             f"/var/lib/libvirt/qemu/nvram/{new_name}_VARS.fd"
                         )
@@ -2480,7 +2476,7 @@ class VmManager(LibvirtClient):
                         source_elem.set("file", new_path)
 
             # Применяем изменения
-            new_xml = ET.tostring(root, encoding="unicode")
+            new_xml = ElementTree.tostring(root, encoding="unicode")
             self.conn.defineXML(new_xml)
 
             # Синхронизируем с NFS

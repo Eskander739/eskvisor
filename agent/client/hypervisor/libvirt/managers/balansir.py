@@ -433,7 +433,9 @@ class Balansir(LibvirtClient):
             )
 
         if self.pycgroup.cgroup_pool_exists(create_rp.name):
-            self.logger.warning(f"Виртуальный ресурс пул '{create_rp.name}' уже существует")
+            self.logger.warning(
+                f"Виртуальный ресурс пул '{create_rp.name}' уже существует"
+            )
             return RpMessage(
                 code=CommandMessagesEnum.rp_already_created.name,
                 success=False,

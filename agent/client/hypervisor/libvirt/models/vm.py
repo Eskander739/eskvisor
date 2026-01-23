@@ -84,51 +84,115 @@ class VMCreateRequest(BaseModel):
     install_method: str | None = (
         "import"  # "import", "pxe", "boot", "cdrom", "location"
     )
-    description: str | None = None
-    architecture: Architecture = Architecture.X86_64
-    emulator_type: EmulatorType = EmulatorType.KVM
-    os_type: OSType = OSType.LINUX
-    os_variant: str | None = "generic"  # ubuntu22.04, centos8, win10 и т.д.
-    noautoconsole: bool = True
+    description: str | None = Field(
+        default=None, description="Текстовое описание виртуальной машины"
+    )
+    architecture: Architecture = Field(
+        default=Architecture.X86_64,
+        description="Архитектура процессора: X86_64, AARCH64, etc",
+    )
+    emulator_type: EmulatorType = Field(
+        default=EmulatorType.KVM, description="Тип эмулятора: KVM, QEMU, etc"
+    )
+    os_type: OSType = Field(
+        default=OSType.LINUX,
+        description="Тип операционной системы: LINUX, WINDOWS, etc",
+    )
+    os_variant: str | None = Field(
+        default="generic",
+        description="Вариант ОС для оптимизации настроек (ubuntu22.04, centos8, win10)",
+    )
+    noautoconsole: bool = Field(
+        default=True,
+        description="Не подключаться к консоли автоматически после создания ВМ",
+    )
 
     # Ресурсы
-    memory_mb: int = 256  # значение memory_mb всего равно maxmemory при live режиме
-    max_memory_mb: int | None = None
-    vcpus: int = 2
-    max_vcpus: int | None = 4
-    cpu_features: list[str] | None = None
+    memory_mb: int = Field(
+        default=256,
+        description="Объем оперативной памяти в МБ(значение memory_mb всегда равно maxmemory при live режиме)",
+    )
+    max_memory_mb: int | None = Field(
+        default=None,
+        description="Максимальный объем оперативной памяти в МБ (для hotplug)",
+    )
+    vcpus: int = Field(
+        default=2, description="Количество виртуальных процессоров (начальное)"
+    )
+    max_vcpus: int | None = Field(
+        default=4,
+        description="Максимальное количество виртуальных процессоров (для hotplug)",
+    )
+    cpu_features: list[str] | None = Field(
+        default=None,
+        description="Список дополнительных функций процессора (например, 'vmx', 'svm')",
+    )
 
     # Устройства
-    disks: list[DiskCreate | DiskAttach] = Field(default_factory=list)
-    networks: list[VmNetAdapter] = Field(default_factory=list)
-    controllers: list[VMController] = Field(default_factory=list)
+    disks: list[DiskCreate | DiskAttach] = Field(
+        default_factory=list,
+        description="Список дисковых устройств (создаваемых или подключаемых)",
+    )
+    networks: list[VmNetAdapter] = Field(
+        default_factory=list, description="Список сетевых адаптеров для подключения ВМ"
+    )
+    controllers: list[VMController] = Field(
+        default_factory=list, description="Список контроллеров (SCSI, IDE, USB и т.д.)"
+    )
 
     # Графика и консоль
-    graphics: GraphicsType = GraphicsType.VNC
-    graphics_port: int | None = None
-    graphics_listen: str = "0.0.0.0"
-    console_type: str = "pty"
+    graphics: GraphicsType = Field(
+        default=GraphicsType.VNC,
+        description="Тип графического интерфейса: VNC, SPICE, none и т.д.",
+    )
+    graphics_port: int | None = Field(
+        default=None,
+        description="Порт для графического интерфейса (если не указан, выбирается автоматически)",
+    )
+    graphics_listen: str = Field(
+        default="0.0.0.0",
+        description="IP-адрес, на котором слушает графический интерфейс",
+    )
+    console_type: str = Field(
+        default="pty", description="Тип консоли: pty, tcp, file и т.д."
+    )
 
     # Прочие настройки
-    autostart_vm: bool = False
-    autostart: bool = False
-    qemu_commandline: NetQemuCommandline | None = None
-    boot_devices: list[str] | None = None
+    autostart_vm: bool = Field(
+        default=False, description="Автоматически запускать ВМ при старте хоста"
+    )
+    autostart: bool = Field(
+        default=False, description="Автоматически запускать ВМ при перезагрузке хоста"
+    )
+    qemu_commandline: NetQemuCommandline | None = Field(
+        default=None, description="Дополнительные аргументы командной строки QEMU"
+    )
+    boot_devices: list[str] | None = Field(
+        default=None,
+        description="Порядок устройств для загрузки: hd (жесткий диск), cdrom, network, fd",
+    )
     # boot_devices: list[str] | None = ["hd", "cdrom", "network", "fd"]
-    extra_args: str | None = None
-    video_model: str = "qxl"
-    boot_uefi: bool = False
-    secure_boot: bool = False
-    secure_boot_loader: str | None = (
-        None  # например, "/usr/share/OVMF/OVMF_CODE_MS.fd" Тип загрузчика Secure Boot (опционально)
+    extra_args: str | None = Field(
+        default=None,
+        description="Дополнительные аргументы для командной строки установки",
+    )
+    video_model: str = Field(
+        default="qxl", description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
+    )
+    boot_uefi: bool = Field(
+        default=False, description="Использовать UEFI вместо BIOS для загрузки"
+    )
+    secure_boot: bool = Field(
+        default=False,
+        description="Включить Secure Boot (требует UEFI и соответствующего загрузчика)",
+    )
+    secure_boot_loader: str | None = Field(
+        default=None,
+        description="Путь к загрузчику Secure Boot (например, /usr/share/OVMF/OVMF_CODE_MS.fd)",
     )
 
     machine_type: MachineType = Field(
-        default=(
-            MachineType.Q35
-            if architecture == Architecture.X86_64
-            else MachineType.PC_I440FX
-        ),
+        default=MachineType.Q35,
         description="Тип эмулируемой машины",
     )
 
@@ -144,12 +208,7 @@ class VMCreateRequest(BaseModel):
     hyperv_features: dict[str, str] = Field(
         default_factory=dict, description="Hyper-V фичи (для Windows)"
     )
-
     cpu_model: str = Field(default="host-model", description="Модель CPU")
-
-    cpu_features: list[str] = Field(
-        default_factory=list, description="Дополнительные фичи CPU"
-    )
 
     @model_validator(mode="after")
     def validate_disk_type_constraints(self):

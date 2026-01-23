@@ -1,4 +1,6 @@
 import random
+from ipaddress import IPv4Network
+
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
@@ -17,8 +19,10 @@ from agent.client.hypervisor.libvirt.models.network import (
         NetworkParameters(
             name=f"nat-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),
-            bridge=NetworkBridge(name="virbr-test-ntt", stp="on", delay=0),
-            ipv4_address="192.168.100.0/24",
+            bridge=NetworkBridge(
+                name=f"virbr-test-{random.randint(1000, 9999)}", stp="on", delay=0
+            ),
+            ipv4_address=IPv4Network("192.168.100.0/24"),
             dhcp_ranges=[
                 NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
             ],
@@ -27,14 +31,14 @@ from agent.client.hypervisor.libvirt.models.network import (
         NetworkParameters(
             name=f"isolated-{random.randint(1000, 9999)}",
             ipv4=True,
-            ipv4_address="192.168.101.0/24",
+            ipv4_address=IPv4Network("192.168.101.0/24"),
             isolated=True,
             autostart=True,
         ),
         NetworkParameters(
             name=f"bridge-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="bridge"),
-            bridge=NetworkBridge(name="virbr-test-bridge"),
+            bridge=NetworkBridge(name=f"virbr-test-{random.randint(1000, 9999)}"),
             autostart=True,
         ),
     ),

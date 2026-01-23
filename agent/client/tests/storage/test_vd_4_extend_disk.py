@@ -44,9 +44,7 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         before_change_disk_virtual_size = storage_session.get_disk_virtual_size(
             disk_path=disk_path
         )
-        assert (
-            bytes_to_gb(before_change_disk_virtual_size) == disk_create.size_gb
-        )
+        assert bytes_to_gb(before_change_disk_virtual_size) == disk_create.size_gb
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.name == disk_create.name

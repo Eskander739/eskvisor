@@ -38,20 +38,13 @@ def test_vd_01_create_disk(storage_session, sparse, disk_format):
         )
         vm_disk = vm_disk.disk_info
         disk_path = (
-            vm_disk.path
-            + "/"
-            + disk_create.name
-            + "."
-            + disk_create.format.value
+            vm_disk.path + "/" + disk_create.name + "." + disk_create.format.value
         )
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.name == disk_create.name
         assert vm_disk.format == disk_format
         if not sparse:
-            assert (
-                round(vm_disk.capacity_bytes / (1024**3), 2)
-                == disk_create.size_gb
-            )
+            assert round(vm_disk.capacity_bytes / (1024**3), 2) == disk_create.size_gb
         else:
             assert 0 < round(vm_disk.capacity_bytes / (1024**3), 10) < 0.1
         assert vm_disk.file_path_exists is True

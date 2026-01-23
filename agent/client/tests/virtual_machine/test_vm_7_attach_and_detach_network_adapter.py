@@ -70,6 +70,7 @@ def test_vm_07_attach_and_detach_network_adapter(
         )
         # ____________________________________Проверка наличия нового сетевого интерфейса_________________________
         get_vm_info = network_session.get_vm_network_info(random_name)
+        network_session.has_vms_connected_to_network(network_name)
         assert len(get_vm_info.net_info.network_interfaces.interfaces) == 2
         for (
             current_network_interface

@@ -80,6 +80,7 @@ class CommandMessagesEnum(Enum):
         "Unsupport update this params on live mode"
     )
     vm_edit_error_in_shutoff_process = "VM edit error in shutoff process"
+    can_not_change_cpu_model_on_running_vm = "Can not change cpu model on running VM"
     vm_edit_error = "VM edit error"
     vm_edit_unexpected_error = "VM edit unexpected error"
     virtual_network_successfully_created = "Virtual network successfully created"

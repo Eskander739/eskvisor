@@ -46,10 +46,7 @@ def test_vd_08_disk_info(storage_session, disk_format, sparse):
         assert vm_disk.name == disk_create.name
         assert vm_disk.format == disk_format
         if not sparse:
-            assert (
-                round(vm_disk.capacity_bytes / (1024**3), 2)
-                == disk_create.size_gb
-            )
+            assert round(vm_disk.capacity_bytes / (1024**3), 2) == disk_create.size_gb
         else:
             assert round(vm_disk.capacity_bytes / (1024**3), 2) < 0.1
 

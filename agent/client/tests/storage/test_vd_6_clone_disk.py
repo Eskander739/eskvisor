@@ -1,6 +1,4 @@
 import random
-import time
-
 import pytest
 
 from agent.client.hypervisor.libvirt.models.volume.disk import (
@@ -43,11 +41,7 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
         assert vm_disk_start.code == CommandMessagesEnum.disk_founded.name
         vm_disk_start = vm_disk_start.disk_info
         first_disk_path = (
-            vm_disk_start.path
-            + "/"
-            + disk_create.name
-            + "."
-            + disk_create.format.value
+            vm_disk_start.path + "/" + disk_create.name + "." + disk_create.format.value
         )
 
         assert vm_disk_start.status.value == DiskStatus.DETACHED.value

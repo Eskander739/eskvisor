@@ -330,14 +330,16 @@ class DiskCreate(BaseModel):
         max_length=255,
     )
     path: str | None = None
-    size_gb: float = Field(1, gt=0, le=65536, description="Размер в GB")
+    size_gb: float = Field(default=1, gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
-    description: str | None = Field(None, max_length=500)
+    description: str | None = Field(
+        default=None, max_length=500, description="Описание диска"
+    )
     sparse: bool = Field(
         default=True, description="Создать разреженный диск"
     )  # Если False = занимает сразу все указанное место
     disk_type: DiskType = DiskType.EXTERNAL_DISK
-    bus_type: BusType | None = Field(None, description="Тип шины подключения")
+    bus_type: BusType | None = Field(default=None, description="Тип шины подключения")
     cache: str = "none"
     readonly: bool = False
     shareable: bool = False

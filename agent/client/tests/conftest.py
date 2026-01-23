@@ -3,6 +3,7 @@ import os
 import random
 import sys
 import time
+from ipaddress import IPv4Network
 
 import pytest
 
@@ -122,17 +123,30 @@ def delete_all_network_info():
     cli = CLIControl()
     yield
     with NetworkManager() as nm:
-        print("nm.list_all_networks(): ", nm.list_all_networks())
         for network in nm.list_all_networks().net_info.items:
             if network.name != "default":
                 nm.delete_network(network.name, force=True)
 
-    test_bridge = "virbr-test-ntt"
-    cmd_arg = "ip link show | grep virbr"
+    cmd_arg = "ip link show | grep virbr | awk -F': ' '{print $2}'"
     result = cli.execute(cmd_arg, shell=True, is_text=True)
-    if test_bridge in result:
-        cmd_args_delete_bridge = ["ip", "link", "delete", "virbr-test-ntt"]
-        cli.execute(cmd_args_delete_bridge)
+    if result:
+        bridge_list_for_delete = [bridge for bridge in result.split("\n") if bridge]
+        for current_bridge in bridge_list_for_delete:
+            if "test" in current_bridge:
+                cmd_args_delete_bridge = ["ip", "link", "delete", current_bridge]
+                cli.execute(cmd_args_delete_bridge)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def delete_all_virtual_machines():
+    yield
+    with VmManager() as vm_manager:
+        vms = vm_manager.list_vms().vm_info
+        for vm in vms.items:
+            vm_manager.delete_vm_with_force(vm.name)
+            vm_manager.logger.info(
+                f"Удаление ВМ - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}"
+            )
 
 
 @pytest.fixture(scope="session")
@@ -288,7 +302,7 @@ def create_nat_network_session():
             name=network_name,
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(name="virbr-test-ntt", stp="on", delay=0),
-            ipv4_address="192.168.100.0/24",
+            ipv4_address=IPv4Network("192.168.100.0/24"),
             dhcp_ranges=[
                 NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
             ],

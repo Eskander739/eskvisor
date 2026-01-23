@@ -1,6 +1,7 @@
 import getpass
 import logging
 import os
+from xml.etree import ElementTree
 
 import libvirt
 from agent.client.hypervisor.libvirt.models.node import NodeInfo
@@ -43,6 +44,11 @@ class LibvirtClient:
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
         return logger
+
+    @staticmethod
+    def xml_string_from_object(element_tree_object: ElementTree.Element) -> str:
+        xml_string = ElementTree.tostring(element_tree_object).decode("utf-8")
+        return xml_string
 
     def connect(self):
         """Подключение к гипервизору"""
@@ -100,7 +106,7 @@ class LibvirtClient:
             self.logger.error(f"Ошибка подключения: {e}")
             return False
 
-    def _auth_callback(self, credentials, user_data):
+    def _auth_callback(self, credentials):
         """Callback функция для аутентификации"""
         for credential in credentials:
             if credential[0] == libvirt.VIR_CRED_AUTHNAME:

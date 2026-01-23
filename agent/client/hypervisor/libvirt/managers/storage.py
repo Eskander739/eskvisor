@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import shutil
-import xml.etree.ElementTree as ElementTree
+from xml.etree import ElementTree
 from datetime import datetime
 from pathlib import Path
 from subprocess import TimeoutExpired

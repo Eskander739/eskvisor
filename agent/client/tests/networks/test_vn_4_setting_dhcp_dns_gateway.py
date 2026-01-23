@@ -2,7 +2,7 @@ import os
 import random
 import re
 import time
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPv4Network
 
 import pytest
 from agent.client.hypervisor.libvirt.models.volume.disk import (
@@ -58,11 +58,12 @@ def test_vn_04_setting_dhcp_dns_gateway(
     network_name = None
     try:
         # ____________________________________Создание виртуальной изолированной с
+        random_int = random.randint(1000, 9999)
         nat_params = NetworkParameters(
-            name=f"nat-{random.randint(1000, 9999)}",
+            name=f"nat-{random_int}",
             forward=NetworkForward(mode="nat"),
-            bridge=NetworkBridge(name="virbr-test-ntt", stp="on", delay=0),
-            ipv4_address="192.168.100.0/24",
+            bridge=NetworkBridge(name=f"virbr-test-{random_int}", stp="on", delay=0),
+            ipv4_address=IPv4Network("192.168.100.0/24"),
             dhcp_ranges=[
                 NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
             ],
