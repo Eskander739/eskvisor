@@ -15,7 +15,7 @@ from agent.client.tools import wait_while_not
 
 
 @pytest.mark.tags("VM‑05", "Увеличение maxmemory с остановкой ВМ")
-def test_vm_05_upgrade_maxmemory_with_destroy_vm(vm_session):
+def test_vm_05_update_vm_with_reload(vm_session):
     """
     VM‑05: Увеличение maxmemory с остановкой ВМ
     """

@@ -61,8 +61,8 @@ def test_vd_02_attach_and_detach_disk(storage_session, create_stopped_vm):
         disk_attach = DiskAttach(
             vm_name=vm_name,
             path=vm_disk.path,
-            disk_name=attach_disk_create.name,
-            disk_format=attach_disk_create.format,
+            name=attach_disk_create.name,
+            format=attach_disk_create.format,
             target_dev=target_dev,
         )
 

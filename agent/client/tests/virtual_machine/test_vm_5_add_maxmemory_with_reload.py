@@ -22,7 +22,7 @@ from agent.client.tools import wait_while_not
         VmUpdateRequest(max_memory_mb=512),  # TODO: Hot-unplug добавить в будущем
     ),
 )
-def test_vm_05_upgrade_maxmemory_with_destroy_vm(vm_session, vm_resource):
+def test_vm_05_add_maxmemory_with_reload(vm_session, vm_resource):
     """
     VM‑05: Увеличение maxmemory с остановкой ВМ
     """

@@ -22,8 +22,8 @@ class HAController:
         self.cli = CLIControl()
         self.nfs_storage_manager = NFSStorageManager()
         self.system_vm_configs_path = os.environ.get("SYSTEM_VM_CONFIGS_PATH")
-        self.loaded_ha_nfs_storages_path = os.environ.get("LOADED_HA_NFS_STORAGES_PATH")
         self.nfs_vm_config_root = os.environ.get("NFS_VM_CONFIG_ROOT")
+        self.loaded_ha_nfs_storages_path = os.environ.get("LOADED_HA_NFS_STORAGES_PATH")
         if not Path(self.loaded_ha_nfs_storages_path).exists():
             nfs_storages_model = NFSStorages(nfs_storages=[]).model_dump_json()
             self.cli.create_file(

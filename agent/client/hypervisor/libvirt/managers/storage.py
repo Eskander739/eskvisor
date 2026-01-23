@@ -271,7 +271,11 @@ class StorageManager(LibvirtClient):
                     return StorageMessage(
                         code=CommandMessagesEnum.disk_already_created.name,
                     )
-            if disk_create.format.value == DiskFormat.QCOW2.value:
+            if disk_create.format.value in (DiskFormat.ISO.value, DiskFormat.IMG.value) or disk_create.disk_type.value == DiskType.CDROM.value:
+                disk_info = StorageMessage(
+                code=CommandMessagesEnum.disk_successfully_attached.name,
+            )
+            elif disk_create.format.value == DiskFormat.QCOW2.value:
                 disk_info = self._create_qcow2_disk(
                     disk_path, disk_create.size_gb, disk_create.sparse
                 )
@@ -596,9 +600,9 @@ class StorageManager(LibvirtClient):
             disk_path = (
                 disk_attach.path
                 + "/"
-                + disk_attach.disk_name
+                + disk_attach.name
                 + "."
-                + disk_attach.disk_format.value
+                + disk_attach.format.value
             )
             self.logger.info(
                 f"Подключение диска {disk_path} к ВМ {disk_attach.vm_name}"
@@ -606,7 +610,7 @@ class StorageManager(LibvirtClient):
 
             vm = self.conn.lookupByName(disk_attach.vm_name)
 
-            if disk_attach.disk_format.value in (
+            if disk_attach.format.value in (
                 DiskFormat.ISO.value,
                 DiskFormat.IMG.value,
             ):
@@ -631,8 +635,8 @@ class StorageManager(LibvirtClient):
 
             disk_info = self.get_disk_info(
                 path=disk_attach.path,
-                disk_name=disk_attach.disk_name,
-                disk_format=disk_attach.disk_format,
+                disk_name=disk_attach.name,
+                disk_format=disk_attach.format,
             )
             if disk_info.code != CommandMessagesEnum.disk_founded.name:
                 return disk_info

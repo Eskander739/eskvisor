@@ -59,9 +59,9 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
             disk_attach_list.append(
                 DiskAttach(
                     vm_name=vm_config_name,
-                    disk_name=attach_disk_create.name,
+                    name=attach_disk_create.name,
                     path=vm_disk.path,
-                    disk_format=attach_disk_create.format,
+                    format=attach_disk_create.format,
                     target_dev=target_dev,
                 )
             )

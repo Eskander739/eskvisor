@@ -353,8 +353,9 @@ class DiskAttach(BaseModel):
 
     vm_name: str = Field(..., description="Имя виртуальной машины")
     path: str
-    disk_name: str
-    disk_format: DiskFormat
+    name: str
+    format: DiskFormat
+    disk_type: DiskType = DiskType.EXTERNAL_DISK
     target_dev: str = Field(default="vdb")
     bus_type: BusType = Field(default=BusType.VIRTIO)
     cache_mode: CacheMode = Field(default=CacheMode.WRITEBACK)

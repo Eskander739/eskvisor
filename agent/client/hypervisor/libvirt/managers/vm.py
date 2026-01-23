@@ -23,7 +23,7 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     Disk,
     DiskAttach,
     DiskType,
-    CacheMode,
+    CacheMode, DiskCreate,
 )
 from agent.client.hypervisor.libvirt.models.enum import (
     GraphicsType,
@@ -159,28 +159,30 @@ class VmManager(LibvirtClient):
                     self.logger.info(
                         f"Создание диска через StorageManager: {disk.name}"
                     )
-                    result = self.storage_manager.create_disk(disk)
+                    if isinstance(disk, DiskCreate):
+                        result = self.storage_manager.create_disk(disk)
 
-                    if hasattr(result, "disk_info") and result.disk_info:
-                        # Обновляем путь диска в конфигурации
-                        all_disks.append(disk_path)
-                        self.logger.info(f"Диск создан: {result.disk_info.path}")
-                    else:
-                        self.logger.error(f"Ошибка создания диска: {result}")
-                        # Откатываем созданные диски
-                        for created_disk_path in all_disks:
-                            try:
-                                self.storage_manager.delete_disk(
-                                    disk_path=created_disk_path
-                                )
-                            except Exception as e:
-                                self.logger.error(
-                                    f"Ошибка при откате диска {created_disk_path}: {e}"
-                                )
-                        return VmMessage(
-                            success=False,
-                            code="DISK_CREATION_FAILED",
-                        )
+                        if hasattr(result, "disk_info") and result.disk_info:
+                            # Обновляем путь диска в конфигурации
+                            all_disks.append(disk_path)
+                            self.logger.info(f"Диск создан: {result.disk_info.path}")
+                        else:
+                            self.logger.error(f"Ошибка создания диска: {result}")
+                            # Откатываем созданные диски
+                            for created_disk_path in all_disks:
+                                try:
+                                    self.storage_manager.delete_disk(
+                                        disk_path=created_disk_path
+                                    )
+                                except Exception as e:
+                                    self.logger.error(
+                                        f"Ошибка при откате диска {created_disk_path}: {e}"
+                                    )
+                            return VmMessage(
+                                success=False,
+                                code="DISK_CREATION_FAILED",
+                            )
+
             except Exception as global_e:
                 self.logger.exception(f"Ошибка при создании дисков: {global_e}")
                 # Откатываем созданные диски
@@ -425,17 +427,18 @@ class VmManager(LibvirtClient):
             if disk.bus_type:
                 disk_params.append(f"bus={disk.bus_type.value}")
 
-            if disk.cache and disk.disk_type.value != DiskType.CDROM.value:
-                disk_params.append(f"cache={disk.cache}")
+            if isinstance(disk, DiskCreate):
+                if disk.cache and disk.disk_type.value != DiskType.CDROM.value:
+                    disk_params.append(f"cache={disk.cache}")
 
-            if disk.readonly:
-                disk_params.append("readonly=on")
+                if disk.readonly:
+                    disk_params.append("readonly=on")
 
-            if disk.shareable:
-                disk_params.append("shareable=on")
+                if disk.shareable:
+                    disk_params.append("shareable=on")
 
-            if disk.serial:
-                disk_params.append(f"serial={disk.serial}")
+                if disk.serial:
+                    disk_params.append(f"serial={disk.serial}")
 
             if disk.disk_type.value == DiskType.CDROM.value:
                 disk_cmd = disk_cmd.replace("--disk", "")
@@ -1006,8 +1009,8 @@ class VmManager(LibvirtClient):
             disk_attach = DiskAttach(
                 vm_name=vm_name,
                 path=path,
-                disk_name=disk_name,
-                disk_format=disk_format,
+                name=disk_name,
+                format=disk_format,
                 target_dev=target_dev or self._get_free_cdrom_device(vm_name),
                 bus_type=bus_type_enum,
                 cache_mode=CacheMode.NONE,

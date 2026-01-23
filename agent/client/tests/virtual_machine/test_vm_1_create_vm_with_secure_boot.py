@@ -14,7 +14,7 @@ from agent.client.tools import wait_while_not
 @pytest.mark.tags("VM‑01", "Создание ВМ с проверкой включения/отключения Secure Boot")
 @pytest.mark.parametrize("vm_state", (VMState.SHUTOFF, VMState.RUNNING))
 @pytest.mark.parametrize("secure_boot", [True, False])
-def test_vm_01_create_vm(vm_session, vm_state, secure_boot):
+def test_vm_01_create_vm_with_secure_boot(vm_session, vm_state, secure_boot):
     """
     VM‑01: Создание ВМ с проверкой включения/отключения Secure Boot
     """

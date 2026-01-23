@@ -55,7 +55,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
     )
     network_name = None
     try:
-        # ____________________________________Создание виртуальной изолированной с
+        # ____________________________________Создание NAT сети________________
         nat_params = NetworkParameters(
             name=f"nat-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),

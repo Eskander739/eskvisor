@@ -22,7 +22,7 @@ from agent.client.tools import wait_while_not
         VmUpdateRequest(vcpus=3, change_live_config=True),
     ),
 )
-def test_vm_05_change_vcpu_hot_plug_unplug(vm_session, vm_resource):
+def test_vm_05_add_vcpu_hot_plug(vm_session, vm_resource):
     """
     VM‑05: Горячее добавление CPU ядер
     """

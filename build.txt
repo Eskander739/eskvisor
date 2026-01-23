@@ -1,0 +1,124 @@
+#Инструкция подготовки образа Alpine Linux Virtual для проекта по управлению виртуализацией
+
+#Выполняю следующую последовательность команд:
+ip link set up eth0
+udhcpc -i eth0
+
+
+#Далее устанавливаем систему на диск:
+setup-alpine
+#Выполняем все пункты, перезагружаем(reboot), запускаем ВМ и выполняем следующие команды:
+
+echo 'https://dl-cdn.alpinelinux.org/alpine/v3.19/community' >> /etc/apk/repositories(только для чистого iso)
+echo 'https://dl-cdn.alpinelinux.org/alpine/v3.19/main' >> /etc/apk/repositories(только для чистого iso)
+echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
+echo "https://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
+apk update
+# Используем с приставкой репозитория --repository=https://dl-cdn.alpinelinux.org/alpine/v3.19/community если простой apk update не сработает
+apk add nano
+apk add sudo
+
+# Добавляем openssh-server только если не добавили в процессе установки
+apk add openssh-server
+nano /etc/ssh/sshd_config
+#Меняем параметры PermitRootLogin, PasswordAuthentication(расскоментируем и меняем если бы закомментированы) на:
+PermitRootLogin yes
+PasswordAuthentication yes
+
+#Ставим новый парол следующей командой:
+passwd
+rc-update add sshd default
+rc-service sshd start
+#Далее подключаемся по ssh для удобства(ip берем через команду: 'ip a у интерфейса eth0 или похожего интерфейса')
+
+#___________________Установка зависимостей для libvirt___________________
+apk add glib libaio numactl liburing zstd
+apk add qemu-system-x86_64 qemu-img qemu-modules
+apk add libvirt-daemon libvirt-client libvirt-qemu
+apk add alpine-sdk build-base squashfs-tools xorriso
+apk add virt-install
+rc-update add libvirtd default
+
+# Создайте базовую конфигурацию сети
+cat > /etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+
+ifup eth0
+
+rc-service libvirtd start
+
+# Включите сеть по умолчанию
+virsh net-autostart default
+
+# Проверьте
+virsh net-list --all
+
+export LIBVIRT_DEFAULT_URI="qemu:///system"
+# Проверьте подключение
+virsh -c qemu:///system version
+
+# Проверьте, доступен ли KVM
+ls -la /dev/kvm
+
+# Проверьте модули ядра
+lsmod | grep kvm
+
+# Загрузите модуль tun
+modprobe tun
+
+# Проверьте, загружен ли tun
+lsmod | grep tun
+
+# Добавьте в автозагрузку
+echo "tun" >> /etc/modules-load.d/tun.conf
+
+# Создайте пустой диск (1GB)
+qemu-img create -f qcow2 /var/lib/libvirt/images/test-vm.qcow2 1G
+
+# Создайте простую VM
+virt-install --name test-vm --memory 512 --vcpus 1 --disk path=/var/lib/libvirt/images/test-vm.qcow2 --os-variant generic --graphics none --noautoconsole --import
+# Проверяем наличие созданной ВМ:
+virsh -c qemu:///system list --all
+# Удаляем тестовую ВМ:
+virsh -c qemu:///system destroy test-vm
+virsh -c qemu:///system undefine test-vm
+
+# ________________Установка python__________________
+apk add python3 py3-pip
+# Создайте виртуальное окружение
+python3 -m venv venv
+
+# Активируйте его
+source venv/bin/activate
+
+# Теперь pip будет работать
+pip install --upgrade pip
+apk add libvirt libvirt-dev pkgconfig gcc musl-dev python3-dev
+apk add gcc musl-dev python3-dev gobject-introspection-dev cairo-dev pango-dev gdk-pixbuf-dev
+pip3 install PyGObject
+apk add --upgrade --no-cache glib util-linux
+apk add make automake autoconf libtool
+apk add linux-headers musl-dev gcc python3-dev
+apk add ethtool util-linux-dev
+pip install -r requirements.txt
+
+
+# Попробуйте исправить
+apk fix
+
+# Или принудительно удалите glib
+rm -f /var/lib/apk/db/installed
+apk update
+
+
+# Для деактивации
+deactivate
+# Настройка cgroup v2
+mount -t cgroup2 none /sys/fs/cgroup
+mount | grep cgroup # должно выйти: none on /sys/fs/cgroup type cgroup2 (rw,relatime)
+echo "+cpu +memory" > /sys/fs/cgroup/cgroup.subtree_control

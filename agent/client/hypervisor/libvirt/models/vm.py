@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
 
 from agent.client.hypervisor.libvirt.models.controller import VMController
-from agent.client.hypervisor.libvirt.models.volume.disk import BusType, DiskCreate
+from agent.client.hypervisor.libvirt.models.volume.disk import BusType, DiskCreate, DiskAttach
 from agent.client.hypervisor.libvirt.models.enum import (
     Architecture,
     ControllerType,
@@ -95,7 +95,7 @@ class VMCreateRequest(BaseModel):
     cpu_features: list[str] | None = None
 
     # Устройства
-    disks: list[DiskCreate] = Field(default_factory=list)
+    disks: list[DiskCreate | DiskAttach] = Field(default_factory=list)
     networks: list[VmNetAdapter] = Field(default_factory=list)
     controllers: list[VMController] = Field(default_factory=list)
 
