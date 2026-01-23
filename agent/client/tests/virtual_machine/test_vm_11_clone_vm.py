@@ -1,7 +1,4 @@
 import random
-import time
-import uuid
-
 import pytest
 
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate

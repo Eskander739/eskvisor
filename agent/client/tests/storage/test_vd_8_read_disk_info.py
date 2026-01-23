@@ -28,34 +28,34 @@ def test_vd_08_disk_info(storage_session, disk_format, sparse):
     try:
         # ____________________________________Создание диска______________________
         random_name = random.randint(10000, 99999)
-        attach_disk_create = DiskCreate(
+        disk_create = DiskCreate(
             name=f"disk-test-{random_name}",
             size_gb=0.2,
             format=disk_format,
             sparse=sparse,
         )
-        attach_disk = storage_session.create_disk(attach_disk_create)
+        attach_disk = storage_session.create_disk(disk_create)
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
         vm_disk = storage_session.get_disk_info(
-            disk_name=attach_disk_create.name, disk_format=attach_disk_create.format
+            disk_name=disk_create.name, disk_format=disk_create.format
         )
         vm_disk = vm_disk.disk_info
-        disk_path = f"{vm_disk.path}/{attach_disk_create.name}.{disk_format.value}"
+        disk_path = f"{vm_disk.path}/{disk_create.name}.{disk_format.value}"
         disk_virtual_size = storage_session.get_disk_virtual_size(disk_path=disk_path)
         assert vm_disk.status.value == DiskStatus.DETACHED.value
-        assert vm_disk.name == attach_disk_create.name
+        assert vm_disk.name == disk_create.name
         assert vm_disk.format == disk_format
         if not sparse:
             assert (
                 round(vm_disk.capacity_bytes / (1024**3), 2)
-                == attach_disk_create.size_gb
+                == disk_create.size_gb
             )
         else:
             assert round(vm_disk.capacity_bytes / (1024**3), 2) < 0.1
 
-        assert bytes_to_gb(disk_virtual_size) == attach_disk_create.size_gb
+        assert bytes_to_gb(disk_virtual_size) == disk_create.size_gb
         assert vm_disk.file_path_exists is True
-        assert vm_disk.path == attach_disk_create.path
+        assert vm_disk.path == disk_create.path
     finally:
         # ____________________________________Удаление диска(постусловие)_________
         if disk_path is not None:

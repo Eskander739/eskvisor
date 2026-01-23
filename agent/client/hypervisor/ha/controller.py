@@ -53,21 +53,21 @@ class HAController:
         Возвращает локальные конфиги ВМ и конфиги ВМ в автозапуске
         """
         path = path if path else self.system_vm_configs_path
+        ls_path = "ls {} | grep '.xml$'"
 
         if not self.validate_nfs_path_safety(path):
             self.logger.warning(f"Попытка инъекции в пути: '{path}'")
             raise ValueError(f"Попытка инъекции в пути: '{path}'")
-        cmd_args = lambda local_path: f"ls {local_path} | grep '\.xml$'"
         vm_configs_list = []
         vm_autostart_configs_list = []
-        vm_configs = self.cli.execute(cmd_args(path), shell=True, is_text=True).split(
-            "\n"
-        )
+        vm_configs = self.cli.execute(
+            ls_path.format(path), shell=True, is_text=True
+        ).split("\n")
         if vm_configs:
             vm_configs_list = [vm_config for vm_config in vm_configs if vm_config]
         path = f"{path}/autostart"
         vm_autostart_configs = self.cli.execute(
-            cmd_args(path), shell=True, is_text=True
+            ls_path.format(path), shell=True, is_text=True
         ).split("\n")
         if vm_autostart_configs:
             vm_autostart_configs_list = [
@@ -81,21 +81,22 @@ class HAController:
         """
         Возвращает конфиги ВМ и конфиги ВМ в автозапуске из HA NFS хранилищ
         """
+
+        ls_path = "ls {} | grep '.xml$'"
         storages = self.loaded_ha_nfs_storages
         vm_configs_list = []
         vm_autostart_configs_list = []
 
         for current_storage in storages.nfs_storages:
             path = f"{current_storage.mount}/{self.nfs_vm_config_root}"
-            cmd_args = lambda local_path: f"ls {local_path} | grep '\.xml$'"
             vm_configs = self.cli.execute(
-                cmd_args(path), shell=True, is_text=True
+                ls_path.format(path), shell=True, is_text=True
             ).split("\n")
             if vm_configs:
                 vm_configs_list = [vm_config for vm_config in vm_configs if vm_config]
             path = f"{path}/autostart"
             vm_autostart_configs = self.cli.execute(
-                cmd_args(path), shell=True, is_text=True
+                ls_path.format(path), shell=True, is_text=True
             ).split("\n")
             if vm_autostart_configs:
                 vm_autostart_configs_list = [

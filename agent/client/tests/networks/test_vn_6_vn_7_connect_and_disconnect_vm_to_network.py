@@ -80,7 +80,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         vm_created = True
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
-        time.sleep(60)
+        time.sleep(30)
         # _________________________Проверка наличия виртуальной сети у ВМ_________
         get_net_vm_info = network_session.get_vm_network_info(vm_template.name)
         assert (

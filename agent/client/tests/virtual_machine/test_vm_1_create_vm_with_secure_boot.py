@@ -1,14 +1,10 @@
 import random
-import uuid
-
 import pytest
-from pydantic import ValidationError
 
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.vm import VirtualMachine, VMCreateRequest
-from agent.client.tools import wait_while_not
+from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 
 
 @pytest.mark.tags("VM‑01", "Создание ВМ с проверкой включения/отключения Secure Boot")

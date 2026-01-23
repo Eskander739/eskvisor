@@ -1,7 +1,7 @@
 import os
 import shutil
 import uuid
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ElementTree
 
 import libvirt
 
@@ -10,6 +10,7 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     Disk,
     DiskType,
     SnapshotDiskInfo,
+    DiskFormat,
 )
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import (
@@ -457,7 +458,7 @@ class SnapshotManager(LibvirtClient):
             snapshot_xml = snapshot.getXMLDesc(flags=0)
 
             # Обновление описания в XML
-            root = ET.fromstring(snapshot_xml)
+            root = ElementTree.fromstring(snapshot_xml)
 
             # Поиск и обновление элемента description
             description_elem = root.find("description")
@@ -465,11 +466,11 @@ class SnapshotManager(LibvirtClient):
                 description_elem.text = new_description
             else:
                 # Если элемента description нет, создаем его
-                desc_elem = ET.SubElement(root, "description")
+                desc_elem = ElementTree.SubElement(root, "description")
                 desc_elem.text = new_description
 
             # Преобразование обратно в XML строку
-            updated_xml = ET.tostring(root, encoding="unicode")
+            updated_xml = ElementTree.tostring(root, encoding="unicode")
 
             # Создание нового снапшота с обновленным описанием и удаление старого
             new_snapshot = virtual_machine.snapshotCreateXML(
@@ -516,7 +517,7 @@ class SnapshotManager(LibvirtClient):
         """
         try:
             xml_desc = snapshot.getXMLDesc(flags=0)
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             # Ищем элемент description
             description_elem = root.find("description")
@@ -631,7 +632,7 @@ class SnapshotManager(LibvirtClient):
         """
         try:
 
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
             devices = root.find("domain").find("devices")
             disk_list = []
             disk_list_from_secion_disks = []
@@ -653,7 +654,7 @@ class SnapshotManager(LibvirtClient):
                         name=disk_name,
                         path=disk_path,
                         type=DiskType.SNAPSHOT,
-                        format=current_disk.find("driver").get("type"),
+                        format=DiskFormat(current_disk.find("driver").get("type")),
                         bus_type=current_disk.find("target").get("bus"),
                         target_dev=current_disk.find("target").get("dev"),
                         file_path_exists=False,
@@ -688,7 +689,7 @@ class SnapshotManager(LibvirtClient):
         """
         try:
 
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
             result = {}
 
             # Извлекаем имя ВМ из снапшота
@@ -828,7 +829,7 @@ class SnapshotManager(LibvirtClient):
             snapshot_xml = snapshot.getXMLDesc(flags=libvirt.VIR_DOMAIN_XML_SECURE)
 
             # Парсим XML
-            root = ET.fromstring(snapshot_xml)
+            root = ElementTree.fromstring(snapshot_xml)
 
             # Обновляем имя ВМ
             name_elem = root.find("domain").find("name")
@@ -869,7 +870,7 @@ class SnapshotManager(LibvirtClient):
                             )
 
             # Преобразуем XML обратно в строку
-            new_xml = ET.tostring(root.find("domain"), encoding="unicode")
+            new_xml = ElementTree.tostring(root.find("domain"), encoding="unicode")
 
             # Создаем новую ВМ
             new_domain = self.conn.defineXML(new_xml)
@@ -1172,7 +1173,7 @@ class SnapshotManager(LibvirtClient):
         """Получить размер снапшота в байтах"""
         try:
             xml_desc = snapshot.getXMLDesc(flags=0)
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             total_size = 0
 
@@ -1199,7 +1200,7 @@ class SnapshotManager(LibvirtClient):
         try:
             virtual_machine = self.conn.lookupByName(vm_name)
             xml_desc = virtual_machine.XMLDesc(flags=0)
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             # Ищем пути к дискам
             disk_paths = []
@@ -1272,14 +1273,14 @@ class SnapshotManager(LibvirtClient):
         # Находим максимальную длину цепочки
         max_depth = 0
 
-        def get_depth(snapshot_name, snapshots_dict, current_depth):
+        def get_depth(snapshot_name, local_snapshots_dict, current_depth):
             nonlocal max_depth
             max_depth = max(max_depth, current_depth)
 
             # Ищем детей этого снапшота
-            for snapshot in snapshots_dict.values():
+            for snapshot in local_snapshots_dict.values():
                 if snapshot.parent and snapshot.parent.name == snapshot_name:
-                    get_depth(snapshot.name, snapshots_dict, current_depth + 1)
+                    get_depth(snapshot.name, local_snapshots_dict, current_depth + 1)
 
         # Создаем словарь для быстрого поиска
         snapshots_dict = {s.name: s for s in snapshots}

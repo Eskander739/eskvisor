@@ -1,7 +1,4 @@
 import random
-import time
-import uuid
-
 import pytest
 
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
@@ -86,7 +83,7 @@ def test_vm_07_attach_and_detach_network_adapter(
             ):
                 break
         else:
-            raise AssertionError(f"Не найден подключенный сетевой интерфейс")
+            raise AssertionError("Не найден подключенный сетевой интерфейс")
         # ____________________________________Отключение сетевого интерфейса_________________________
         detach_network_info = network_session.detach_vm_network_interface(
             random_name, random_mac_address
@@ -113,7 +110,7 @@ def test_vm_07_attach_and_detach_network_adapter(
                 current_network_interface.mac_address == random_mac_address
                 and current_network_interface.source.name == network_name
             ):
-                raise AssertionError(f"Найден подключенный сетевой интерфейс")
+                raise AssertionError("Найден подключенный сетевой интерфейс")
 
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________

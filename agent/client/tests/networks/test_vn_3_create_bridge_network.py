@@ -1,6 +1,4 @@
 import random
-import uuid
-
 import pytest
 
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum

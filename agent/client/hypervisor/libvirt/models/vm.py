@@ -4,7 +4,11 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
 
 from agent.client.hypervisor.libvirt.models.controller import VMController
-from agent.client.hypervisor.libvirt.models.volume.disk import BusType, DiskCreate, DiskAttach
+from agent.client.hypervisor.libvirt.models.volume.disk import (
+    BusType,
+    DiskCreate,
+    DiskAttach,
+)
 from agent.client.hypervisor.libvirt.models.enum import (
     Architecture,
     ControllerType,

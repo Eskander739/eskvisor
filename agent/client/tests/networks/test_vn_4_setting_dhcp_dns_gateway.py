@@ -128,7 +128,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
         vm_created = True
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
-        time.sleep(60)  # Даем время ВМ загрузиться
+        time.sleep(30)  # Даем время ВМ загрузиться
 
         # _________________________Проверка наличия виртуальной сети у ВМ_________
         get_net_vm_info = network_session.get_vm_network_info(vm_template.name)

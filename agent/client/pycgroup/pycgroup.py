@@ -240,6 +240,13 @@ class PYCGroup:
             cgroup_info_list.append(self.get_cgroup_pool(cgroup_path))
         return cgroup_info_list
 
+    def cgroup_pool_exists(self, pool_name: str):
+        try:
+            self.cgroup_pool_path(pool_name)
+            return True
+        except (FileNotFoundError, ValueError):
+            return False
+
     def get_cgroup_pool(self, pool_name: str) -> dict[str, tuple]:
         cgroup_path = self.cgroup_pool_path(pool_name)
 

@@ -36,10 +36,14 @@ class Balansir(LibvirtClient):
         self.logger = DefaultLogger("Балансиръ")
         self.logger.info("Инициализация виртуального менеджера ресурс пулов")
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
-        self.storage_manager = StorageManager()
-        self.storage_manager.connect()
+        self.virtual_rp_manager_path = os.environ.get("RP_VIRTUAL_MANAGER_PATH")
+        self.node_info = None
         self.physical_volume_manager = PhysicalVolumeManager()
         self.volume_group_manager = VolumeGroupManager()
+        self.logic_volume_manager = LogicalVolumeManager()
+        self.storage_manager = None
+        self.vm_manager = None
+        self.pycgroup = PYCGroup()
         system_volume_group = self.volume_group_manager.get_volume_by_name(
             self.system_volume_group_name
         )
@@ -51,14 +55,17 @@ class Balansir(LibvirtClient):
                 pv_names=valid_physical_volumes,
                 volume_group_name=self.system_volume_group_name,
             )
-        self.logic_volume_manager = LogicalVolumeManager()
-        self.virtual_rp_manager_path = os.environ.get("RP_VIRTUAL_MANAGER_PATH")
-        self.pycgroup = PYCGroup()
-        self.vm_manager = VmManager()
-        self.vm_manager.connect()
-        self.node_info = self.vm_manager.get_node_info()
-
         self.logger.info("Виртуальный менеджер ресурс пулов инициализирован")
+
+    def __enter__(self):
+        self.conn = self.connect()
+        self.vm_manager = VmManager()
+        self.storage_manager = StorageManager()
+        self.storage_manager.conn = self.conn
+        self.vm_manager.conn = self.conn
+        self.node_info = self.get_node_info()
+
+        return self
 
     @staticmethod
     def validate_name(vm_name: str):
@@ -145,11 +152,8 @@ class Balansir(LibvirtClient):
         virtual_machines = {}
         for current_name in vms:
             domain = self.vm_manager.conn.lookupByUUIDString(current_name)
-            try:
-                current_vm = self.vm_manager.get_vm_info(domain)
-                virtual_machines[current_name] = current_vm
-            except Exception:
-                pass
+            current_vm = self.vm_manager.get_vm_info(domain)
+            virtual_machines[current_name] = current_vm
         virtual_rp_info = current_virtual_resource_pool.rp_info
         for current_resource_reservation_vm in vm_reservation_list:
             current_vm = virtual_machines[current_resource_reservation_vm.name]
@@ -312,9 +316,8 @@ class Balansir(LibvirtClient):
             self.logger.info("Старт конфигурации ВМ")
 
             # Проверка существования пула через cgroup
-            try:
-                self.pycgroup.get_cgroup_pool(rp_name)
-            except Exception:
+            if not self.pycgroup.cgroup_pool_exists(rp_name):
+                self.logger.warning(f"Виртуальный ресурс пул '{rp_name}' не найден")
                 return RpMessage(
                     code=CommandMessagesEnum.rp_virtual_not_found.name,
                     success=False,
@@ -358,10 +361,8 @@ class Balansir(LibvirtClient):
     def delete_vm_from_virtual_resource_pool(self, name: str, vn_name: str):
         self.logger.info("Старт удаления ВМ из ресурс пула")
 
-        # Проверка существования пула через cgroup
-        try:
-            self.pycgroup.get_cgroup_pool(name)
-        except Exception:
+        if not self.pycgroup.cgroup_pool_exists(name):
+            self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
@@ -431,19 +432,12 @@ class Balansir(LibvirtClient):
                 success=False,
             )
 
-        # Проверка существования cgroup
-        try:
-            self.pycgroup.get_cgroup_pool(create_rp.name)
-            self.logger.warning(
-                f"Виртуальный ресурс пул '{create_rp.name}' уже существует"
-            )
+        if self.pycgroup.cgroup_pool_exists(create_rp.name):
+            self.logger.warning(f"Виртуальный ресурс пул '{create_rp.name}' уже существует")
             return RpMessage(
                 code=CommandMessagesEnum.rp_already_created.name,
                 success=False,
             )
-        except Exception:
-            # Пул не существует, продолжаем создание
-            pass
 
         try:
             if create_rp.vms is not None:
@@ -521,9 +515,7 @@ class Balansir(LibvirtClient):
                 raise ValueError("Байты не могут быть числом с плавающей точкой")
 
         # Проверка существования пула через cgroup
-        try:
-            self.pycgroup.get_cgroup_pool(edit_rp.name)
-        except Exception:
+        if not self.pycgroup.cgroup_pool_exists(edit_rp.name):
             self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' не найден")
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
@@ -629,10 +621,8 @@ class Balansir(LibvirtClient):
         self.logger.info(f"Удаление ресурс пула: '{name}'")
 
         # Проверка существования пула через cgroup
-        try:
-            self.pycgroup.get_cgroup_pool(name)
-        except Exception as e:
-            self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден: {e}")
+        if not self.pycgroup.cgroup_pool_exists(name):
+            self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
@@ -682,17 +672,13 @@ class Balansir(LibvirtClient):
 
     def get_virtual_resource_pool_by_name(self, name: str) -> RpMessage:
         # Получение информации из cgroup
-        try:
-            cgroup_info = self.pycgroup.get_cgroup_pool(name)
-        except Exception as e:
-            self.logger.warning(
-                f"Виртуальный ресурс пул '{name}' не найден в cgroup: {e}"
-            )
+        if not self.pycgroup.cgroup_pool_exists(name):
+            self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
             )
-
+        cgroup_info = self.pycgroup.get_cgroup_pool(name)
         vms = self.pycgroup.pid_ctl.get_vm_names_resource_pool(cgroup_info.get("path"))
         vm_reservation_list = None
 

@@ -83,15 +83,11 @@ class VirshConsoleController:
                 self.child.sendline("\n\n")
                 time.sleep(1)
 
-                try:
-                    self.child.expect([":", "$", "#"], timeout=2)
-                    logger.info("Консоль активирована на второй попытке")
-                    self.connected = True
-                    self._start_io_threads()
-                    return True
-                except BaseException:
-                    logger.error("Не удалось активировать консоль")
-                    return False
+                self.child.expect([":", "$", "#"], timeout=2)
+                logger.info("Консоль активирована на второй попытке")
+                self.connected = True
+                self._start_io_threads()
+                return True
 
         except Exception as e:
             logger.error(f"Ошибка подключения: {e}")
@@ -154,7 +150,8 @@ class VirshConsoleController:
                 logger.warning(f"Ошибка чтения: {e}")
                 time.sleep(0.1)
 
-    def _clean_output(self, data):
+    @staticmethod
+    def _clean_output(data):
         """Очистка вывода от эхо-копий команд и управляющих символов"""
         # Удаляем управляющие последовательности ANSI
         import re
@@ -284,7 +281,7 @@ class VirshConsoleController:
     def interactive_control(self):
         """
         Интерактивное управление ВМ без выхода из консоли
-        Показывает только вывод от ВМ, скрывая ввод пользователя
+        Показывает - вывод от ВМ, скрывая ввод пользователя
         """
         if not self.connected:
             logger.error("Сначала подключитесь к консоли")
@@ -373,7 +370,7 @@ class VirshConsoleController:
         """
         if not self.connected:
             logger.error("Не подключено")
-            return
+            return None
 
         logger.info(f"Начинаю мониторинг на {duration} секунд...")
         logger.info("Нажмите Ctrl+C для остановки")
@@ -420,13 +417,10 @@ class VirshConsoleController:
 
         # Закрываем соединение
         if self.child:
-            try:
-                # Отправляем Ctrl+] для выхода из virsh console
-                self.child.send("\x1d")
-                time.sleep(0.5)
-                self.child.close()
-            except BaseException:
-                pass
+            # Отправляем Ctrl+] для выхода из virsh console
+            self.child.send("\x1d")
+            time.sleep(0.5)
+            self.child.close()
             self.child = None
 
         self.connected = False

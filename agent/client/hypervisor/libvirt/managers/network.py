@@ -1,6 +1,7 @@
 import ipaddress
 import subprocess
-from xml.etree import ElementTree as ET
+from typing import Any
+from xml.etree import ElementTree
 
 import libvirt
 
@@ -66,16 +67,16 @@ class NetworkManager(LibvirtClient):
                 )
 
             xml_config = self._generate_network_xml(params)
-            network = self.conn.networkDefineXML(xml_config)
+            current_network = self.conn.networkDefineXML(xml_config)
 
             if params.uuid:
-                network.setUUID(params.uuid)
+                current_network.setUUID(params.uuid)
 
             if params.autostart:
-                network.setAutostart(True)  # По умолчанию автозапуск включен
+                current_network.setAutostart(True)  # По умолчанию автозапуск включен
             else:
-                network.setAutostart(False)  # По умолчанию автозапуск выключен
-            network.create()  # Активируем сеть
+                current_network.setAutostart(False)  # По умолчанию автозапуск выключен
+            current_network.create()  # Активируем сеть
 
             self.logger.info(
                 f"Сеть '{params.name}' успешно создана "
@@ -118,20 +119,16 @@ class NetworkManager(LibvirtClient):
             domains = self.conn.listAllDomains(libvirt.VIR_CONNECT_LIST_DOMAINS_RUNNING)
 
             for domain in domains:
-                try:
-                    # Получаем XML ВМ
-                    xml_desc = domain.XMLDesc(0)
+                # Получаем XML ВМ
+                xml_desc = domain.XMLDesc(0)
 
-                    # Быстрая проверка строкой
-                    if f"<source network='{network_name}'" in xml_desc:
-                        return True
+                # Быстрая проверка строкой
+                if f"<source network='{network_name}'" in xml_desc:
+                    return True
 
-                    # Альтернативный формат (без кавычек)
-                    if f"<source network={network_name}" in xml_desc:
-                        return True
-
-                except BaseException:
-                    continue
+                # Альтернативный формат (без кавычек)
+                if f"<source network={network_name}" in xml_desc:
+                    return True
 
             return False
 
@@ -147,10 +144,10 @@ class NetworkManager(LibvirtClient):
     ) -> NetworkMessage:
         """Удаление виртуальной сети"""
         try:
-            network = self.conn.networkLookupByName(network_name)
+            current_network = self.conn.networkLookupByName(network_name)
 
             # Получаем информацию о типе сети перед удалением
-            network_type = self._get_network_type_from_xml(network.XMLDesc(0))
+            network_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
             if self._has_vms_connected_to_network(network_name) and not approve_admin:
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) не может быть удалена с подключенными ВМ без подтверждения администратора"
@@ -160,9 +157,9 @@ class NetworkManager(LibvirtClient):
                     success=False,
                 )
 
-            if network.isActive():
+            if current_network.isActive():
                 if force:
-                    network.destroy()
+                    current_network.destroy()
                     self.logger.info(
                         f"Сеть '{network_name}' (тип: {network_type}) остановлена перед удалением"
                     )
@@ -176,7 +173,7 @@ class NetworkManager(LibvirtClient):
                         note="use force=True for force delete",
                     )
 
-            network.undefine()
+            current_network.undefine()
             self.logger.info(
                 f"Сеть '{network_name}' (тип: {network_type}) успешно удалена"
             )
@@ -196,8 +193,8 @@ class NetworkManager(LibvirtClient):
     def restart_network(self, network_name: str, force: bool = False) -> NetworkMessage:
         """Перезапуск виртуальной сети с опциональной проверкой подключенных ВМ"""
         try:
-            network = self.conn.networkLookupByName(network_name)
-            network_type = self._get_network_type_from_xml(network.XMLDesc(0))
+            current_network = self.conn.networkLookupByName(network_name)
+            network_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
 
             # Проверяем, есть ли подключенные ВМ (если не force)
             if not force and self._has_vms_connected_to_network(network_name):
@@ -211,9 +208,9 @@ class NetworkManager(LibvirtClient):
                 )
 
             # Если сеть активна, останавливаем
-            was_active = network.isActive()
+            was_active = current_network.isActive()
             if was_active:
-                network.destroy()
+                current_network.destroy()
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) остановлена для перезапуска"
                 )
@@ -222,7 +219,7 @@ class NetworkManager(LibvirtClient):
                 time.sleep(2)  # Даем время для корректного завершения
 
             # Запускаем сеть
-            network.create()
+            current_network.create()
             self.logger.info(
                 f"Сеть '{network_name}' (тип: {network_type}) запущена {'после перезапуска' if was_active else ''}"
             )
@@ -250,10 +247,10 @@ class NetworkManager(LibvirtClient):
         was_active = None
         try:
             # Получаем текущую сеть
-            network = self.conn.networkLookupByName(network_name)
+            current_network = self.conn.networkLookupByName(network_name)
 
             # Определяем старый и новый типы сетей
-            old_type = self._get_network_type_from_xml(network.XMLDesc(0))
+            old_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
             new_type_info = self._determine_network_type(params)
 
             self.logger.info(
@@ -262,16 +259,16 @@ class NetworkManager(LibvirtClient):
             )
 
             # Сохраняем важные параметры старой сети
-            was_active = network.isActive()
-            autostart = network.autostart()
-            old_uuid = network.UUIDString()
+            was_active = current_network.isActive()
+            autostart = current_network.autostart()
+            old_uuid = current_network.UUIDString()
 
             # Сохраняем старую XML для возможного восстановления
-            old_xml = network.XMLDesc(0)
+            old_xml = current_network.XMLDesc(0)
 
             # Если сеть активна, деактивируем её для редактирования
             if was_active:
-                network.destroy()
+                current_network.destroy()
                 self.logger.info(
                     f"Сеть '{network_name}' остановлена для редактирования"
                 )
@@ -280,7 +277,7 @@ class NetworkManager(LibvirtClient):
                 time.sleep(1)  # Даем время для корректного завершения
 
             # ⭐ ВАЖНО: УДАЛЯЕМ старую сеть перед созданием новой ⭐
-            network.undefine()
+            current_network.undefine()
             self.logger.debug(f"Старая сеть '{network_name}' удалена")
 
             # Генерируем новую XML конфигурацию
@@ -341,8 +338,8 @@ class NetworkManager(LibvirtClient):
     def get_network_info(self, network_name: str) -> NetworkMessage:
         """Получение информации о сети"""
         try:
-            network = self.conn.networkLookupByName(network_name)
-            xml_desc = network.XMLDesc(0)
+            current_network = self.conn.networkLookupByName(network_name)
+            xml_desc = current_network.XMLDesc(0)
 
             # Определяем тип сети из XML
             network_type_info = self._get_network_type_info_from_xml(xml_desc)
@@ -350,14 +347,16 @@ class NetworkManager(LibvirtClient):
             # Парсим дополнительные настройки из XML
             parsed_settings = self._parse_network_xml_settings(xml_desc)
             info = NetworkInfo(
-                name=network.name(),
-                uuid=network.UUIDString(),
+                name=current_network.name(),
+                uuid=current_network.UUIDString(),
                 bridge_name=(
-                    network.bridgeName() if hasattr(network, "bridgeName") else None
+                    current_network.bridgeName()
+                    if hasattr(current_network, "bridgeName")
+                    else None
                 ),
-                active=network.isActive(),
-                persistent=network.isPersistent(),
-                autostart=network.autostart(),
+                active=current_network.isActive(),
+                persistent=current_network.isPersistent(),
+                autostart=current_network.autostart(),
                 network_type=network_type_info,
                 xml=xml_desc,
                 gateway=parsed_settings.get("gateway"),
@@ -389,19 +388,19 @@ class NetworkManager(LibvirtClient):
         # Дополнительная валидация перед генерацией XML
         self._validate_network_parameters(params)
 
-        root = ET.Element("network")
+        root = ElementTree.Element("network")
 
         # Базовые параметры
-        name_elem = ET.SubElement(root, "name")
+        name_elem = ElementTree.SubElement(root, "name")
         name_elem.text = params.name
 
         if params.uuid:
-            uuid_elem = ET.SubElement(root, "uuid")
+            uuid_elem = ElementTree.SubElement(root, "uuid")
             uuid_elem.text = params.uuid
 
         # Мост
         if params.bridge:
-            bridge_elem = ET.SubElement(root, "bridge")
+            bridge_elem = ElementTree.SubElement(root, "bridge")
             if params.bridge.name:
                 bridge_elem.set("name", params.bridge.name)
             if params.bridge.stp is not None:
@@ -413,29 +412,31 @@ class NetworkManager(LibvirtClient):
 
         # Форвардинга
         if params.forward:
-            forward_elem = ET.SubElement(root, "forward", mode=params.forward.mode)
+            forward_elem = ElementTree.SubElement(
+                root, "forward", mode=params.forward.mode
+            )
             if params.forward.dev:
                 forward_elem.set("dev", params.forward.dev)
             if params.forward.interface:
-                interface_elem = ET.SubElement(forward_elem, "interface")
+                interface_elem = ElementTree.SubElement(forward_elem, "interface")
                 interface_elem.set("dev", params.forward.interface)
 
         # Domain
         if params.domain_name:
-            domain_elem = ET.SubElement(root, "domain")
+            domain_elem = ElementTree.SubElement(root, "domain")
             domain_elem.set("name", params.domain_name)
 
         # MTU
         if params.mtu and params.mtu != 1500:
-            ET.SubElement(root, "mtu", size=str(params.mtu))
+            ElementTree.SubElement(root, "mtu", size=str(params.mtu))
 
         # Trust guest RX filters
         if params.trust_guest_rx_filters:
-            ET.SubElement(root, "trustGuestRxFilters")
+            ElementTree.SubElement(root, "trustGuestRxFilters")
 
         # IP конфигурация
         if params.ipv4 and params.ipv4_address:
-            ip_elem = ET.SubElement(root, "ip")
+            ip_elem = ElementTree.SubElement(root, "ip")
             ip_elem.set(
                 "address",
                 str(ipaddress.ip_network(str(params.ipv4_address)).network_address),
@@ -446,24 +447,24 @@ class NetworkManager(LibvirtClient):
             ip_elem.set("family", "ipv4")
             # Gateway
             if params.gateway:
-                gateway_elem = ET.SubElement(ip_elem, "gateway")
+                gateway_elem = ElementTree.SubElement(ip_elem, "gateway")
                 gateway_elem.set("addr", params.gateway)
 
             # DHCP
             if params.dhcp_ranges or params.dhcp_hosts:
-                dhcp_elem = ET.SubElement(ip_elem, "dhcp")
+                dhcp_elem = ElementTree.SubElement(ip_elem, "dhcp")
 
                 # Диапазоны DHCP
                 if params.dhcp_ranges:
                     for dhcp_range in params.dhcp_ranges:
-                        range_elem = ET.SubElement(dhcp_elem, "range")
+                        range_elem = ElementTree.SubElement(dhcp_elem, "range")
                         range_elem.set("start", str(dhcp_range.start))
                         range_elem.set("end", str(dhcp_range.end))
 
                 # Статические хосты DHCP
                 if params.dhcp_hosts:
                     for dhcp_host in params.dhcp_hosts:
-                        host_elem = ET.SubElement(dhcp_elem, "host")
+                        host_elem = ElementTree.SubElement(dhcp_elem, "host")
                         host_elem.set("mac", dhcp_host.mac)
                         host_elem.set("ip", str(dhcp_host.ip))
                         if dhcp_host.name:
@@ -471,7 +472,7 @@ class NetworkManager(LibvirtClient):
 
         # IPv6 конфигурация
         if params.ipv6 and params.ipv6_address:
-            ip6_elem = ET.SubElement(root, "ip")
+            ip6_elem = ElementTree.SubElement(root, "ip")
             ip6_elem.set(
                 "address",
                 str(ipaddress.ip_network(str(params.ipv6_address)).network_address),
@@ -484,7 +485,7 @@ class NetworkManager(LibvirtClient):
         # Маршруты
         if params.routes:
             for route in params.routes:
-                route_elem = ET.SubElement(root, "route")
+                route_elem = ElementTree.SubElement(root, "route")
                 route_elem.set("address", str(route.address))
                 if route.gateway:
                     route_elem.set("gateway", str(route.gateway))
@@ -502,12 +503,12 @@ class NetworkManager(LibvirtClient):
             or params.dns
             and (params.dns.forwarders or params.dns.hosts or params.dns.txt_records)
         ):
-            dns_elem = ET.SubElement(root, "dns")
+            dns_elem = ElementTree.SubElement(root, "dns")
 
             # Обрабатываем новые DNS forwarders
             if params.dns_forwarders:
                 for forwarder in params.dns_forwarders:
-                    forwarder_elem = ET.SubElement(dns_elem, "forwarder")
+                    forwarder_elem = ElementTree.SubElement(dns_elem, "forwarder")
                     forwarder_elem.set("addr", forwarder.addr)
                     if forwarder.domain:
                         forwarder_elem.set("domain", forwarder.domain)
@@ -515,16 +516,16 @@ class NetworkManager(LibvirtClient):
             # Обрабатываем новые DNS hosts
             if params.dns_hosts:
                 for host in params.dns_hosts:
-                    host_elem = ET.SubElement(dns_elem, "host")
+                    host_elem = ElementTree.SubElement(dns_elem, "host")
                     host_elem.set("ip", host.ip)
                     for hostname in host.hostnames:
-                        hostname_elem = ET.SubElement(host_elem, "hostname")
+                        hostname_elem = ElementTree.SubElement(host_elem, "hostname")
                         hostname_elem.text = hostname
 
             # Обрабатываем новые DNS TXT записи
             if params.dns_txts:
                 for txt in params.dns_txts:
-                    txt_elem = ET.SubElement(dns_elem, "txt")
+                    txt_elem = ElementTree.SubElement(dns_elem, "txt")
                     txt_elem.set("name", txt.name)
                     txt_elem.set("value", txt.value)
 
@@ -533,30 +534,32 @@ class NetworkManager(LibvirtClient):
             # Старые forwarders
             if params.dns.forwarders:
                 for forwarder in params.dns.forwarders:
-                    forwarder_elem = ET.SubElement(dns_elem, "forwarder")
+                    forwarder_elem = ElementTree.SubElement(dns_elem, "forwarder")
                     forwarder_elem.set("addr", str(forwarder))
 
             # Старые hosts
             if params.dns.hosts:
                 for host in params.dns.hosts:
-                    host_elem = ET.SubElement(dns_elem, "host")
+                    host_elem = ElementTree.SubElement(dns_elem, "host")
                     host_elem.set("ip", str(host.ip))
                     if host.hostnames:
                         for hostname in host.hostnames:
-                            hostname_elem = ET.SubElement(host_elem, "hostname")
+                            hostname_elem = ElementTree.SubElement(
+                                host_elem, "hostname"
+                            )
                             hostname_elem.text = hostname
 
             # Старые TXT записи
             if params.dns.txt_records:
                 for txt in params.dns.txt_records:
-                    txt_elem = ET.SubElement(dns_elem, "txt")
+                    txt_elem = ElementTree.SubElement(dns_elem, "txt")
                     txt_elem.set("name", txt.name)
                     txt_elem.set("value", txt.value)
 
             # SRV записи
             if params.dns.srv_records:
                 for srv in params.dns.srv_records:
-                    srv_elem = ET.SubElement(dns_elem, "srv")
+                    srv_elem = ElementTree.SubElement(dns_elem, "srv")
                     srv_elem.set("service", srv.service)
                     srv_elem.set("protocol", srv.protocol)
                     srv_elem.set("target", srv.target)
@@ -569,17 +572,17 @@ class NetworkManager(LibvirtClient):
 
             # Domain и local_only
             if params.dns.domain:
-                domain_elem = ET.SubElement(dns_elem, "domain")
+                domain_elem = ElementTree.SubElement(dns_elem, "domain")
                 domain_elem.set("name", params.dns.domain)
                 if params.dns.local_only:
                     domain_elem.set("localOnly", "yes")
 
         # Изолированная сеть
         if params.isolated:
-            ET.SubElement(root, "isolated")
+            ElementTree.SubElement(root, "isolated")
 
         # Преобразуем в строку
-        xml_str = ET.tostring(root, encoding="unicode")
+        xml_str = ElementTree.tostring(root, encoding="unicode")
 
         # Добавляем XML заголовок
         xml_header = '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -588,13 +591,13 @@ class NetworkManager(LibvirtClient):
     def _parse_network_xml_settings(self, xml_desc: str) -> dict:
         """Парсинг дополнительных настроек из XML сети"""
         try:
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
             settings = {
                 "gateway": None,
                 "dns_forwarders": [],
                 "dns_hosts": [],
                 "dns_txts": [],
-                "ipv4_address": None,
+                "ipv4_address": "",
                 "dhcp_ranges": [],
             }
 
@@ -654,7 +657,7 @@ class NetworkManager(LibvirtClient):
 
             return settings
 
-        except ET.ParseError as e:
+        except ElementTree.ParseError as e:
             self.logger.error(f"Ошибка парсинга XML настроек сети: {e}")
             return {}
 
@@ -710,11 +713,11 @@ class NetworkManager(LibvirtClient):
     def stop_network(self, network_name: str) -> NetworkMessage:
         """Остановка сети"""
         try:
-            network = self.conn.networkLookupByName(network_name)
-            network_type = self._get_network_type_from_xml(network.XMLDesc(0))
+            current_network = self.conn.networkLookupByName(network_name)
+            network_type = self._get_network_type_from_xml(current_network.XMLDesc(0))
 
-            if network.isActive():
-                network.destroy()
+            if current_network.isActive():
+                current_network.destroy()
                 self.logger.info(
                     f"Сеть '{network_name}' (тип: {network_type}) остановлена"
                 )
@@ -745,25 +748,25 @@ class NetworkManager(LibvirtClient):
             # Получаем все сети (флаг 0 - все сети)
             networks = self.conn.listAllNetworks(0)
 
-            for network in networks:
+            for current_network in networks:
                 try:
-                    xml_desc = network.XMLDesc(0)
+                    xml_desc = current_network.XMLDesc(0)
                     network_type_info = self._get_network_type_info_from_xml(xml_desc)
 
                     # Парсим дополнительные настройки
                     parsed_settings = self._parse_network_xml_settings(xml_desc)
 
                     info = NetworkInfo(
-                        name=network.name(),
-                        uuid=network.UUIDString(),
+                        name=current_network.name(),
+                        uuid=current_network.UUIDString(),
                         bridge_name=(
-                            network.bridgeName()
-                            if hasattr(network, "bridgeName")
+                            current_network.bridgeName()
+                            if hasattr(current_network, "bridgeName")
                             else None
                         ),
-                        active=network.isActive(),
-                        persistent=network.isPersistent(),
-                        autostart=network.autostart(),
+                        active=current_network.isActive(),
+                        persistent=current_network.isPersistent(),
+                        autostart=current_network.autostart(),
                         network_type=network_type_info,
                         xml=xml_desc,
                         gateway=parsed_settings.get("gateway"),
@@ -777,7 +780,7 @@ class NetworkManager(LibvirtClient):
                     networks_info.append(info)
                 except Exception as e:
                     self.logger.warning(
-                        f"Ошибка получения информации о сети {network.name()}: {e}"
+                        f"Ошибка получения информации о сети {current_network.name()}: {e}"
                     )
 
             return NetworkMessage(
@@ -829,7 +832,7 @@ class NetworkManager(LibvirtClient):
     def _get_network_type_from_xml(self, xml_desc: str) -> str:
         """Получение типа сети из XML конфигурации"""
         try:
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             # Проверяем на изолированную сеть
             isolated_elem = root.find("isolated")
@@ -845,14 +848,14 @@ class NetworkManager(LibvirtClient):
             # Сеть без форвардинга
             return "no-forward"
 
-        except ET.ParseError as e:
+        except ElementTree.ParseError as e:
             self.logger.error(f"Ошибка парсинга XML при определении типа сети: {e}")
             return "unknown"
 
     def _get_network_type_info_from_xml(self, xml_desc: str) -> NetworkTypeInfo:
         """Получение полной информации о типе сети из XML"""
         try:
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             # Определяем базовые характеристики
             has_ipv4 = root.find(".//ip[@family='ipv4']") is not None
@@ -886,7 +889,7 @@ class NetworkManager(LibvirtClient):
                 description=description,
             )
 
-        except ET.ParseError as e:
+        except ElementTree.ParseError as e:
             self.logger.error(f"Ошибка парсинга XML: {e}")
             return NetworkTypeInfo(
                 type="unknown", description="Ошибка определения типа сети"
@@ -919,7 +922,7 @@ class NetworkManager(LibvirtClient):
         """Получение сводки по всем сетям"""
         networks = self.list_all_networks().net_info
 
-        summary = {
+        current_summary = {
             "total": networks.total,
             "active": 0,
             "inactive": 0,
@@ -927,26 +930,26 @@ class NetworkManager(LibvirtClient):
             "by_autostart": {"enabled": 0, "disabled": 0},
         }
 
-        for network in networks.items:
+        for current_network in networks.items:
             # Подсчет активных/неактивных
-            if network.active:
-                summary["active"] += 1
+            if current_network.active:
+                current_summary["active"] += 1
             else:
-                summary["inactive"] += 1
+                current_summary["inactive"] += 1
 
             # Подсчет по типам
-            network_type = network.network_type.type
-            if network_type not in summary["by_type"]:
-                summary["by_type"][network_type] = 0
-            summary["by_type"][network_type] += 1
+            network_type = current_network.network_type.type
+            if network_type not in current_summary["by_type"]:
+                current_summary["by_type"][network_type] = 0
+            current_summary["by_type"][network_type] += 1
 
             # Подсчет по автозапуску
-            if network.autostart:
-                summary["by_autostart"]["enabled"] += 1
+            if current_network.autostart:
+                current_summary["by_autostart"]["enabled"] += 1
             else:
-                summary["by_autostart"]["disabled"] += 1
+                current_summary["by_autostart"]["disabled"] += 1
 
-        return summary
+        return current_summary
 
     def is_network_visible(self, network_name: str) -> bool:
         """
@@ -1035,7 +1038,7 @@ class NetworkManager(LibvirtClient):
             )
 
         xml_desc = vm.XMLDesc(0)
-        root = ET.fromstring(xml_desc)
+        root = ElementTree.fromstring(xml_desc)
 
         interfaces = []
 
@@ -1177,9 +1180,8 @@ class NetworkManager(LibvirtClient):
                     "description": "Применен сетевой фильтр",
                 }
                 for param in filterref.findall("parameter"):
-                    interface_info["filter"]["parameters"][param.get("name")] = (
-                        param.get("value")
-                    )
+                    parameter: Any = interface_info["filter"]["parameters"]
+                    parameter[param.get("name")] = param.get("value")
 
             # Проверяем MTU
             mtu = iface.find("mtu")
@@ -1196,13 +1198,17 @@ class NetworkManager(LibvirtClient):
             if iface["source"].get("type") == "network":
                 network_name = iface["source"]["name"]
                 try:
-                    network = self.conn.networkLookupByName(network_name)
+                    current_network = self.conn.networkLookupByName(network_name)
                     iface["source"]["network_info"] = {
-                        "active": network.isActive(),
-                        "persistent": network.isPersistent(),
-                        "autostart": network.autostart(),
-                        "bridge": network.bridgeName() if network.isActive() else None,
-                        "uuid": network.UUIDString(),
+                        "active": current_network.isActive(),
+                        "persistent": current_network.isPersistent(),
+                        "autostart": current_network.autostart(),
+                        "bridge": (
+                            current_network.bridgeName()
+                            if current_network.isActive()
+                            else None
+                        ),
+                        "uuid": current_network.UUIDString(),
                     }
                 except libvirt.libvirtError:
                     iface["source"]["network_info"] = {"error": "Network not found"}
@@ -1302,8 +1308,8 @@ class NetworkManager(LibvirtClient):
 
             # Проверяем существование сети
             try:
-                network = self.conn.networkLookupByName(network_name)
-                if not network.isActive():
+                current_network = self.conn.networkLookupByName(network_name)
+                if not current_network.isActive():
                     self.logger.warning(f"Сеть '{network_name}' не активна")
             except libvirt.libvirtError as e:
                 self.logger.error(f"Сеть '{network_name}' не найдена: {e}")
@@ -1428,17 +1434,17 @@ class NetworkManager(LibvirtClient):
         Генерация XML конфигурации сетевого интерфейса
         """
         # Создаем корневой элемент interface
-        interface = ET.Element("interface", type="network")
+        interface = ElementTree.Element("interface", type="network")
 
         # Добавляем источник (подключение к сети)
-        source = ET.SubElement(interface, "source", network=network_name)
+        ElementTree.SubElement(interface, "source", network=network_name)
 
         # Добавляем MAC-адрес (если указан)
         if mac_address:
-            ET.SubElement(interface, "mac", address=mac_address)
+            ElementTree.SubElement(interface, "mac", address=mac_address)
 
         # Добавляем модель - ЭТО ОБЯЗАТЕЛЬНО
-        ET.SubElement(interface, "model", type=model)
+        ElementTree.SubElement(interface, "model", type=model)
 
         # Добавляем драйвер с ПРАВИЛЬНЫМИ атрибутами
         driver_attrs = {}
@@ -1460,39 +1466,41 @@ class NetworkManager(LibvirtClient):
 
         # Добавляем элемент driver только если есть атрибуты
         if driver_attrs:
-            ET.SubElement(interface, "driver", **driver_attrs)
+            ElementTree.SubElement(interface, "driver", **driver_attrs)
 
         # Добавляем состояние канала
         if link_state and link_state != "up":
-            ET.SubElement(interface, "link", state=link_state)
+            ElementTree.SubElement(interface, "link", state=link_state)
 
         # Добавляем порядок загрузки
         if boot_order is not None:
-            ET.SubElement(interface, "boot", order=str(boot_order))
+            ElementTree.SubElement(interface, "boot", order=str(boot_order))
 
         # Добавляем ROM
         if rom_bar and rom_bar != "on":
-            ET.SubElement(interface, "rom", bar=rom_bar)
+            ElementTree.SubElement(interface, "rom", bar=rom_bar)
 
         # Добавляем сетевой фильтр
         if filter_name:
-            filterref = ET.SubElement(interface, "filterref", filter=filter_name)
+            filterref = ElementTree.SubElement(
+                interface, "filterref", filter=filter_name
+            )
             if filter_params:
                 for param_name, param_value in filter_params.items():
-                    ET.SubElement(
+                    ElementTree.SubElement(
                         filterref, "parameter", name=param_name, value=str(param_value)
                     )
 
         # Добавляем MTU
         if mtu_size and mtu_size != 1500:
-            ET.SubElement(interface, "mtu", size=str(mtu_size))
+            ElementTree.SubElement(interface, "mtu", size=str(mtu_size))
 
         # Добавляем target device (опционально)
         if target_dev:
-            ET.SubElement(interface, "target", dev=target_dev)
+            ElementTree.SubElement(interface, "target", dev=target_dev)
 
         # Преобразуем в XML строку
-        xml_str = ET.tostring(interface, encoding="unicode")
+        xml_str = ElementTree.tostring(interface, encoding="unicode")
 
         # Для отладки - логируем сгенерированный XML
         self.logger.debug(f"Сгенерирован XML интерфейса:\n{xml_str}")
@@ -1521,7 +1529,7 @@ class NetworkManager(LibvirtClient):
 
             # Проверяем существование интерфейса с указанным MAC
             xml_desc = vm.XMLDesc(0)
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             interface_found = False
             for iface in root.findall(".//devices/interface"):

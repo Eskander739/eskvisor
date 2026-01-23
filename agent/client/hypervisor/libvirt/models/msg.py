@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 from agent.client.hypervisor.libvirt.models.volume.disk import Disk
 from agent.client.hypervisor.libvirt.models.network import (

@@ -12,7 +12,7 @@ from agent.client.hypervisor.libvirt.models.vm_stats.stats import CpuAndRamUsage
 from agent.client.logger_config import DefaultLogger
 from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.dispatcher import TaskDispatcher
-from agent.client.task_manager.models import TaskAdd, TaskType, TasksInfo
+from agent.client.task_manager.models import TaskAdd, TaskType
 from agent.client.task_manager.ws_notification import WebSocketNotificationHandler
 from agent.client.tools import get_quick_stats
 
@@ -68,7 +68,7 @@ async def clear_all_tasks():
             try:
                 task = orjson.loads(task_json.model_dump_json())
                 all_tasks.append(task.get("request_id"))
-            except:
+            except Exception:
                 pass
 
         # Обрабатываем processing задачи
@@ -76,7 +76,7 @@ async def clear_all_tasks():
             try:
                 task = orjson.loads(task_json.model_dump_json())
                 all_tasks.append(task.get("request_id"))
-            except:
+            except Exception:
                 pass
 
         deleted_count = queue_manager.delete_all_tasks()

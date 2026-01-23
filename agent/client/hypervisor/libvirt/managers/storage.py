@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import shutil
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ElementTree
 from datetime import datetime
 from pathlib import Path
 from subprocess import TimeoutExpired
@@ -131,9 +131,7 @@ class StorageManager(LibvirtClient):
                 rp_path = Path(disk_create.path)
                 rp_path.parent.mkdir()
                 rp_path.mkdir()
-                self.logger.info(
-                    f"Результат создания директории для точки монтирования"
-                )
+                self.logger.info("Результат создания директории для точки монтирования")
 
             source = f"/dev/{self.system_volume_group_name}/{disk_create.name}"
             self.mount_lv_to_system(source, disk_create.path)
@@ -271,10 +269,13 @@ class StorageManager(LibvirtClient):
                     return StorageMessage(
                         code=CommandMessagesEnum.disk_already_created.name,
                     )
-            if disk_create.format.value in (DiskFormat.ISO.value, DiskFormat.IMG.value) or disk_create.disk_type.value == DiskType.CDROM.value:
+            if (
+                disk_create.format.value in (DiskFormat.ISO.value, DiskFormat.IMG.value)
+                or disk_create.disk_type.value == DiskType.CDROM.value
+            ):
                 disk_info = StorageMessage(
-                code=CommandMessagesEnum.disk_successfully_attached.name,
-            )
+                    code=CommandMessagesEnum.disk_successfully_attached.name
+                )
             elif disk_create.format.value == DiskFormat.QCOW2.value:
                 disk_info = self._create_qcow2_disk(
                     disk_path, disk_create.size_gb, disk_create.sparse
@@ -719,7 +720,7 @@ class StorageManager(LibvirtClient):
         try:
             vm = self.conn.lookupByName(vm_name)
             xml_desc = vm.XMLDesc()
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             for disk_element in root.findall(".//disk"):
                 target = disk_element.find("target")
@@ -758,7 +759,7 @@ class StorageManager(LibvirtClient):
             xml_desc = vm.XMLDesc()
 
             # Используем ElementTree для надежного парсинга XML
-            root = ET.fromstring(xml_desc)
+            root = ElementTree.fromstring(xml_desc)
 
             # Ищем диск с указанным target_dev
             disk_element = None
@@ -899,10 +900,10 @@ class StorageManager(LibvirtClient):
 
             vm = self.conn.lookupByName(detach_disk.vm_name)
             xml_desc = vm.XMLDesc()
-            root = ET.fromstring(xml_desc)
-            for current_disk in root.find("devices").findall("disk"):
-                if current_disk.find("target").get("dev") == detach_disk.target_dev:
-                    disk_xml = ET.tostring(current_disk, encoding="unicode")
+            root = ElementTree.fromstring(xml_desc)
+            for disk_device in root.find("devices").findall("disk"):
+                if disk_device.find("target").get("dev") == detach_disk.target_dev:
+                    disk_xml = ElementTree.tostring(disk_device, encoding="unicode")
                     break
             else:
                 raise ValueError(
@@ -1233,7 +1234,6 @@ class StorageManager(LibvirtClient):
                 disk_format = DiskFormat.VHDX
 
             size_bytes = self.get_disk_size(disk_path) if file_path_exists else 0
-
             disk_name = os.path.basename(disk_path).split(".").pop(0)
             disk_dir = os.path.dirname(disk_path)
 
@@ -1309,15 +1309,12 @@ class StorageManager(LibvirtClient):
 
         for dir_path in standard_dirs:
             if Path(dir_path).exists():
-                try:
-                    for file_name in os.listdir(dir_path):
-                        file_path = os.path.join(dir_path, file_name)
-                        if self._is_disk_file(file_path):
-                            disk_info = self._get_file_disk_info(file_path)
-                            if disk_info:
-                                all_disks.append(disk_info)
-                except Exception:
-                    continue
+                for file_name in os.listdir(dir_path):
+                    file_path = os.path.join(dir_path, file_name)
+                    if self._is_disk_file(file_path):
+                        disk_info = self._get_file_disk_info(file_path)
+                        if disk_info:
+                            all_disks.append(disk_info)
 
         return all_disks
 

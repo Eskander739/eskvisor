@@ -8,6 +8,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any
 
 import libvirt
 from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
@@ -23,7 +24,8 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     Disk,
     DiskAttach,
     DiskType,
-    CacheMode, DiskCreate,
+    CacheMode,
+    DiskCreate,
 )
 from agent.client.hypervisor.libvirt.models.enum import (
     GraphicsType,
@@ -57,7 +59,7 @@ UNSUPPORT_LIVE_UPGRADE_PARAMS = (
 
 class VmManager(LibvirtClient):
     """
-    Управление виртуальными машинами с использованием virt-install
+    Управление виртуальными машинами
     """
 
     libvirtError = None
@@ -66,13 +68,21 @@ class VmManager(LibvirtClient):
         self.ha_controller = HAController()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger("VmManager")
-        self.snapshot = SnapshotManager()
-        self.snapshot.connect()
         super().__init__()
+        self.snapshot = None
+        self.storage_manager = None
+        self.network_manager = None
+
+    def __enter__(self):
+        self.conn = self.connect()
+        self.snapshot = SnapshotManager()
         self.storage_manager = StorageManager()
         self.network_manager = NetworkManager()
-        self.storage_manager.connect()
-        self.network_manager.conn = self.storage_manager.conn
+        self.snapshot.conn = self.conn
+        self.storage_manager.conn = self.conn
+        self.network_manager.conn = self.conn
+
+        return self
 
     def restart_vms_in_live_host(self):
         """
@@ -1222,7 +1232,7 @@ class VmManager(LibvirtClient):
                 cpu_elem = root.find("cpu")
                 if cpu_elem is not None:
                     # Обновляем топологию CPU
-                    topology = cpu_elem.find("topology")
+                    topology: Any = cpu_elem.find("topology")
                     if topology is None:
                         topology = ET.SubElement(cpu_elem, "topology")
 
@@ -1251,9 +1261,7 @@ class VmManager(LibvirtClient):
 
             # TODO: Реализовать изменение autostart(то что директория)
             # Изменение модели CPU (требует остановки ВМ)
-            if (
-                vm_update.cpu_model is not None and False == True
-            ):  # Заглушка, не протестировано
+            if vm_update.cpu_model is not None:  # Заглушка, не протестировано
                 try:
                     cpu_config = vm_update.cpu_model
 
@@ -1315,20 +1323,23 @@ class VmManager(LibvirtClient):
                     cpu_elem.set("mode", mode)
 
                     if "match" in cpu_config:
-                        cpu_elem.set("match", cpu_config["match"])
+                        match = str(cpu_config["match"])
+                        cpu_elem.set("match", match)
 
                     if "check" in cpu_config:
-                        cpu_elem.set("check", cpu_config["check"])
+                        check = str(cpu_config["check"])
+                        cpu_elem.set("check", check)
 
                     # Добавляем модель для custom/host-model
                     if mode in ["custom", "host-model"] and "model" in cpu_config:
+                        cpu_model = str(cpu_config["model"])
                         model_elem = ET.SubElement(cpu_elem, "model")
-                        model_elem.text = cpu_config["model"]
+                        model_elem.text = cpu_model
                         model_elem.set("fallback", cpu_config.get("fallback", "allow"))
 
                     # Добавляем топологию
                     if "topology" in cpu_config:
-                        topology = cpu_config["topology"]
+                        topology: Any = cpu_config["topology"]
                         topology_elem = ET.SubElement(cpu_elem, "topology")
 
                         # Валидация топологии
@@ -1345,7 +1356,7 @@ class VmManager(LibvirtClient):
 
                     # Добавляем features
                     if "features" in cpu_config:
-                        features = cpu_config["features"]
+                        features: Any = cpu_config["features"]
                         for feature_name, feature_policy in features.items():
                             if feature_policy not in [
                                 "require",
@@ -2365,7 +2376,7 @@ class VmManager(LibvirtClient):
                 if nvram_element is not None:
                     return nvram_element.text
 
-            loader_element = root.find('.//loader[@type="pflash"]')
+            loader_element: Any = root.find('.//loader[@type="pflash"]')
             if loader_element is not None:
                 parent = loader_element.getparent()
                 if parent is not None:
@@ -2404,13 +2415,6 @@ class VmManager(LibvirtClient):
                 if Path(old_nvram_path).exists():
                     # Создаем новый путь для NVRAM
                     nvram_dir = os.path.dirname(old_nvram_path)
-                    old_nvram_name = os.path.basename(old_nvram_path)
-
-                    # Извлекаем базовое имя (без _VARS.fd или аналогичного суффикса)
-                    if old_nvram_name.endswith("_VARS.fd"):
-                        base_nvram_name = old_nvram_name[:-8]  # Убираем _VARS.fd
-                    else:
-                        base_nvram_name = os.path.splitext(old_nvram_name)[0]
 
                     # Создаем новое имя NVRAM файла
                     new_nvram_name = f"{new_name}_VARS.fd"
@@ -2477,7 +2481,7 @@ class VmManager(LibvirtClient):
 
             # Применяем изменения
             new_xml = ET.tostring(root, encoding="unicode")
-            new_domain = self.conn.defineXML(new_xml)
+            self.conn.defineXML(new_xml)
 
             # Синхронизируем с NFS
             self.ha_controller.sync_nfs_vm_configs()

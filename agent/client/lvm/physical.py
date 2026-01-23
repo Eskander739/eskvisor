@@ -1,10 +1,8 @@
-import random
-import time
+import orjson
 
 from agent.client.cli import CLIControl
 from agent.client.hypervisor.libvirt.models.volume.physical import PhysicalVolume
 from agent.client.logger_config import DefaultLogger
-from agent.client.stg.nfs import NFSStorageManager
 
 
 class PhysicalVolumeManager:
@@ -76,7 +74,7 @@ class PhysicalVolumeManager:
         cmd_args = ["pvs", pv_name, "--reportformat=json"]
         # Выполняем команду
         result = self.cli.execute(cmd_args)
-        return self._parse_dict_to_models(json.loads(result)).pop()
+        return self._parse_dict_to_models(orjson.loads(result)).pop()
 
     def get_volume_list(
         self,
@@ -153,7 +151,7 @@ class PhysicalVolumeManager:
 
         # Выполняем команду
         result = self.cli.execute(cmd_args)
-        return self._parse_dict_to_models(json.loads(result))
+        return self._parse_dict_to_models(orjson.loads(result))
 
     @staticmethod
     def _parse_dict_to_models(output: dict) -> list[PhysicalVolume]:

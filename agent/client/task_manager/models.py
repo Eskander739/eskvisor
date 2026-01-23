@@ -55,7 +55,7 @@ class TaskResponse(BaseModel):
     request_id: str
     task: Task
     status: TaskStatus
-    result: dict | None = None
+    result: Any = None
     started_at: datetime.datetime
     completed_at: datetime.datetime
 

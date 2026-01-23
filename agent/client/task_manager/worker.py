@@ -57,18 +57,19 @@ class TaskHandler:
     """
 
     def __init__(self):
-        self.vm_manager = VmManager()
-        self.net_manager = NetworkManager()
-        self.snapshot_manager = SnapshotManager()
-        self.storage_manager = StorageManager()
-        self.balansir = Balansir()
+        with VmManager() as vm_manager:
+            self.vm_manager = vm_manager
+            self.net_manager = NetworkManager()
+            self.snapshot_manager = SnapshotManager()
+            self.storage_manager = StorageManager()
+            self.balansir = Balansir()
 
-        self.balansir.connect()
-
-        self.storage_manager.conn = self.balansir.conn
-        self.snapshot_manager.conn = self.balansir.conn
-        self.net_manager.conn = self.balansir.conn
-        self.vm_manager.conn = self.balansir.conn
+            self.storage_manager.conn = self.vm_manager.conn
+            self.snapshot_manager.conn = self.vm_manager.conn
+            self.net_manager.conn = self.vm_manager.conn
+            self.balansir.conn = self.vm_manager.conn
+            self.balansir.vm_manager = self.vm_manager
+            self.balansir.storage_manager = self.storage_manager
 
     def handle_task(
         self, task_type: TaskType, action: str, params: dict[str, Any]
@@ -406,7 +407,8 @@ class TaskHandler:
         else:
             raise ValueError(f"Unknown resource pool action: {action}")
 
-    def _handle_stats_task(self, action: str, payload: dict) -> dict[str, Any]:
+    @staticmethod
+    def _handle_stats_task(action: str, payload: dict) -> dict[str, Any]:
         """Обработка задач статистики"""
         if action == "vm_stats":
             # Получение статистики ВМ

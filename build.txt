@@ -90,8 +90,10 @@ virsh -c qemu:///system undefine test-vm
 
 # ________________Установка python__________________
 apk add python3 py3-pip
+apk add python3 py3-pip python3-dev
+apk add py3-pip
 # Создайте виртуальное окружение
-python3 -m venv venv
+python3 -m venv venv --without-pip
 
 # Активируйте его
 source venv/bin/activate

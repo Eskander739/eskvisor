@@ -55,7 +55,7 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
         vm_created = True
         assert create_vm_info.vm_info is not None
         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
-        time.sleep(60)
+        time.sleep(30)
         # ____________________________________Подключение к ВМ____________________
         virsh_console.connect()
         results = virsh_console.execute_commands(

@@ -44,7 +44,7 @@ class LibvirtClient:
             logger.setLevel(logging.INFO)
         return logger
 
-    def connect(self) -> bool:
+    def connect(self):
         """Подключение к гипервизору"""
         try:
             # Настройка аутентификации, если указаны учетные данные
@@ -94,7 +94,7 @@ class LibvirtClient:
                 )
             self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
             self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
-            return True
+            return self.conn
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка подключения: {e}")

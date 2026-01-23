@@ -1,8 +1,6 @@
 import random
-import uuid
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Self
 
 from pydantic import (
@@ -154,56 +152,74 @@ class Disk(BaseModel):
     format: DiskFormat
 
     # Условно обязательные поля (инициализируются None)
-    capacity_bytes: int | None = Field(None, description="Размер диска в байтах", ge=0)
+    capacity_bytes: int | None = Field(
+        default=None, description="Размер диска в байтах", ge=0
+    )
     capacity_gb: float | None = Field(
-        None, description="Размер диска в гигабайтах", ge=0.0
+        default=None, description="Размер диска в гигабайтах", ge=0.0
     )
     allocation_bytes: int | None = Field(
-        None, description="Фактически занято байт", ge=0
+        default=None, description="Фактически занято байт", ge=0
     )
     allocation_gb: float | None = Field(
-        None, description="Фактически занято гигабайт", ge=0.0
+        default=None, description="Фактически занято гигабайт", ge=0.0
     )
-    pool: str | None = Field(None, description="Имя пула хранилищ")
-    vm_name: str | None = Field(None, description="Имя виртуальной машины")
-    status: DiskStatus | None = Field(None, description="Статус подключения")
+    pool: str | None = Field(default=None, description="Имя пула хранилищ")
+    vm_name: str | None = Field(default=None, description="Имя виртуальной машины")
+    status: DiskStatus | None = Field(default=None, description="Статус подключения")
 
     # Опциональные поля
     uuid: str | None = Field(
-        None,
+        default=None,
         description="UUID диска",
         pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     )
-    backing_file: str | None = Field(None, description="Базовый образ (для QCOW2)")
-    encrypted: bool | None = Field(None, description="Зашифрован ли диск")
-    readonly: bool | None = Field(None, description="Только для чтения")
-    created: datetime | None = Field(None, description="Дата создания")
-    modified: datetime | None = Field(None, description="Дата последнего изменения")
-    description: str | None = Field(None, description="Описание диска", max_length=500)
-    owner: str | None = Field(None, description="Владелец диска")
+    backing_file: str | None = Field(
+        default=None, description="Базовый образ (для QCOW2)"
+    )
+    encrypted: bool | None = Field(default=None, description="Зашифрован ли диск")
+    readonly: bool | None = Field(default=None, description="Только для чтения")
+    created: datetime | None = Field(default=None, description="Дата создания")
+    modified: datetime | None = Field(
+        default=None, description="Дата последнего изменения"
+    )
+    description: str | None = Field(
+        default=None, description="Описание диска", max_length=500
+    )
+    owner: str | None = Field(default=None, description="Владелец диска")
     permissions: str | None = Field(
-        None, description="Права доступа в восьмеричном формате", pattern=r"^0[0-7]{3}$"
+        default=None,
+        description="Права доступа в восьмеричном формате",
+        pattern=r"^0[0-7]{3}$",
     )
     cluster_size: int | None = Field(
-        None, description="Размер кластера в байтах", ge=512
+        default=None, description="Размер кластера в байтах", ge=512
     )
-    compat: str | None = Field(None, description="Версия совместимости")
-    lazy_refcounts: bool | None = Field(None, description="Ленивые счетчики ссылок")
+    compat: str | None = Field(default=None, description="Версия совместимости")
+    lazy_refcounts: bool | None = Field(
+        default=None, description="Ленивые счетчики ссылок"
+    )
     refcount_bits: int | None = Field(
-        None, description="Бит счетчика ссылок", ge=1, le=64
+        default=None, description="Бит счетчика ссылок", ge=1, le=64
     )
-    snapshot_count: int | None = Field(None, description="Количество снапшотов", ge=0)
+    snapshot_count: int | None = Field(
+        default=None, description="Количество снапшотов", ge=0
+    )
     virtual_size: int | None = Field(
-        None, description="Виртуальный размер в байтах", ge=0
+        default=None, description="Виртуальный размер в байтах", ge=0
     )
-    disk_size: int | None = Field(None, description="Размер на диске в байтах", ge=0)
-    bus_type: BusType | None = Field(None, description="Тип шины подключения")
-    target_dev: str | None = Field(None, description="Устройство в виртуальной машине")
-    cache_mode: CacheMode | None = Field(None, description="Режим кэширования")
-    io_mode: IoMode | None = Field(None, description="Режим ввода-вывода")
-    discard: DiscardMode | None = Field(None, description="Поддержка discard")
+    disk_size: int | None = Field(
+        default=None, description="Размер на диске в байтах", ge=0
+    )
+    bus_type: BusType | None = Field(default=None, description="Тип шины подключения")
+    target_dev: str | None = Field(
+        default=None, description="Устройство в виртуальной машине"
+    )
+    cache_mode: CacheMode | None = Field(default=None, description="Режим кэширования")
+    io_mode: IoMode | None = Field(default=None, description="Режим ввода-вывода")
+    discard: DiscardMode | None = Field(default=None, description="Поддержка discard")
     detect_zeroes: DetectZeroesMode | None = Field(
-        None, description="Обнаружение нулей"
+        default=None, description="Обнаружение нулей"
     )
     shareable: bool = False  # TODO: Не реализовано
     serial: str | None = None

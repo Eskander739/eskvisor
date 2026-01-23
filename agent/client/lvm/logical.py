@@ -4,7 +4,6 @@ import re
 import orjson
 
 from agent.client.cli import CLIControl
-from agent.client.hypervisor.libvirt.models.vm import VMCreateRequest
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate
 from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,

@@ -29,7 +29,7 @@ def test_vd_12_create_disk_in_resource_pool(
 
     rp_name = create_resource_pool_session
     random_name = random.randint(10000, 99999)
-    attach_disk_create = DiskCreate(
+    disk_create = DiskCreate(
         name=f"disk-test-{random_name}",
         size_gb=0.2,
         format=disk_format,
@@ -38,23 +38,23 @@ def test_vd_12_create_disk_in_resource_pool(
     )
     try:
         # ____________________________________Создание диска______________________
-        attach_disk = storage_session.create_disk(attach_disk_create)
+        attach_disk = storage_session.create_disk(disk_create)
         assert attach_disk.code == CommandMessagesEnum.disk_successfully_created.name
         vm_disk = storage_session.get_disk_info(
-            disk_name=attach_disk_create.name,
-            path=attach_disk_create.path,
-            disk_format=attach_disk_create.format,
+            disk_name=disk_create.name,
+            path=disk_create.path,
+            disk_format=disk_create.format,
             is_pool=True,
         )
         assert vm_disk.code == CommandMessagesEnum.disk_founded.name, vm_disk.note
         logic_volume_disk_current = (
             storage_session.logic_volume_manager.get_volume_by_name(
-                attach_disk_create.name, SYSTEM_VOLUME_GROUP_NAME
+                disk_create.name, SYSTEM_VOLUME_GROUP_NAME
             )
         )
         vm_disk = vm_disk.disk_info
         assert vm_disk.status.value == DiskStatus.DETACHED.value
-        assert vm_disk.name == attach_disk_create.name
+        assert vm_disk.name == disk_create.name
         assert vm_disk.format == disk_format
         assert vm_disk.file_path_exists is True
         if disk_format == DiskFormat.RAW:
@@ -64,11 +64,11 @@ def test_vd_12_create_disk_in_resource_pool(
         # ____________________________________Удаление диска(постусловие)_________
         if disk_format == DiskFormat.QCOW2:
             delete_disk_info = storage_session.delete_pool_disk_qcow2(
-                disk_name=attach_disk_create.name
+                disk_name=disk_create.name
             )
             assert delete_disk_info is True
         else:
             delete_disk_info = storage_session.delete_pool_disk_raw(
-                disk_name=attach_disk_create.name
+                disk_name=disk_create.name
             )
             assert delete_disk_info is True
