@@ -41,7 +41,7 @@ def test_vd_08_disk_info(storage_session, disk_format, sparse):
         )
         vm_disk = vm_disk.disk_info
         disk_path = f"{vm_disk.path}/{disk_create.name}.{disk_format.value}"
-        disk_virtual_size = storage_session.get_disk_virtual_size(disk_path=disk_path)
+        qemu_disk_info = storage_session.get_qemu_disk_info(disk_path=disk_path)
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.name == disk_create.name
         assert vm_disk.format == disk_format
@@ -50,7 +50,7 @@ def test_vd_08_disk_info(storage_session, disk_format, sparse):
         else:
             assert round(vm_disk.capacity_bytes / (1024**3), 2) < 0.1
 
-        assert bytes_to_gb(disk_virtual_size) == disk_create.size_gb
+        assert bytes_to_gb(qemu_disk_info.virtual_size) == disk_create.size_gb
         assert vm_disk.file_path_exists is True
         assert vm_disk.path == disk_create.path
     finally:

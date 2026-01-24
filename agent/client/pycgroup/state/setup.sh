@@ -1,8 +1,37 @@
 #!/bin/bash
 # /usr/local/bin/setup.sh
-# Установка и настройка системы управления cgroup
-
 set -e
+
+echo "=== Проверка поддержки cgroup v2 ядром ==="
+if ! grep -q cgroup2 /proc/filesystems; then
+    echo "ОШИБКА: CGroup V2 не поддерживается ядром системы" >&2
+    exit 1
+fi
+
+echo "=== Установка CGroup V2 ==="
+# Проверка, что cgroup2 еще не смонтирован
+if mount | grep -q 'cgroup2 on'; then
+    echo "CGroup V2 уже смонтирован"
+else
+    echo "=== Монтирование CGroup V2 ==="
+    mount -t cgroup2 none /sys/fs/cgroup
+
+    # Проверка успешности монтирования
+    if [ $? -ne 0 ]; then
+        echo "ОШИБКА: Не удалось смонтировать CGroup V2" >&2
+        exit 1
+    fi
+fi
+
+echo "=== Настройка контроллеров ==="
+echo "+cpu +memory" > /sys/fs/cgroup/cgroup.subtree_control
+
+if [ $? -ne 0 ]; then
+    echo "ОШИБКА: Не удалось настроить контроллеры CGroup V2" >&2
+    exit 1
+fi
+
+echo "=== CGroup V2 успешно настроен ==="
 
 echo "=== Установка системы управления CGroup V2 ==="
 

@@ -26,6 +26,7 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskStatus,
     DiskType,
     DiskUpdate,
+    QemuDisk,
 )
 from agent.client.hypervisor.libvirt.models.msg import (
     CommandMessagesEnum,
@@ -537,8 +538,8 @@ class StorageManager(LibvirtClient):
         try:
             disk_path = f"{path}/{disk_name}.{disk_format.value}"
             if new_size_gb is not None:
-                current_size_bytes = self.get_disk_size(disk_path)
-                current_size_gb = round(current_size_bytes / (1024**3), 2)
+                current_size_bytes = self.get_qemu_disk_info(disk_path)
+                current_size_gb = round(current_size_bytes.actual_size / (1024**3), 2)
                 if new_size_gb > current_size_gb:
                     self.logger.info(f"Увеличение размера до {new_size_gb}GB")
                     cmd = ["qemu-img", "resize", disk_path, f"{new_size_gb}G"]
@@ -1192,27 +1193,18 @@ class StorageManager(LibvirtClient):
         else:
             raise ValueError(f"Неизвестный тип размера: {size_type}")
 
-    def get_disk_virtual_size(
-        self, disk_path: str
-    ) -> int:  # Возвращает размер в байтах
-        cmd = ["qemu-img", "info", disk_path]
+    def get_qemu_disk_info(self, disk_path: str) -> QemuDisk:
+        cmd = ["qemu-img", "info", "--output=json", disk_path]
         result = self.cli.execute(cmd, return_proc=True)
 
         if result.returncode != 0:
             raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
-        size_type = result.stdout.split("\n")[2].split(":")[1].split(" ")[2]
-        size_data = float(result.stdout.split("\n")[2].split(":")[1].split(" ")[1])
-        return self.convert_to_bytes_simple(size_data, size_type)
+        qemu_disk = QemuDisk(**orjson.loads(result.stdout))
+        self.logger.info(
+            f"Disk: '{qemu_disk.filename}', virtual-size: '{qemu_disk.virtual_size}', actual-size: '{qemu_disk.actual_size}'"
+        )
 
-    def get_disk_size(self, path: str) -> int:  # Возвращает размер в байтах
-        cmd = ["qemu-img", "info", path]
-        result = self.cli.execute(cmd, return_proc=True)
-
-        if result.returncode != 0:
-            raise Exception(f"Ошибка qemu-img при чтении диска: {result.stderr}")
-        size_type = result.stdout.split("\n")[3].split(":")[1].split(" ")[2]
-        size_data = float(result.stdout.split("\n")[3].split(":")[1].split(" ")[1])
-        return self.convert_to_bytes_simple(size_data, size_type)
+        return qemu_disk
 
     def _get_file_disk_info(self, disk_path: str) -> Disk | str:
         try:
@@ -1233,7 +1225,9 @@ class StorageManager(LibvirtClient):
             elif disk_path.endswith(".vhd") or disk_path.endswith(".vhdx"):
                 disk_format = DiskFormat.VHDX
 
-            size_bytes = self.get_disk_size(disk_path) if file_path_exists else 0
+            qemu_disk_info = (
+                self.get_qemu_disk_info(disk_path) if file_path_exists else 0
+            )
             disk_name = os.path.basename(disk_path).split(".").pop(0)
             disk_dir = os.path.dirname(disk_path)
 
@@ -1260,8 +1254,8 @@ class StorageManager(LibvirtClient):
                 file_path_exists=file_path_exists,
                 type=disk_type,
                 format=disk_format,
-                capacity_bytes=size_bytes,
-                allocation_bytes=size_bytes,
+                capacity_bytes=qemu_disk_info.actual_size,
+                allocation_bytes=qemu_disk_info.actual_size,
                 status=status,
                 vm_name=vm_name,
                 readonly=readonly,
@@ -1448,7 +1442,9 @@ class StorageManager(LibvirtClient):
                 disk_format = self.libvirt_config.disk_format_by_path(disk_path)
 
             size_bytes = (
-                self.get_disk_size(disk_path) if Path(disk_path).exists() else 0
+                self.get_qemu_disk_info(disk_path).actual_size
+                if Path(disk_path).exists()
+                else 0
             )
 
             bus_type = None
@@ -1551,6 +1547,7 @@ if __name__ == "__main__":
     # """
     #
     with StorageManager() as manager:
+        print(manager.get_qemu_disk_info("/eskvisor/storages/disk-test-81278.qcow2"))
         #     # Создание диска в пуле
         #     # disk_create = DiskCreate(
         #     #     name="test_disk",

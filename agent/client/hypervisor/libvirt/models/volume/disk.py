@@ -144,6 +144,37 @@ class DiskType(Enum):
     EXTERNAL_DISK = "external_disk"  # Внешний диск
 
 
+class QemuDiskFormatSpecificData(BaseModel):
+    compat: str
+    compression_type: str = Field(alias="compression-type")
+    lazy_refcounts: bool = Field(alias="lazy-refcounts")
+    refcount_bits: int = Field(alias="refcount-bits")
+    corrupt: bool
+    extended_l2: bool = Field(alias="extended-l2")
+
+
+class QemuDiskFormatSpecific(BaseModel):
+    type: str
+    data: QemuDiskFormatSpecificData
+
+
+class QemuDisk(BaseModel):
+    virtual_size: int = Field(
+        alias="virtual-size",
+        description="Это размер, который видит гостевая ОС внутри ВМ",
+    )
+    actual_size: int = Field(
+        alias="actual-size",
+        description="Это размер файла на хосте (включая метаданные QCOW2), actual-size может превышать virtual-size",
+    )
+    filename: str
+    format: str
+    cluster_size: int | None = Field(default=None, alias="cluster-size")
+    format_specific: QemuDiskFormatSpecific | None = Field(
+        default=None, alias="format-specific"
+    )
+
+
 class Disk(BaseModel):
     name: str
     path: str

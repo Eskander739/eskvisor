@@ -3,7 +3,6 @@ import subprocess
 import time
 from datetime import datetime
 from collections import deque
-import signal
 import sys
 
 from agent.client.hypervisor.libvirt.models.vm_stats.stats import (
@@ -17,10 +16,10 @@ from agent.client.logger_config import DefaultLogger
 
 
 class VMLiveMonitor:
-    def __init__(self, vm_name: str, interval_seconds=2):
+    def __init__(self, virtual_machine: str, interval_seconds=2):
         self.logger = DefaultLogger("VMLiveMonitor")
         self.connection_uri = os.environ.get("CONNECTION_URI")
-        self.vm_name = vm_name  # можно передавать и UUID ВМ
+        self.vm_name = virtual_machine  # можно передавать и UUID ВМ
         self.interval = interval_seconds
         self.running = True
         self.history_size = 60  # Храним 60 последних измерений
@@ -37,7 +36,6 @@ class VMLiveMonitor:
 
         for line in output.strip().split("\n"):
             if "=" in line:
-                # Убираем префикс 'Domain: ' если есть
                 line = line.replace("Domain: '{}' ".format(self.vm_name), "")
 
                 key, value = line.split("=", 1)
@@ -63,10 +61,10 @@ class VMLiveMonitor:
             )
             return self.parse_virsh_output(result.stdout)
         except subprocess.CalledProcessError as e:
-            print(f"Error getting stats: {e.stderr}")
+            self.logger.info(f"Error getting stats: {e.stderr}")
             return None
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            self.logger.info(f"Unexpected error: {e}")
             return None
 
     def calculate_cpu_usage(self, stats):
@@ -107,7 +105,8 @@ class VMLiveMonitor:
 
         return min(cpu_percent, 100.0)
 
-    def calculate_memory_usage(self, stats):
+    @staticmethod
+    def calculate_memory_usage(stats):
         """Расчет использования памяти"""
         if not stats:
             return {}
@@ -139,9 +138,9 @@ class VMLiveMonitor:
 
     def monitor_loop(self):
         """Основной цикл мониторинга"""
-        print(f"Starting live monitoring of VM: {self.vm_name}")
-        print(f"Interval: {self.interval} seconds")
-        print("-" * 80)
+        self.logger.info(f"Starting live monitoring of VM: {self.vm_name}")
+        self.logger.info(f"Interval: {self.interval} seconds")
+        self.logger.info("-" * 80)
 
         header_printed = False
 
@@ -174,10 +173,10 @@ class VMLiveMonitor:
 
                 # Вывод текущих значений
                 if not header_printed:
-                    print(
+                    self.logger.info(
                         f"{'Time':<20} {'CPU %':<10} {'RAM Used':<12} {'RAM RSS':<12} {'RAM %':<8} {'vCPU':<8}"
                     )
-                    print("-" * 80)
+                    self.logger.info("-" * 80)
                     header_printed = True
 
                 current_time = timestamp.strftime("%H:%M:%S")
@@ -189,7 +188,7 @@ class VMLiveMonitor:
                     f"{stats.get('vcpu.current', 0)}/{stats.get('vcpu.maximum', 0)}"
                 )
 
-                print(
+                self.logger.info(
                     f"{current_time:<20} {cpu_str:<10} {ram_used_str:<12} {ram_rss_str:<12} {ram_percent_str:<8} {vcpu_str:<8}"
                 )
 
@@ -199,7 +198,7 @@ class VMLiveMonitor:
                 self.stop()
                 break
             except Exception as e:
-                print(f"Error in monitor loop: {e}")
+                self.logger.info(f"Error in monitor loop: {e}")
                 time.sleep(self.interval)
 
     def stop(self):
@@ -284,18 +283,18 @@ class VMLiveMonitor:
         # Расчет памяти по последнему измерению
         memory_usage = self.calculate_memory_usage(stats2)
 
-        data = CpuAndRamUsage(
+        cpu_and_ram = CpuAndRamUsage(
             memory=memory_usage.rss_mb,
             cpu_core_count=stats2.get("vcpu.current", 1),
             cpu_usage_percent=cpu_percent,
         )
 
         self.logger.info(
-            f"Статистика: RAM={data.memory:.3f}MB, "
-            f"CPU Cores={data.cpu_core_count}, "
-            f"CPU Usage={data.cpu_usage_percent:.3f}%"
+            f"Статистика: RAM={cpu_and_ram.memory:.3f}MB, "
+            f"CPU Cores={cpu_and_ram.cpu_core_count}, "
+            f"CPU Usage={cpu_and_ram.cpu_usage_percent:.3f}%"
         )
-        return data
+        return cpu_and_ram
 
     def _calculate_cpu_usage_between(self, stats1, stats2):
         """Расчет CPU % между двумя измерениями"""
@@ -314,17 +313,9 @@ class VMLiveMonitor:
         return min((time_diff_ns / max_possible_ns) * 100, 100.0)
 
 
-def signal_handler(sig, frame):
-    print("\nStopping monitor...")
-    sys.exit(0)
-
-
 if __name__ == "__main__":
     vm_name = "VM-TEST-32314"
     interval = int(sys.argv[2]) if len(sys.argv) > 2 else 2
-
-    # Обработка Ctrl+C
-    signal.signal(signal.SIGINT, signal_handler)
 
     # Запуск мониторинга
     monitor = VMLiveMonitor("ESKA-VM-TEST", interval)

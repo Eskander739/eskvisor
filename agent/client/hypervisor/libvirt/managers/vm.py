@@ -1956,10 +1956,12 @@ class VmManager(LibvirtClient):
     def get_vm_state_by_name(self, name: str, display_logs: bool = False) -> int | bool:
         """Получение состояния ВМ по имени"""
         try:
-            virtual_machine = self.conn.lookupByName(name)
+            domain = self.conn.lookupByName(name)
             if display_logs:
                 self.logger.info(f"Поиск ВМ {name}")
-            return self.get_vm_info(virtual_machine, display_logs).state.value
+            info = domain.info()
+            state = VMState(info[0])
+            return state.value
         except self.libvirtError:
             if display_logs:
                 self.logger.info(f"ВМ {name} не найдена")
@@ -1968,11 +1970,11 @@ class VmManager(LibvirtClient):
     def get_vm_by_name(self, name: str) -> VmMessage:
         """Получение ВМ по имени"""
         try:
-            virtual_machine = self.conn.lookupByName(name)
+            domain = self.conn.lookupByName(name)
             self.logger.info(f"Поиск ВМ {name}")
             return VmMessage(
                 code=CommandMessagesEnum.vm_successfully_found.name,
-                vm_info=self.get_vm_info(virtual_machine),
+                vm_info=self.get_vm_info(domain),
                 success=True,
             )
         except self.libvirtError as e:
@@ -2199,9 +2201,6 @@ class VmManager(LibvirtClient):
         except self.libvirtError as e:
             self.logger.error(f"Ошибка удаления ВМ {name}, \nerr: {e}")
 
-            if "nvram" in str(e).lower():
-                return self._delete_vm_with_nvram_fallback(name, delete_disks)
-
             return VmMessage(
                 code=CommandMessagesEnum.vm_delete_error.name,
                 success=False,
@@ -2243,74 +2242,6 @@ class VmManager(LibvirtClient):
 
         return disk_paths
 
-    def _delete_vm_with_nvram_fallback(
-        self, name: str, delete_disks: bool = False
-    ) -> VmMessage:
-        """
-        Альтернативный метод удаления ВМ с NVRAM
-
-        Args:
-            name: Имя ВМ
-            delete_disks: Удалять ли диски
-
-        Returns:
-            Успех операции
-        """
-        try:
-            command = f"virsh undefine --nvram {name}"
-            result = subprocess.run(command, shell=True, capture_output=True, text=True)
-
-            if result.returncode == 0:
-                self.logger.info(f"ВМ {name} удалена через virsh undefine --nvram")
-
-                nvram_pattern = f"/var/lib/libvirt/qemu/nvram/{name}_*"
-                import glob
-
-                nvram_files = glob.glob(nvram_pattern)
-                for nvram_file in nvram_files:
-                    try:
-                        os.remove(nvram_file)
-                        self.logger.info(f"Удален файл NVRAM: {nvram_file}")
-                    except OSError:
-                        pass
-
-                return VmMessage(
-                    code=CommandMessagesEnum.vm_successfully_deleted.name,
-                    success=True,
-                )
-            else:
-                command = f"virsh undefine --remove-all-storage {name}"
-                result = subprocess.run(
-                    command, shell=True, capture_output=True, text=True
-                )
-
-                if result.returncode == 0:
-                    self.logger.info(
-                        f"ВМ {name} удалена через virsh undefine --remove-all-storage"
-                    )
-                    return VmMessage(
-                        code=CommandMessagesEnum.vm_successfully_deleted.name,
-                        success=True,
-                    )
-                else:
-                    self.logger.error(
-                        f"Не удалось удалить ВМ {name} даже через virsh: {result.stderr}"
-                    )
-                    return VmMessage(
-                        code=CommandMessagesEnum.vm_delete_error.name,
-                        success=False,
-                    )
-
-        except Exception as e:
-            self.logger.error(
-                f"Ошибка в альтернативном методе удаления ВМ {name}, \nerr: {e}"
-            )
-            return VmMessage(
-                code=CommandMessagesEnum.vm_delete_error.name,
-                success=False,
-                note=str(e),
-            )
-
     def delete_vm_with_force(self, name: str, delete_disks: bool = True):
         """
         Вспомогательная функция для принудительного удаления ВМ,
@@ -2332,22 +2263,19 @@ class VmManager(LibvirtClient):
                 delete_disks=delete_disks,
                 delete_nvram=False,
             ),
-            lambda: self._delete_vm_with_nvram_fallback(
-                name, delete_disks=delete_disks
-            ),
         ]
 
         for i, method in enumerate(methods, 1):
-            print(f"Попытка {i} удаления ВМ {name}...")
+            self.logger.info(f"Попытка {i} удаления ВМ {name}...")
             result = method()
             if result.success:
-                print(f"ВМ {name} успешно удалена")
+                self.logger.info(f"ВМ {name} успешно удалена")
                 return VmMessage(
                     code=CommandMessagesEnum.vm_successfully_deleted.name,
                     success=True,
                 )
 
-        print(f"Не удалось удалить ВМ {name}")
+        self.logger.info(f"Не удалось удалить ВМ {name}")
         return VmMessage(
             code=CommandMessagesEnum.vm_delete_error.name,
             success=False,

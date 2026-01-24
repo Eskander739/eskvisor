@@ -41,10 +41,9 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         )
         vm_disk = vm_disk.disk_info
         disk_path = f"{vm_disk.path}/{disk_create.name}.{disk_format.value}"
-        before_change_disk_virtual_size = storage_session.get_disk_virtual_size(
-            disk_path=disk_path
-        )
-        assert bytes_to_gb(before_change_disk_virtual_size) == disk_create.size_gb
+        before_qemu_disk_info = storage_session.get_qemu_disk_info(disk_path)
+
+        assert bytes_to_gb(before_qemu_disk_info.virtual_size) == disk_create.size_gb
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.name == disk_create.name
@@ -66,12 +65,14 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         disk_path = f"{vm_disk.path}/{disk_create.name}.{disk_format.value}"
         assert vm_disk.path == disk_create.path
 
-        after_change_disk_virtual_size = storage_session.get_disk_virtual_size(
-            disk_path=disk_path
-        )
-        assert bytes_to_gb(after_change_disk_virtual_size) == edit_disk.new_size_gb
+        after_qemu_disk_info = storage_session.get_qemu_disk_info(disk_path)
+
+        assert bytes_to_gb(after_qemu_disk_info.virtual_size) == edit_disk.new_size_gb
         assert (
-            round(after_change_disk_virtual_size / before_change_disk_virtual_size, 2)
+            round(
+                after_qemu_disk_info.virtual_size / before_qemu_disk_info.virtual_size,
+                2,
+            )
             == 2.5
         )
 
