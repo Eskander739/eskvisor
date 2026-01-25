@@ -1,6 +1,6 @@
 from enum import StrEnum
 from typing import Any
-from pydantic import BaseModel, Field, EmailStr, ConfigDict, validator
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 from permissions import Permission, RolePermissions
@@ -154,7 +154,7 @@ class UserCreate(BaseModel):
     role: UserRole = UserRole.VIEWER
     group_ids: list[UUID] = Field(default_factory=list)
 
-    @validator('password')
+    @field_validator("password")
     def validate_password(cls, v):
         if not any(c.isupper() for c in v):
             raise ValueError('Password must contain at least one uppercase letter')
