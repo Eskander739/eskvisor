@@ -148,6 +148,7 @@ class CommandMessagesEnum(Enum):
     rp_virtual_config_edit_success = "Virtual resource pool config successfully edited"
     rp_virtual_config_successfully_founded = "Virtual resource pool config successfully founded"
     rp_virtual_edit_error = "Virtual resource pool edit error"
+    file_in_use_by_another_process = "File in use by another process"
     rp_virtual_config_edit_error = "Virtual resource pool config edit error"
     rp_virtual_config_sync_error = "Virtual resource pool config sync error"
     rp_virtual_config_sync_success = "Virtual resource pool config sync successfully"

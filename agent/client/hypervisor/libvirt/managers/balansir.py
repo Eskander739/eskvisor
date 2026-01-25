@@ -1,3 +1,4 @@
+import fcntl
 import os
 from pathlib import Path
 
@@ -124,12 +125,21 @@ class Balansir(LibvirtClient):
                             self.logger.info(f"ВМ '{vm_name}' уже добавлен в пул '{rp_name}'")
 
             with open(self.resource_pool_connected_vms, "w") as write_config:
+                fcntl.flock(write_config.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 write_config.write(current_config.model_dump_json())
 
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_edit_success.name,
                 success=True,
             )
+
+        except BlockingIOError as e:
+            return RpMessage(
+                code=CommandMessagesEnum.file_in_use_by_another_process.name,
+                success=False,
+                note=str(e)
+            )
+
         except Exception as e:
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
@@ -157,19 +167,27 @@ class Balansir(LibvirtClient):
                 )
 
             with open(self.resource_pool_connected_vms, "w") as write_config:
+                fcntl.flock(write_config.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 write_config.write(current_config.model_dump_json())
 
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_success.name,
                 success=True,
             )
+
+        except BlockingIOError as e:
+            return RpMessage(
+                code=CommandMessagesEnum.file_in_use_by_another_process.name,
+                success=False,
+                note=str(e)
+            )
+
         except Exception as e:
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
                 success=False,
                 note=str(e)
             )
-
 
     def delete_vm_from_rp_config(self, rp_name: str, vm_name: str):
         try:
@@ -191,12 +209,21 @@ class Balansir(LibvirtClient):
                 )
 
             with open(self.resource_pool_connected_vms, "w") as write_config:
+                fcntl.flock(write_config.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 write_config.write(current_config.model_dump_json())
 
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_success.name,
                 success=True,
             )
+
+        except BlockingIOError as e:
+            return RpMessage(
+                code=CommandMessagesEnum.file_in_use_by_another_process.name,
+                success=False,
+                note=str(e)
+            )
+
         except Exception as e:
             return RpMessage(
                 code=CommandMessagesEnum.vm_delete_error_from_rp_config.name,
