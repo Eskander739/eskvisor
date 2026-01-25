@@ -1104,7 +1104,7 @@ class VmManager(LibvirtClient):
             # Отключаем диск через StorageManager
             result = self.storage_manager.detach_disk(disk_detach)
 
-            if result:
+            if result.code == CommandMessagesEnum.disk_successfully_detached.name:
                 return VmMessage(
                     success=True,
                     code="ISO_DETACH_SUCCESS",
@@ -2398,9 +2398,11 @@ class VmManager(LibvirtClient):
                             new_path = str(
                                 Path(path) / f"{new_name}.{disk_format.value}"
                             )
-                            self.storage_manager.clone_disk(
+                            clone_disk_info = self.storage_manager.clone_disk(
                                 disk_name, path, disk_format, new_name
                             )
+                            if clone_disk_info.code == CommandMessagesEnum.disk_clone_error.name:
+                                return clone_disk_info
                         source_elem.set("file", new_path)
 
             # Применяем изменения

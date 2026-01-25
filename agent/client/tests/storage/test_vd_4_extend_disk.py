@@ -1,5 +1,4 @@
 import random
-
 import pytest
 
 from agent.client.hypervisor.libvirt.models.volume.disk import (
@@ -52,12 +51,13 @@ def test_vd_04_extend_disk(storage_session, disk_format):
         assert vm_disk.path == disk_create.path
 
         # ____________________________________Редактирование диска________________
-        storage_session.extend_disk(
+        disk_extend_info = storage_session.extend_disk(
             new_size_gb=edit_disk.new_size_gb,
             path=vm_disk.path,
             disk_name=disk_create.name,
             disk_format=disk_format,
         )
+        assert disk_extend_info.code == CommandMessagesEnum.disk_successfully_extended.name, disk_extend_info.note
         vm_disk = storage_session.get_disk_info(
             disk_name=disk_create.name, disk_format=disk_format
         )

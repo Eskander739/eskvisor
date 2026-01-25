@@ -97,9 +97,10 @@ def test_vd_10_concurrent_attachment(storage_session, multi_create_stopped_vm):
 
         # ____________________________________Отключение диска____________________
 
-        storage_session.detach_disk(
+        detach_disk_info = storage_session.detach_disk(
             DiskDetach(vm_name=vm_name_to_detach, target_dev=target_dev_to_detach)
         )
+        assert detach_disk_info.code == CommandMessagesEnum.disk_successfully_detached.name
 
         vm_disk = storage_session.get_disk_info(
             disk_name=disk_create.name, disk_format=disk_create.format

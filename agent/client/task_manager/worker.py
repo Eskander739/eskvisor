@@ -304,7 +304,6 @@ class TaskHandler:
     ) -> Disk | bool | None | list[Disk] | StorageMessage:
         """Обработка задач хранилища"""
 
-        # TODO: Перевести ответы на StorageMessage
         if action == "create_disk":
             # Создание диска
             disk_create = DiskCreate(**payload)
@@ -314,7 +313,7 @@ class TaskHandler:
         elif action == "delete_disk":
             # Удаление диска
             disk_path = payload.get("disk_path")
-            success = self.storage_manager.delete_disk(disk_path)
+            success = self.storage_manager.delete_disk_with_msg(disk_path)
             return success
 
         elif action == "attach_disk":

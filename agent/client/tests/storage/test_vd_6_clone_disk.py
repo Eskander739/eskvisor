@@ -58,12 +58,13 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
             assert 0 < round(vm_disk_start.capacity_bytes / (1024**3), 10) < 0.1
 
         # ____________________________________Клонирование диска диска____________
-        storage_session.clone_disk(
+        clone_disk_info = storage_session.clone_disk(
             disk_name=disk_create.name,
             path=vm_disk_start.path,
             disk_format=vm_disk_start.format,
             target_name=cloned_disk_name,
         )
+        assert clone_disk_info.code == CommandMessagesEnum.disk_successfully_cloned.name
         vm_disk = storage_session.get_disk_info(
             disk_name=cloned_disk_name, disk_format=disk_create.format
         )
