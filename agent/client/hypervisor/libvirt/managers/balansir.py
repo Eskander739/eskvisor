@@ -1,6 +1,5 @@
-import datetime
 import os
-
+from pathlib import Path
 
 from agent.client.constants import INVALID_LINUX_CHAR
 from agent.client.hypervisor.libvirt.client import LibvirtClient
@@ -21,12 +20,12 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
     ResourcePoolVirtual,
     ResourcePoolVirtualEdit,
-    ResourceReservationVM,
+    ResourceReservationVM, ResourcePoolConnectedVMS, ResourcePoolVMS,
 )
 from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,
 )
-from agent.client.hypervisor.libvirt.models.general import StoragePoolType
+from agent.client.hypervisor.libvirt.models.general import StoragePoolType, VMState
 from agent.client.logger_config import DefaultLogger
 
 
@@ -35,8 +34,9 @@ class Balansir(LibvirtClient):
         super().__init__()
         self.logger = DefaultLogger("Балансиръ")
         self.logger.info("Инициализация виртуального менеджера ресурс пулов")
+        self.resource_pool_connected_vms = os.environ.get("RESOURCE_POOL_CONNECTED_VMS")
+        self.exists_rp_config()
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
-        self.virtual_rp_manager_path = os.environ.get("RP_VIRTUAL_MANAGER_PATH")
         self.node_info = None
         self.physical_volume_manager = PhysicalVolumeManager()
         self.volume_group_manager = VolumeGroupManager()
@@ -66,6 +66,254 @@ class Balansir(LibvirtClient):
         self.node_info = self.get_node_info()
 
         return self
+
+    def exists_rp_config(self):
+        rp_config_path = Path(self.resource_pool_connected_vms)
+        if not rp_config_path.exists():
+            rp_config_path.parent.mkdir(exist_ok=True, parents=True)
+            rp_config_path.touch(exist_ok=True)
+            with open(str(self.resource_pool_connected_vms), "w") as create_config:
+                create_config.write(ResourcePoolConnectedVMS().model_dump_json())
+
+    def get_rp_list_from_config(self) -> RpMessage | ResourcePoolConnectedVMS:
+        try:
+            with open(self.resource_pool_connected_vms, "r") as read_config:
+                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_successfully_found.name,
+                rp_info=current_config,
+                success=True,
+            )
+        except Exception as e:
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_not_found.name,
+                success=False,
+                note=str(e)
+            )
+
+    def get_rp_from_config(self, rp_name: str) -> RpMessage | ResourcePoolVMS:
+        with open(self.resource_pool_connected_vms, "r") as read_config:
+            current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+
+        for current_rp in current_config.resource_pools:
+            if current_rp.name == rp_name:
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_config_successfully_founded.name,
+                    rp_info=current_rp,
+                    success=True,
+                )
+        else:
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_not_found.name,
+                success=False,
+            )
+
+    def add_vms_to_rp_config(self, rp_name: str, vms: list[str]):
+        try:
+            with open(self.resource_pool_connected_vms, "r") as read_config:
+                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+
+            for current_rp in current_config.resource_pools:
+                if current_rp.name == rp_name:
+                    for vm_name in vms:
+                        if vm_name not in current_rp.connected_vms:
+                            current_rp.connected_vms.append(vm_name)
+                            self.logger.info(f"ВМ '{vm_name}' успешно добавлен в пул '{rp_name}'")
+                        else:
+                            self.logger.info(f"ВМ '{vm_name}' уже добавлен в пул '{rp_name}'")
+
+            with open(self.resource_pool_connected_vms, "w") as write_config:
+                write_config.write(current_config.model_dump_json())
+
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_edit_success.name,
+                success=True,
+            )
+        except Exception as e:
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
+                success=False,
+                note=str(e)
+            )
+
+    def add_vm_to_rp_config(self, rp_name: str, vm_name: str) -> RpMessage:
+        try:
+            with open(self.resource_pool_connected_vms, "r") as read_config:
+                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+
+            for current_rp in current_config.resource_pools:
+                if current_rp.name == rp_name:
+                    if vm_name not in current_rp.connected_vms:
+                        current_rp.connected_vms.append(vm_name)
+                        self.logger.info(f"ВМ '{vm_name}' успешно добавлен в пул '{rp_name}'")
+                    else:
+                        self.logger.info(f"ВМ '{vm_name}' уже добавлен в пул '{rp_name}'")
+                    break
+            else:
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_not_found.name,
+                    success=False,
+                )
+
+            with open(self.resource_pool_connected_vms, "w") as write_config:
+                write_config.write(current_config.model_dump_json())
+
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_edit_success.name,
+                success=True,
+            )
+        except Exception as e:
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
+                success=False,
+                note=str(e)
+            )
+
+
+    def delete_vm_from_rp_config(self, rp_name: str, vm_name: str):
+        try:
+            with open(self.resource_pool_connected_vms, "r") as read_config:
+                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+
+            for current_rp in current_config.resource_pools:
+                if current_rp.name == rp_name:
+                    if vm_name in current_rp.connected_vms:
+                        current_rp.connected_vms.remove(vm_name)
+                        self.logger.info(f"ВМ '{vm_name}' успешно удален из пула '{rp_name}'")
+                    else:
+                        self.logger.info(f"ВМ '{vm_name}' отсутствует в пуле '{rp_name}'")
+                    break
+            else:
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_not_found.name,
+                    success=False,
+                )
+
+            with open(self.resource_pool_connected_vms, "w") as write_config:
+                write_config.write(current_config.model_dump_json())
+
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_edit_success.name,
+                success=True,
+            )
+        except Exception as e:
+            return RpMessage(
+                code=CommandMessagesEnum.vm_delete_error_from_rp_config.name,
+                success=False,
+                note=str(e)
+            )
+
+
+    def sync_rps_config_vms(self):
+        """
+        В ресурс пул cgroup v2 можно добавить только запущенную ВМ,
+        синхронизация требуется для автоматического добавления ВМ в пул если ВМ была перезагружена, выключена и затем включена
+        поскольку если ВМ выключается, пропадает ее процесс PID, а привязка ВМ к пулу cgroup v2 идет по PID, который
+        после перезагрузки, выключения/включения меняется
+        """
+        pools_config = {}
+        try:
+            rp_config = self.get_rp_list_from_config()
+            if rp_config.code == CommandMessagesEnum.rp_virtual_successfully_found.name:
+                self.logger.info("Найдены ресурс пулы")
+                rp_config = rp_config.rp_info
+                for current_rp in rp_config.resource_pools:
+                    pools_config[current_rp.name] = current_rp
+                self.logger.info("Чтение ресурс пулов успешно")
+
+                for current_rp_name in self.pycgroup.get_cgroup_pool_names:
+                    pycgroup_pool = self.pycgroup.get_cgroup_pool(current_rp_name)
+                    pool_config: ResourcePoolVMS = pools_config.get(current_rp_name)
+                    if pool_config:
+                        for current_vm_name in pool_config.connected_vms:
+                            if self.vm_manager.get_vm_state_by_name(current_vm_name) in (VMState.PAUSED.value,
+                                                                                         VMState.RUNNING.value):
+                                vm_pid = self.pycgroup.pid_ctl.vm_pid(current_vm_name)
+                                pids = pycgroup_pool.get("pids")
+                                if pids is None or vm_pid not in pycgroup_pool.get("pids"):
+                                    add_pid_result = self.pycgroup.add_pid_to_pool(current_rp_name, vm_pid)
+                                    if str(vm_pid) not in add_pid_result:
+                                        self.logger.warning(
+                                            f"Не удалось добавить ВМ '{current_vm_name}' в ресурс пул '{current_rp_name}'")
+                        vm_names = self.pycgroup.pid_ctl.get_vm_names_resource_pool(current_rp_name)
+                        if vm_names is not None:
+                            for current_vm in vm_names:
+                                if current_vm not in pool_config.connected_vms:
+                                    self.pycgroup.delete_vm_from_pool(current_rp_name, current_vm)
+
+            self.logger.info(f"Конфигурация ресурс пулов завершена")
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_sync_success.name,
+                success=True,
+            )
+        except Exception as e:
+            self.logger.info(f"Ошибка синхронизации ресурс пулов: '{str(e)}'")
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_sync_error.name,
+                success=False,
+                note=str(e)
+            )
+
+    def add_rp_to_config(self, rp_name: str, vms: list[str] | None = None) -> RpMessage:
+        try:
+            rp_config = self.get_rp_list_from_config()
+            if rp_config.code == CommandMessagesEnum.rp_virtual_successfully_found.name:
+                rp_config = rp_config.rp_info
+                rp_config.resource_pools.append(
+                    ResourcePoolVMS(name=rp_name, connected_vms=vms if vms is not None else []))
+                with open(self.resource_pool_connected_vms, "w") as write_config:
+                    write_config.write(rp_config.model_dump_json())
+
+                self.logger.info(f"Ресурс пул '{rp_name}' успешно добавлен в конфиг")
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_config_edit_success.name,
+                    success=True,
+                )
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_not_found.name,
+                success=False,
+            )
+        except Exception as e:
+            self.logger.info(f"Ошибка добавления ресурс пула '{rp_name}' в конфиг: '{str(e)}'")
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
+                success=False,
+                note=str(e)
+            )
+
+    def delete_rp_from_config(self, rp_name: str) -> RpMessage:
+        try:
+            rp_config = self.get_rp_list_from_config()
+            if rp_config.code == CommandMessagesEnum.rp_virtual_successfully_found:
+                rp_config = rp_config.rp_info
+                for current_rp in rp_config.resource_pools:
+                    if current_rp.name == rp_name:
+                        rp_for_delete = current_rp
+                        break
+                else:
+                    return RpMessage(
+                        code=CommandMessagesEnum.rp_virtual_not_found.name,
+                        success=False,
+                    )
+                rp_config.resource_pools.remove(rp_for_delete)
+                with open(self.resource_pool_connected_vms, "w") as write_config:
+                    write_config.write(rp_config.model_dump_json())
+
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_config_edit_success.name,
+                    success=True,
+                )
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_not_found.name,
+                success=False,
+            )
+        except Exception as e:
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
+                success=False,
+                note=str(e)
+            )
 
     @staticmethod
     def validate_name(vm_name: str):
@@ -348,6 +596,7 @@ class Balansir(LibvirtClient):
                     return validate_vm_reservation_list
 
             self.pycgroup.add_vms_to_pool(rp_name, vms)
+            self.add_vms_to_rp_config(rp_name, vms)
             self.logger.info(f"Конфигурация ВМ для пула '{rp_name}' успешно применена")
             return True
 
@@ -358,21 +607,29 @@ class Balansir(LibvirtClient):
                 note=str(e),
             )
 
-    def delete_vm_from_virtual_resource_pool(self, name: str, vn_name: str):
-        self.logger.info("Старт удаления ВМ из ресурс пула")
+    def delete_vm_from_virtual_resource_pool(self, name: str, vm_name: str):
+        try:
+            self.logger.info("Старт удаления ВМ из ресурс пула")
 
-        if not self.pycgroup.cgroup_pool_exists(name):
-            self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
+            if not self.pycgroup.cgroup_pool_exists(name):
+                self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_not_found.name,
+                    success=False,
+                )
+            self.pycgroup.delete_vm_from_pool(name, vm_name)
+            self.delete_vm_from_rp_config(name, vm_name)
+            self.logger.info(f"ВМ '{name}' из ресурс пула успешно удалена")
             return RpMessage(
-                code=CommandMessagesEnum.rp_virtual_not_found.name,
-                success=False,
+                code=CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name,
+                success=True,
             )
-        self.pycgroup.delete_vm_from_pool(name, vn_name)
-        self.logger.info(f"ВМ '{name}' из ресурс пула успешно удалена")
-        return RpMessage(
-            code=CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name,
-            success=True,
-        )
+        except Exception as e:
+            return RpMessage(
+                code=CommandMessagesEnum.vm_delete_error_from_virtual_resource_pool.name,
+                success=False,
+                note=str(e)
+            )
 
     @property
     def used_ram_and_cpu_by_resource_pools(self) -> tuple[int, int]:
@@ -488,15 +745,15 @@ class Balansir(LibvirtClient):
                 return create_ram_config
             self.logger.info("RAM конфигурация ресурс пула успешно установлена")
 
-            self.logger.warning(
-                f"Виртуальный ресурс пул '{create_rp.name}' успешно создан"
-            )
-
             self.configuration_vm(create_rp.name, create_rp.vms)
             self.logger.info(
                 f"ВМ конфигурация ресурс пула '{create_rp.cpu_core_limit}' успешно установлена"
             )
+            self.add_rp_to_config(create_rp.name, create_rp.vms)
 
+            self.logger.warning(
+                f"Виртуальный ресурс пул '{create_rp.name}' успешно создан"
+            )
             return RpMessage(
                 code=CommandMessagesEnum.virtual_rp_create_success.name,
                 success=True,
@@ -510,114 +767,123 @@ class Balansir(LibvirtClient):
             )
 
     def edit_virtual_resource_pool(self, edit_rp: ResourcePoolVirtualEdit) -> RpMessage:
+        # при редактировании ресурс пула работает только добавление через vms, удаление происходит отдельным методом
         self.logger.info(f"Редактирование виртуального ресурс пула: '{edit_rp.name}'")
+        try:
 
-        if edit_rp.ram_limit_gb is not None:
-            if isinstance(edit_rp.ram_limit_bytes, float):
-                raise ValueError("Байты не могут быть числом с плавающей точкой")
+            if edit_rp.ram_limit_gb is not None:
+                if isinstance(edit_rp.ram_limit_bytes, float):
+                    raise ValueError("Байты не могут быть числом с плавающей точкой")
 
-        # Проверка существования пула через cgroup
-        if not self.pycgroup.cgroup_pool_exists(edit_rp.name):
-            self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' не найден")
-            return RpMessage(
-                code=CommandMessagesEnum.rp_virtual_not_found.name,
-                success=False,
-            )
+            # Проверка существования пула через cgroup
+            if not self.pycgroup.cgroup_pool_exists(edit_rp.name):
+                self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' не найден")
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_not_found.name,
+                    success=False,
+                )
 
-        current_virtual_rp = self.get_virtual_resource_pool_by_name(edit_rp.name)
-        if not current_virtual_rp.success:
-            return current_virtual_rp
+            current_virtual_rp = self.get_virtual_resource_pool_by_name(edit_rp.name)
+            if not current_virtual_rp.success:
+                return current_virtual_rp
 
-        current_virtual_rp = current_virtual_rp.rp_info
-        if not self.validate_max_ram_and_max_cpu(
-            current_virtual_rp.ram_limit_bytes, current_virtual_rp.cpu_core_limit
-        ):
-            return RpMessage(
-                code=CommandMessagesEnum.rp_ram_or_cpu_more_than_on_node.name,
-                success=False,
-            )
-
-        if edit_rp.vms is not None:
-            if isinstance(edit_rp.vms, str):
-                edit_rp.vms = [edit_rp.vms]
-            for current_name in edit_rp.vms:
-                self.validate_name(current_name)
-            validate_vm_list_info = self.validate_vm_list(edit_rp)
-            if (
-                validate_vm_list_info.code
-                != CommandMessagesEnum.vm_list_is_correct.name
-            ):
-                return validate_vm_list_info
-            self.configuration_vm(
-                edit_rp.name,
-                edit_rp.vms,
-            )
-            self.logger.info(
-                f"ВМ конфигурация ресурс пула '{edit_rp.cpu_core_limit}' успешно изменена"
-            )
-
-        if edit_rp.storage_limit is not None:
-            self.logger.info(
-                f"Изменение STORAGE конфигурации ресурс пула: '{edit_rp.storage_limit}'"
-            )
-            edit_logic_volume = self.logic_volume_manager.edit_volume(
-                edit_rp.name,
-                self.system_volume_group_name,
-                edit_rp.storage_limit,
-                edit_rp.volume_size_type,
-            )
-            if (
-                f"Logical volume {self.system_volume_group_name}/{edit_rp.name} successfully resized"
-                not in edit_logic_volume
+            current_virtual_rp = current_virtual_rp.rp_info
+            if not self.validate_max_ram_and_max_cpu(
+                    current_virtual_rp.ram_limit_bytes, current_virtual_rp.cpu_core_limit
             ):
                 return RpMessage(
-                    code=CommandMessagesEnum.edit_logic_volume_error.name,
-                    success=True,
+                    code=CommandMessagesEnum.rp_ram_or_cpu_more_than_on_node.name,
+                    success=False,
                 )
-            create_cpu_config = self.configuration_storage(
-                edit_rp.name,
-                edit_rp.volume_size_type,
-                edit_rp.storage_limit,
-                storage_type=edit_rp.storage_type,
-            )
-            if create_cpu_config is not True:
-                return create_cpu_config
-            self.logger.info(
-                f"STORAGE конфигурация ресурс пула '{edit_rp.storage_limit}' успешно изменена"
-            )
 
-        if edit_rp.cpu_core_limit is not None:
-            self.logger.info(
-                f"Изменение CPU конфигурации ресурс пула: '{edit_rp.cpu_core_limit}'"
-            )
-            create_cpu_config = self.configuration_cpu(
-                edit_rp.name, edit_rp.cpu_core_limit, edit_rp.cpu_weight
-            )
-            if create_cpu_config is not True:
-                return create_cpu_config
-            self.logger.info(
-                f"CPU конфигурация ресурс пула '{edit_rp.cpu_core_limit}' успешно изменена"
-            )
+            if edit_rp.vms is not None:
+                if isinstance(edit_rp.vms, str):
+                    edit_rp.vms = [edit_rp.vms]
+                for current_name in edit_rp.vms:
+                    self.validate_name(current_name)
+                validate_vm_list_info = self.validate_vm_list(edit_rp)
+                if (
+                        validate_vm_list_info.code
+                        != CommandMessagesEnum.vm_list_is_correct.name
+                ):
+                    return validate_vm_list_info
+                self.configuration_vm(
+                    edit_rp.name,
+                    edit_rp.vms,
+                )
+                self.logger.info(
+                    f"ВМ конфигурация ресурс пула '{edit_rp.cpu_core_limit}' успешно изменена"
+                )
 
-        if edit_rp.ram_limit_bytes is not None:
-            self.logger.info(
-                f"Изменение RAM конфигурации ресурс пула: '{edit_rp.cpu_core_limit}'"
-            )
-            create_ram_config = self.configuration_ram(
-                edit_rp.name, edit_rp.ram_limit_bytes
-            )
-            if create_ram_config is not True:
-                return create_ram_config
-            self.logger.info(
-                f"RAM конфигурация ресурс пула '{edit_rp.ram_limit_bytes}' успешно изменена"
-            )
+            if edit_rp.storage_limit is not None:
+                self.logger.info(
+                    f"Изменение STORAGE конфигурации ресурс пула: '{edit_rp.storage_limit}'"
+                )
+                edit_logic_volume = self.logic_volume_manager.edit_volume(
+                    edit_rp.name,
+                    self.system_volume_group_name,
+                    edit_rp.storage_limit,
+                    edit_rp.volume_size_type,
+                )
+                if (
+                        f"Logical volume {self.system_volume_group_name}/{edit_rp.name} successfully resized"
+                        not in edit_logic_volume
+                ):
+                    return RpMessage(
+                        code=CommandMessagesEnum.edit_logic_volume_error.name,
+                        success=True,
+                    )
+                create_cpu_config = self.configuration_storage(
+                    edit_rp.name,
+                    edit_rp.volume_size_type,
+                    edit_rp.storage_limit,
+                    storage_type=edit_rp.storage_type,
+                )
+                if create_cpu_config is not True:
+                    return create_cpu_config
+                self.logger.info(
+                    f"STORAGE конфигурация ресурс пула '{edit_rp.storage_limit}' успешно изменена"
+                )
 
-        self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' успешно изменен")
+            if edit_rp.cpu_core_limit is not None:
+                self.logger.info(
+                    f"Изменение CPU конфигурации ресурс пула: '{edit_rp.cpu_core_limit}'"
+                )
+                create_cpu_config = self.configuration_cpu(
+                    edit_rp.name, edit_rp.cpu_core_limit, edit_rp.cpu_weight
+                )
+                if create_cpu_config is not True:
+                    return create_cpu_config
+                self.logger.info(
+                    f"CPU конфигурация ресурс пула '{edit_rp.cpu_core_limit}' успешно изменена"
+                )
 
-        return RpMessage(
-            code=CommandMessagesEnum.rp_virtual_edit_success.name,
-            success=True,
-        )
+            if edit_rp.ram_limit_bytes is not None:
+                self.logger.info(
+                    f"Изменение RAM конфигурации ресурс пула: '{edit_rp.cpu_core_limit}'"
+                )
+                create_ram_config = self.configuration_ram(
+                    edit_rp.name, edit_rp.ram_limit_bytes
+                )
+                if create_ram_config is not True:
+                    return create_ram_config
+                self.logger.info(
+                    f"RAM конфигурация ресурс пула '{edit_rp.ram_limit_bytes}' успешно изменена"
+                )
+
+            self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' успешно изменен")
+
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_edit_success.name,
+                success=True,
+            )
+        except Exception as e:
+            self.logger.warning(f"Ошибка редактирования виртуального ресурс пула: {e}")
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_edit_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def delete_virtual_resource_pool(self, name: str, force: bool = False):
         self.logger.info(f"Удаление ресурс пула: '{name}'")
@@ -666,6 +932,7 @@ class Balansir(LibvirtClient):
                 success=False,
                 note=str(e),
             )
+        self.delete_rp_from_config(name)
         self.logger.info(f"Виртуальный ресурс пул '{name}' удален")
         return RpMessage(
             code=CommandMessagesEnum.rp_virtual_delete_success.name,
@@ -674,63 +941,71 @@ class Balansir(LibvirtClient):
 
     def get_virtual_resource_pool_by_name(self, name: str) -> RpMessage:
         # Получение информации из cgroup
-        if not self.pycgroup.cgroup_pool_exists(name):
-            self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
+        try:
+            if not self.pycgroup.cgroup_pool_exists(name):
+                self.logger.warning(f"Виртуальный ресурс пул '{name}' не найден")
+                return RpMessage(
+                    code=CommandMessagesEnum.rp_virtual_not_found.name,
+                    success=False,
+                )
+            cgroup_info = self.pycgroup.get_cgroup_pool(name)
+            vms = self.pycgroup.pid_ctl.get_vm_names_resource_pool(cgroup_info.get("path"))
+            vm_reservation_list = None
+
+            storage_info = self.logic_volume_manager.get_volume_by_name(
+                name, self.system_volume_group_name
+            )
+            cpu = cgroup_info.get("cpu")
+            ram = cgroup_info.get("ram")
+            cpu_limit = -1 if isinstance(cpu[0], str) else cpu[0]
+            cpu_allocated = cpu[2]
+            cpu_available = -1 if isinstance(cpu[3], str) else cpu[3]
+            cpu_weight = cpu[4]
+
+            ram_limit = -1 if isinstance(ram[0], str) else ram[0]
+            ram_allocated = ram[2]
+            ram_available = -1 if isinstance(ram[1], str) else ram[1]
+            ram_reservation = ram[3]
+
+            if storage_info is not None:
+                storage_allocated = (
+                        storage_info.volume_size - storage_info.available_volume_size
+                )
+                available_volume_size = storage_info.available_volume_size
+            else:
+                storage_allocated = 0
+                available_volume_size = 0
+            current_rp_virtual = ResourcePoolVirtual(
+                name=name,
+                cpu_core_limit=cpu_limit,
+                cpu_core_allocated=cpu_allocated,
+                cpu_core_available=cpu_available,
+                cpu_weight=cpu_weight,
+                ram_limit_bytes=ram_limit,
+                ram_allocated=ram_allocated,
+                ram_available=ram_available,
+                ram_reservation_bytes=ram_reservation,
+                vms=list(vms) if vms else None,
+                vm_reservation_list=vm_reservation_list,
+                storage_type=StoragePoolType.LOGICAL,
+                storage_limit=0,
+                storage_allocated=storage_allocated,
+                storage_available=available_volume_size,
+                group_volume=self.system_volume_group_name,
+                logical_volume=name,
+            )
             return RpMessage(
-                code=CommandMessagesEnum.rp_virtual_not_found.name,
+                code=CommandMessagesEnum.rp_virtual_successfully_found.name,
+                success=True,
+                rp_info=current_rp_virtual,
+            )
+        except Exception as e:
+            self.logger.warning(f"Ошибка получения виртуального ресурс пула: {e}")
+            return RpMessage(
+                code=CommandMessagesEnum.rp_virtual_found_error.name,
                 success=False,
+                note=str(e),
             )
-        cgroup_info = self.pycgroup.get_cgroup_pool(name)
-        vms = self.pycgroup.pid_ctl.get_vm_names_resource_pool(cgroup_info.get("path"))
-        vm_reservation_list = None
-
-        storage_info = self.logic_volume_manager.get_volume_by_name(
-            name, self.system_volume_group_name
-        )
-        cpu = cgroup_info.get("cpu")
-        ram = cgroup_info.get("ram")
-        cpu_limit = -1 if isinstance(cpu[0], str) else cpu[0]
-        cpu_allocated = cpu[2]
-        cpu_available = -1 if isinstance(cpu[3], str) else cpu[3]
-        cpu_weight = cpu[4]
-
-        ram_limit = -1 if isinstance(ram[0], str) else ram[0]
-        ram_allocated = ram[2]
-        ram_available = -1 if isinstance(ram[1], str) else ram[1]
-        ram_reservation = ram[3]
-
-        if storage_info is not None:
-            storage_allocated = (
-                storage_info.volume_size - storage_info.available_volume_size
-            )
-            available_volume_size = storage_info.available_volume_size
-        else:
-            storage_allocated = 0
-            available_volume_size = 0
-        current_rp_virtual = ResourcePoolVirtual(
-            name=name,
-            cpu_core_limit=cpu_limit,
-            cpu_core_allocated=cpu_allocated,
-            cpu_core_available=cpu_available,
-            cpu_weight=cpu_weight,
-            ram_limit_bytes=ram_limit,
-            ram_allocated=ram_allocated,
-            ram_available=ram_available,
-            ram_reservation_bytes=ram_reservation,
-            vms=list(vms) if vms else None,
-            vm_reservation_list=vm_reservation_list,
-            storage_type=StoragePoolType.LOGICAL,
-            storage_limit=0,
-            storage_allocated=storage_allocated,
-            storage_available=available_volume_size,
-            group_volume=self.system_volume_group_name,
-            logical_volume=name,
-        )
-        return RpMessage(
-            code=CommandMessagesEnum.rp_virtual_successfully_found.name,
-            success=True,
-            rp_info=current_rp_virtual,
-        )
 
     def get_virtual_resource_pool_list(
         self,
@@ -783,8 +1058,14 @@ class Balansir(LibvirtClient):
 
 
 if __name__ == "__main__":
-    mng = Balansir()
-    a = datetime.datetime.now()
+    from dotenv import load_dotenv
+    load_dotenv()
+    with Balansir() as mng:
+        mng.delete_vm_from_rp_config("resource_pool_94456", "ESKA-VM-TEST")
+        mng.sync_rps_config_vms()
+        # mng.add_vm_to_rp_config("resource_pool_94456", "ESKA-VM-TEST")
+        # mng.add_rp_to_config("resource_pool_94456")
+        # mng.add_vm_to_rp_config("ESKA-VM-TEST")
     # print(a)
     # data = mng.create_virtual_resource_pool(
     #     create_rp=ResourcePoolVirtualCreate(
@@ -820,4 +1101,4 @@ if __name__ == "__main__":
     # b = datetime.datetime.now()
     # print(b)
     # print(b - a)
-    mng.delete_vm_from_virtual_resource_pool("resource_pool_678", "VM-TEST-83852")
+    # mng.delete_vm_from_virtual_resource_pool("resource_pool_678", "VM-TEST-83852")

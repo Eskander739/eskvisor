@@ -10,7 +10,7 @@ from agent.client.hypervisor.libvirt.models.msg import (
     NetworkMessage,
     SnapshotMessage,
     RpMessage,
-    VmMessage,
+    VmMessage, StorageMessage,
 )
 from agent.client.hypervisor.libvirt.models.network import (
     NetworkParameters,
@@ -29,7 +29,7 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskCreate,
     DiskAttach,
     DiskDetach,
-    Disk,
+    Disk, DiskQuery,
 )
 from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.models import (
@@ -137,39 +137,40 @@ class TaskHandler:
 
         elif action == "start":
             # Запуск ВМ
-            vm_name = params["vm_name"]
+            vm_name = params.get("vm_name")
             return self.vm_manager.start_vm(vm_name)
 
         elif action == "stop":
             # Остановка ВМ
-            vm_name = params["vm_name"]
+            vm_name = params.get("vm_name")
             force = params.get("force", False)
             return self.vm_manager.shutoff_vm(vm_name, force)
 
         elif action == "delete":
             # Удаление ВМ
-            vm_name = params["vm_name"]
+            vm_name = params.get("vm_name")
             delete_disks = params.get("delete_disks", False)
             delete_nvram = params.get("delete_nvram", True)
             return self.vm_manager.delete_vm(vm_name, delete_disks, delete_nvram)
 
         elif action == "edit":
             # Редактирование ВМ
-            vm_name = params["vm_name"]
-            vm_update = VmUpdateRequest(**params.get("update_params", {}))
+            vm_name = params.get("vm_name")
+            vm_update = VmUpdateRequest(**params.get("update_params"))
             return self.vm_manager.edit_vm(vm_name, vm_update)
 
         elif action == "clone":
             # Клонирование ВМ
-            source_name = params["source_vm"]
-            new_name = params["new_name"]
+            source_name = params.get("source_vm")
+            new_name = params.get("new_name")
             result = self.vm_manager.clone_vm(source_name, new_name)
             return result
 
         elif action == "migrate":
             # Миграция ВМ без дисков(ожидаем что используется HA с NFS хранилищем)
-            vm_name = params["vm_name"]
-            dest_uri = params["dest_uri"]
+            vm_name = params.get("vm_name")
+            dest_uri = params.get("dest_uri")
+            copy_storage = params.get("copy_storage", False)
             live = params.get("live") if params.get("live") else False
             undefine_source = (
                 params.get("undefine_source")
@@ -177,7 +178,7 @@ class TaskHandler:
                 else False
             )
             result = self.vm_manager.migrate_vm(
-                vm_name, dest_uri, live, undefine_source
+                vm_name, dest_uri, live, undefine_source, copy_storage
             )
             return result
 
@@ -189,14 +190,14 @@ class TaskHandler:
 
         elif action == "info":
             # Информация о ВМ
-            vm_name = params["vm_name"]
+            vm_name = params.get("vm_name")
             result = self.vm_manager.get_vm_by_name(vm_name)
             return result
 
         elif action == "attach_iso":
             # Подключение ISO
-            vm_name = params["vm_name"]
-            iso_path = params["iso_path"]
+            vm_name = params.get("vm_name")
+            iso_path = params.get("iso_path")
             bus_type = params.get("bus_type", "ide")
             target_dev = params.get("target_dev")
             return self.vm_manager.attach_iso_to_vm(
@@ -216,15 +217,15 @@ class TaskHandler:
 
         elif action == "delete":
             # Удаление сети
-            network_name = payload["network_name"]
+            network_name = payload.get("network_name")
             force = payload.get("force", False)
             approve_admin = payload.get("approve_admin", False)
             return self.net_manager.delete_network(network_name, force, approve_admin)
 
         elif action == "edit":
             # Редактирование сети
-            network_name = payload["network_name"]
-            params = NetworkParameters(**payload.get("params", {}))
+            network_name = payload.get("network_name")
+            params = NetworkParameters(**payload.get("params"))
             return self.net_manager.edit_network(network_name, params)
 
         elif action == "list":
@@ -233,12 +234,12 @@ class TaskHandler:
 
         elif action == "info":
             # Информация о сети
-            network_name = payload["network_name"]
+            network_name = payload.get("network_name")
             return self.net_manager.get_network_info(network_name)
 
         elif action == "start":
             # Запуск сети
-            network_name = payload["network_name"]
+            network_name = payload.get("network_name")
             result = self.net_manager.start_network(network_name)
             return result
 
@@ -249,7 +250,7 @@ class TaskHandler:
 
         elif action == "restart":
             # Перезапуск сети
-            network_name = payload["network_name"]
+            network_name = payload.get("network_name")
             force = payload.get("force", False)
             return self.net_manager.restart_network(network_name, force)
 
@@ -262,12 +263,12 @@ class TaskHandler:
         if action == "create":
             # Создание снапшота
             snapshot_request = SnapshotCreateRequest(**payload)
-            return self.snapshot_manager.create_snapshot(snapshot_request).model_dump()
+            return self.snapshot_manager.create_snapshot(snapshot_request)
 
         elif action == "delete":
             # Удаление снапшота
-            vm_name = payload["vm_name"]
-            snapshot_name = payload["snapshot_name"]
+            vm_name = payload.get("vm_name")
+            snapshot_name = payload.get("snapshot_name")
             remove_children = payload.get("remove_children", False)
             return self.snapshot_manager.delete_snapshot(
                 vm_name, snapshot_name, remove_children
@@ -275,13 +276,13 @@ class TaskHandler:
 
         elif action == "revert":
             # Восстановление снапшота
-            vm_name = payload["vm_name"]
-            snapshot_name = payload["snapshot_name"]
+            vm_name = payload.get("vm_name")
+            snapshot_name = payload.get("snapshot_name")
             return self.snapshot_manager.revert_to_snapshot(vm_name, snapshot_name)
 
         elif action == "list":
             # Список снапшотов ВМ
-            vm_name = payload["vm_name"]
+            vm_name = payload.get("vm_name")
             return self.snapshot_manager.snapshots_by_vm_name(vm_name)
 
         elif action == "clone":
@@ -291,8 +292,8 @@ class TaskHandler:
 
         elif action == "info":
             # Информация о снапшоте
-            vm_name = payload["vm_name"]
-            snapshot_name = payload["snapshot_name"]
+            vm_name = payload.get("vm_name")
+            snapshot_name = payload.get("snapshot_name")
             return self.snapshot_manager.snapshot_by_name(vm_name, snapshot_name)
 
         else:
@@ -300,9 +301,10 @@ class TaskHandler:
 
     def _handle_storage_task(
         self, action: str, payload: dict
-    ) -> Disk | bool | None | list[Disk]:
+    ) -> Disk | bool | None | list[Disk] | StorageMessage:
         """Обработка задач хранилища"""
 
+        # TODO: Перевести ответы на StorageMessage
         if action == "create_disk":
             # Создание диска
             disk_create = DiskCreate(**payload)
@@ -311,7 +313,7 @@ class TaskHandler:
 
         elif action == "delete_disk":
             # Удаление диска
-            disk_path = payload["disk_path"]
+            disk_path = payload.get("disk_path")
             success = self.storage_manager.delete_disk(disk_path)
             return success
 
@@ -329,16 +331,16 @@ class TaskHandler:
 
         elif action == "list_disks":
             # Список дисков
-            query = payload.get("query")
+            query = DiskQuery(**payload)
             disks = self.storage_manager.list_disks(query)
             return disks
 
         elif action == "extend_disk":
             # Расширение диска
-            disk_name = payload["disk_name"]
+            disk_name = payload.get("disk_name")
             path = payload.get("path")
             disk_format = payload.get("disk_format")
-            new_size_gb = payload["new_size_gb"]
+            new_size_gb = payload.get("new_size_gb")
 
             disk = self.storage_manager.extend_disk(
                 new_size_gb, path, disk_name, disk_format
@@ -397,6 +399,10 @@ class TaskHandler:
                 storage_type=storage_filter,
             )
             return pools
+
+        elif action == "sync":
+            sync_rps = self.balansir.sync_rps_config_vms()
+            return sync_rps
 
         elif action == "info":
             # Информация о ресурсном пуле

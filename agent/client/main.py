@@ -17,7 +17,7 @@ from agent.client.task_manager.ws_notification import WebSocketNotificationHandl
 from agent.client.tools import get_quick_stats
 
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="task_manager/templates")
 
 
 logger = DefaultLogger("TaskManagerServer")

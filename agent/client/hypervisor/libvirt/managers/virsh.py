@@ -1,3 +1,4 @@
+import os
 import queue
 import sys
 import threading
@@ -19,6 +20,7 @@ class VirshConsoleController:
         self.vm_name = vm_name
         self.child = None
         self.connected = False
+        self.connection_uri = os.environ.get("CONNECTION_URI")
         self.command_queue = queue.Queue()
         self.response_queue = queue.Queue()
         self.reader_thread = None
@@ -38,7 +40,7 @@ class VirshConsoleController:
         try:
             # Запускаем virsh console
             self.child = pexpect.spawn(
-                f"virsh --connect qemu:///system console {self.vm_name}",
+                f"virsh --connect {self.connection_uri} console {self.vm_name}",
                 timeout=timeout,
             )
             # self.child.logfile = sys.stdout.buffer

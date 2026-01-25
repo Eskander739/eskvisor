@@ -178,3 +178,13 @@ class ResourcePoolVirtual(BaseModel):
     @property
     def storage_available_gb(self) -> float:
         return self.storage_available / (1024**3)
+
+
+class ResourcePoolVMS(BaseModel):
+    name: str
+    connected_vms: list[str]
+
+
+class ResourcePoolConnectedVMS(BaseModel):
+    resource_pools: list[ResourcePoolVMS] = []
+

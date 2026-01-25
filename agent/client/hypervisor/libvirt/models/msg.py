@@ -26,7 +26,7 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VirtualMachinesList,
 )
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
-    ResourcePoolVirtual,
+    ResourcePoolVirtual, ResourcePoolVMS, ResourcePoolConnectedVMS,
 )
 from agent.client.hypervisor.libvirt.models.volume.logic import LogicVolume
 
@@ -37,8 +37,12 @@ class CommandMessagesEnum(Enum):
     vm_successfully_deleted_from_virtual_resource_pool = (
         "VM successfully deleted from virtual resource pool"
     )
+    vm_delete_error_from_virtual_resource_pool = (
+        "VM delete error from virtual resource pool"
+    )
     vm_created_but_not_found_in_libvirt = "VM created but not found in libvirt"
     vm_successfully_created = "VM successfully created"
+    vm_delete_error_from_rp_config = "VM delete error from resource pool config"
     vm_successfully_deleted = "VM successfully deleted"
     vm_delete_error = "VM delete error"
     vm_successfully_cloned = "VM successfully cloned"
@@ -62,6 +66,8 @@ class CommandMessagesEnum(Enum):
     # Виртуальные диски
     disk_convert_error = "Disk convert error"
     disk_not_found = "Disk not found"
+    disk_list_founded = "Disk list founded"
+    disk_list_error = "Disk list error"
     disk_founded = "Disk founded"
     disk_not_found_unexpected_error = "Disk not found unexpected error"
     disk_not_found_libvirt_error = "Disk not found libvirt error"
@@ -139,6 +145,12 @@ class CommandMessagesEnum(Enum):
     vm_present_on_any_virtual_resource_pool = "VM present on any virtual resource pool"
 
     rp_virtual_delete_success = "Virtual resource pool successfully deleted"
+    rp_virtual_config_edit_success = "Virtual resource pool config successfully edited"
+    rp_virtual_config_successfully_founded = "Virtual resource pool config successfully founded"
+    rp_virtual_edit_error = "Virtual resource pool edit error"
+    rp_virtual_config_edit_error = "Virtual resource pool config edit error"
+    rp_virtual_config_sync_error = "Virtual resource pool config sync error"
+    rp_virtual_config_sync_success = "Virtual resource pool config sync successfully"
     rp_virtual_edit_success = "Virtual resource pool successfully edited"
     rp_virtual_successfully_found = "Virtual resource pool successfully found"
     rp_virtual_have_vm_need_use_force_for_delete = (
@@ -146,6 +158,7 @@ class CommandMessagesEnum(Enum):
     )
     rp_virtual_delete_error = "Virtual resource pool delete error"
     rp_virtual_not_found = "Virtual resource pool not found"
+    rp_virtual_found_error = "Virtual resource pool found error"
 
     # Снапшоты
     snapshot_successfully_created = "Snapshot successfully created"
@@ -205,9 +218,10 @@ class VmMessage(DefaultMessage):
 
 
 class StorageMessage(DefaultMessage):
+    success: bool
     target_path: str | None = None
     note: str | None = None
-    disk_info: Disk | LogicVolume | None = None
+    disk_info: Disk | LogicVolume | list[Disk] | None = None
     stdout: str | None = None
     stderr: str | None = None
 
@@ -222,7 +236,7 @@ class RpMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
 
     success: bool
-    rp_info: ResourcePoolVirtual | None = None
+    rp_info: ResourcePoolVirtual | ResourcePoolVMS | ResourcePoolConnectedVMS | None = None
     note: str | None = None
 
 
