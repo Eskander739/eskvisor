@@ -2,11 +2,11 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from agent.client.hypervisor.libvirt.models.volume.disk import Disk
+from agent.client.hypervisor.libvirt.models.volume.disk import Disk, VMStorageUsedInfo
 from agent.client.hypervisor.libvirt.models.network import (
     NetworkInfo,
     NetworkInterfacesInfo,
-    NetworkList,
+    NetworkList, NetworkBackup,
 )
 
 from agent.client.hypervisor.libvirt.models.snapshots import (
@@ -33,6 +33,8 @@ from agent.client.hypervisor.libvirt.models.volume.logic import LogicVolume
 
 class CommandMessagesEnum(Enum):
     # Виртуальные машины
+    vm_storage_used_info = "VM storage used info"
+    vm_storage_used_info_error = "VM storage used info error"
     vm_with_name_already_exists = "VM with name already exists"
     vm_successfully_deleted_from_virtual_resource_pool = (
         "VM successfully deleted from virtual resource pool"
@@ -112,6 +114,8 @@ class CommandMessagesEnum(Enum):
     )
     networks_list_found = "Networks list found"
     networks_list_not_found = "Networks list not found"
+    virtual_network_backup_successfully_created = "Virtual network backup successfully created"
+    virtual_network_backup_create_error = "Virtual network backup create error"
     virtual_network_interface_detach_error = "Virtual network interface detach error"
     virtual_network_interface_not_found = "Virtual network interface not found"
     virtual_network_successfully_updated = "Virtual network successfully updated"
@@ -208,7 +212,6 @@ class CommandMessagesEnum(Enum):
     migration_virsh_error = "Migration virsh error"
     migration_timeout_error_with_virsh = "Migration timeout error with virsh"
 
-
 class DefaultMessage(BaseModel):
     code: str
 
@@ -230,14 +233,14 @@ class StorageMessage(DefaultMessage):
     success: bool
     target_path: str | None = None
     note: str | None = None
-    disk_info: Disk | LogicVolume | list[Disk] | None = None
+    disk_info: Disk | LogicVolume | list[Disk] | VMStorageUsedInfo | None = None
     stdout: str | None = None
     stderr: str | None = None
 
 
 class NetworkMessage(DefaultMessage):
     success: bool
-    net_info: NetworkInfo | NetworkInterfacesInfo | NetworkList | None = None
+    net_info: NetworkInfo | NetworkInterfacesInfo | NetworkList | NetworkBackup | None = None
     note: str | None = None
 
 

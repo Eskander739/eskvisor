@@ -222,6 +222,11 @@ class TaskHandler:
             approve_admin = payload.get("approve_admin", False)
             return self.net_manager.delete_network(network_name, force, approve_admin)
 
+        elif action == "backup":
+            # Редактирование сети
+            network_name = payload.get("network_name")
+            return self.net_manager.create_backup(network_name)
+
         elif action == "edit":
             # Редактирование сети
             network_name = payload.get("network_name")
@@ -334,6 +339,16 @@ class TaskHandler:
             disks = self.storage_manager.list_disks(query)
             return disks
 
+        elif action == "vm_disks_info":
+            # Список дисков
+            vm_disks_info = self.storage_manager.get_disks_by_vm(**payload)
+            return vm_disks_info
+
+        elif action == "vm_disks_used_info":
+            # Список дисков
+            vm_disks_used_info = self.storage_manager.get_storage_used(**payload)
+            return vm_disks_used_info
+
         elif action == "extend_disk":
             # Расширение диска
             disk_name = payload.get("disk_name")
@@ -382,6 +397,13 @@ class TaskHandler:
             name = payload["name"]
             force = payload.get("force", False)
             result = self.balansir.delete_virtual_resource_pool(name, force)
+            return result
+
+        elif action == "delete_vms":
+            # Удаление виртуальных машин из ресурс пула
+            rp_name = payload["name"]
+            vms = payload.get("vms")
+            result = self.balansir.delete_vms_from_virtual_resource_pool(rp_name, vms)
             return result
 
         elif action == "list":

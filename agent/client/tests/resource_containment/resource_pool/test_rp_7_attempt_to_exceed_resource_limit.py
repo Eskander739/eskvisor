@@ -95,8 +95,8 @@ def test_rp_04_rp_05_add_vm_to_resource_pool_and_delete_vm_from_resource_pool(
             raise AssertionError("Некорректное подключение к ВМ")
         # ____________________________________Удаление ВМ из ресурс пула______________
         add_vm_to_resource_pool = (
-            resource_pool_session.delete_vm_from_virtual_resource_pool(
-                name=random_name, vn_name=vm_info.name
+            resource_pool_session.delete_vms_from_virtual_resource_pool(
+                name=random_name, vms=vm_info.name
             )
         )
         assert (

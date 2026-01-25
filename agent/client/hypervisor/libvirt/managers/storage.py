@@ -26,7 +26,7 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskStatus,
     DiskType,
     DiskUpdate,
-    QemuDisk,
+    QemuDisk, VMStorageUsedInfo,
 )
 from agent.client.hypervisor.libvirt.models.msg import (
     CommandMessagesEnum,
@@ -746,13 +746,20 @@ class StorageManager(LibvirtClient):
                 note=str(e),
             )
 
-    def get_storage_used(self, vm_name: str) -> int:
-        used_storage = 0
-        all_disks = self.get_disks_by_vm(vm_name)
-        for disk_elem in all_disks:
-            used_storage += disk_elem.allocation_bytes
+    def get_storage_used(self, vm_name: str) -> StorageMessage:
+        try:
+            used_storage = 0
+            all_disks = self.get_disks_by_vm(vm_name)
+            for disk_elem in all_disks:
+                used_storage += disk_elem.allocation_bytes
 
-        return used_storage
+            return StorageMessage(code=CommandMessagesEnum.vm_storage_used_info.name,
+                                  disk_info=VMStorageUsedInfo(vm_name=vm_name, storage_used=used_storage),
+                                  success=True)
+        except Exception as e:
+            return StorageMessage(code=CommandMessagesEnum.vm_storage_used_info_error.name,
+                                  success=False,
+                                  note=str(e))
 
     def get_disks_by_vm(self, vm_name: str) -> list[Disk]:
         """

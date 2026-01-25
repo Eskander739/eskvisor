@@ -189,24 +189,21 @@ class Balansir(LibvirtClient):
                 note=str(e)
             )
 
-    def delete_vm_from_rp_config(self, rp_name: str, vm_name: str):
+    def delete_vms_from_rp_config(self, rp_name: str, vms: str | list[str]):
+        if isinstance(vms, str):
+            vms = [vms]
         try:
             with open(self.resource_pool_connected_vms, "r") as read_config:
                 current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
 
             for current_rp in current_config.resource_pools:
                 if current_rp.name == rp_name:
-                    if vm_name in current_rp.connected_vms:
-                        current_rp.connected_vms.remove(vm_name)
-                        self.logger.info(f"ВМ '{vm_name}' успешно удален из пула '{rp_name}'")
-                    else:
-                        self.logger.info(f"ВМ '{vm_name}' отсутствует в пуле '{rp_name}'")
-                    break
-            else:
-                return RpMessage(
-                    code=CommandMessagesEnum.rp_virtual_not_found.name,
-                    success=False,
-                )
+                    for vm_name in vms:
+                        if vm_name in current_rp.connected_vms:
+                            current_rp.connected_vms.remove(vm_name)
+                            self.logger.info(f"ВМ '{vm_name}' успешно удален из пула '{rp_name}'")
+                        else:
+                            self.logger.info(f"ВМ '{vm_name}' отсутствует в пуле '{rp_name}'")
 
             with open(self.resource_pool_connected_vms, "w") as write_config:
                 fcntl.flock(write_config.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -634,7 +631,7 @@ class Balansir(LibvirtClient):
                 note=str(e),
             )
 
-    def delete_vm_from_virtual_resource_pool(self, name: str, vm_name: str):
+    def delete_vms_from_virtual_resource_pool(self, name: str, vms: str | list[str]):
         try:
             self.logger.info("Старт удаления ВМ из ресурс пула")
 
@@ -644,9 +641,9 @@ class Balansir(LibvirtClient):
                     code=CommandMessagesEnum.rp_virtual_not_found.name,
                     success=False,
                 )
-            self.pycgroup.delete_vm_from_pool(name, vm_name)
-            self.delete_vm_from_rp_config(name, vm_name)
-            self.logger.info(f"ВМ '{name}' из ресурс пула успешно удалена")
+            self.pycgroup.delete_vms_from_pool(name, vms)
+            self.delete_vms_from_rp_config(name, vms)
+            self.logger.info(f"ВМ '{vms}' из ресурс пула успешно удалены")
             return RpMessage(
                 code=CommandMessagesEnum.vm_successfully_deleted_from_virtual_resource_pool.name,
                 success=True,
@@ -1088,7 +1085,7 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     with Balansir() as mng:
-        mng.delete_vm_from_rp_config("resource_pool_94456", "ESKA-VM-TEST")
+        mng.delete_vms_from_rp_config("resource_pool_94456", "ESKA-VM-TEST")
         mng.sync_rps_config_vms()
         # mng.add_vm_to_rp_config("resource_pool_94456", "ESKA-VM-TEST")
         # mng.add_rp_to_config("resource_pool_94456")

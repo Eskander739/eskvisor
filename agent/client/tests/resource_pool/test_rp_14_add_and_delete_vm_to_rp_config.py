@@ -63,7 +63,7 @@ def test_rp_14_add_and_delete_vm_to_rp_config(
         assert vm_name in add_vm_to_rp_config_info.rp_info.connected_vms
 
         # ____________________________________Удаление ВМ из конфига ресурс пула______________
-        add_vm_to_rp_config_info = resource_pool_session.delete_vm_from_rp_config(random_name, vm_name)
+        add_vm_to_rp_config_info = resource_pool_session.delete_vms_from_rp_config(random_name, vm_name)
         assert add_vm_to_rp_config_info.code == CommandMessagesEnum.rp_virtual_config_edit_success.name
 
         # ____________________________________Проверка отсутствия ВМ в конфиге ресурс пула______________

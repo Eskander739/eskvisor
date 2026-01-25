@@ -305,6 +305,14 @@ class PYCGroup:
         result = self.pid_ctl.delete_pid_from_pool(cgroup_path, vm_pid)
         return result
 
+    def delete_vms_from_pool(self, pool_name: str, vms: list[str]):
+        if isinstance(vms, str):
+            vms = [vms]
+        cgroup_path = self.cgroup_pool_path(pool_name)
+        for vm_name in vms:
+            vm_pid = self.pid_ctl.vm_pid(vm_name)
+            self.pid_ctl.delete_pid_from_pool(cgroup_path, vm_pid)
+
     def create_cgroup_pool(
         self,
         name: str,

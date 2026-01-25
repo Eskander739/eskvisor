@@ -112,7 +112,7 @@ class NetworkManager(LibvirtClient):
                 note=str(e),
             )
 
-    def create_backup(self, network_name: str) -> NetworkBackup:
+    def create_backup(self, network_name: str) -> NetworkMessage:
         """Создание бэкапа сети"""
         try:
             current_network = self.conn.networkLookupByName(network_name)
@@ -131,11 +131,13 @@ class NetworkManager(LibvirtClient):
                 created_at=datetime.datetime.now(),
             )
 
-            return backup
+            return NetworkMessage(code=CommandMessagesEnum.virtual_network_backup_successfully_created.name,
+                                  net_info=backup,
+                                  success=True)
         except self.libvirtError as e:
-            raise self.libvirtError(
-                f"Не удалось создать бэкап сети {network_name}: {e}"
-            )
+            return NetworkMessage(code=CommandMessagesEnum.virtual_network_backup_create_error.name,
+                                  success=False,
+                                  note=str(e))
 
     def restore_network(self, backup: NetworkBackup) -> bool:
         """Восстановление сети из бэкапа"""

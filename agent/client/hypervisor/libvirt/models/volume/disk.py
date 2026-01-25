@@ -153,6 +153,11 @@ class QemuDiskFormatSpecificData(BaseModel):
     extended_l2: bool = Field(alias="extended-l2")
 
 
+class VMStorageUsedInfo(BaseModel):
+    vm_name: str
+    storage_used: int  # в байтах
+
+
 class QemuDiskFormatSpecific(BaseModel):
     type: str
     data: QemuDiskFormatSpecificData
