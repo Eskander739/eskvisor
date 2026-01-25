@@ -12,7 +12,7 @@ pyproject.toml
 # Default ignored files
 /workspace.xml
 .~lock
-~$
+~$*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
