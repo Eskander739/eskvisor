@@ -140,6 +140,28 @@ class TaskHandler:
             vm_name = params.get("vm_name")
             return self.vm_manager.start_vm(vm_name)
 
+        elif action == "state":
+            # Запуск ВМ
+            vm_name = params.get("vm_name")
+            state = self.vm_manager.get_vm_state_with_msg(vm_name)
+            return state
+
+        elif action == "reboot":
+            # Запуск ВМ
+            vm_name = params.get("vm_name")
+            hard_reset = params.get("hard_reset")
+            return self.vm_manager.reboot_vm(vm_name, hard_reset)
+
+        elif action == "suspend":
+            # Запуск ВМ
+            vm_name = params.get("vm_name")
+            return self.vm_manager.suspend_vm(vm_name)
+
+        elif action == "resume":
+            # Запуск ВМ
+            vm_name = params.get("vm_name")
+            return self.vm_manager.resume_vm(vm_name)
+
         elif action == "stop":
             # Остановка ВМ
             vm_name = params.get("vm_name")
@@ -194,16 +216,6 @@ class TaskHandler:
             result = self.vm_manager.get_vm_by_name(vm_name)
             return result
 
-        elif action == "attach_iso":
-            # Подключение ISO
-            vm_name = params.get("vm_name")
-            iso_path = params.get("iso_path")
-            bus_type = params.get("bus_type", "ide")
-            target_dev = params.get("target_dev")
-            return self.vm_manager.attach_iso_to_vm(
-                vm_name, iso_path, bus_type, target_dev
-            )
-
         else:
             raise ValueError(f"Unknown VM action: {action}")
 
@@ -237,6 +249,19 @@ class TaskHandler:
             # Список сетей
             return self.net_manager.list_all_networks()
 
+        elif action == "vm_network_info":
+            # Информация о сети
+            vm_name = payload.get("vm_name")
+            return self.net_manager.get_vm_network_info(vm_name)
+
+        elif action == "attach":
+            # Добавление сетевого интерфейса к виртуальной машине
+            return self.net_manager.attach_vm_network_interface(**payload)
+
+        elif action == "detach":
+            # Отключение сетевого интерфейса от виртуальной машины
+            return self.net_manager.detach_vm_network_interface(**payload)
+
         elif action == "info":
             # Информация о сети
             network_name = payload.get("network_name")
@@ -246,6 +271,12 @@ class TaskHandler:
             # Запуск сети
             network_name = payload.get("network_name")
             result = self.net_manager.start_network(network_name)
+            return result
+        elif action == "autostart":
+            # Запуск сети
+            network_name = payload.get("network_name")
+            autostart = payload.get("autostart")
+            result = self.net_manager.set_network_autostart(network_name, autostart)
             return result
 
         elif action == "stop":
@@ -278,6 +309,11 @@ class TaskHandler:
             return self.snapshot_manager.delete_snapshot(
                 vm_name, snapshot_name, remove_children
             )
+
+        elif action == "delete_all":
+            # Удаление снапшота
+            vm_name = payload.get("vm_name")
+            return self.snapshot_manager.delete_all_snapshots_by_vm_name(vm_name)
 
         elif action == "revert":
             # Восстановление снапшота

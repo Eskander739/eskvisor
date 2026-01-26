@@ -43,7 +43,7 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VmUpdateRequest,
     HostForward,
     VirtualMachinesList,
-    SecureBootVM,
+    SecureBootVM, VMStateInfo,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -508,7 +508,7 @@ class VmManager(LibvirtClient):
 
             cmd_parts.append(graphics_cmd)
 
-        cmd_parts.extend(["--video", config.video_model])
+        cmd_parts.extend(["--video", config.video_model.value])
 
         if config.console_type:
             cmd_parts.extend(["--console", f"{config.console_type}"])
@@ -973,174 +973,6 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка проверки совместимости: {e}")
             compatibility["errors"].append(str(e))
             return compatibility
-
-    def attach_iso_to_vm(
-        self, vm_name: str, iso_path: str, bus_type: str = "ide", target_dev: str = None
-    ) -> VmMessage:
-        """
-        Подключить ISO образ к существующей ВМ
-
-        Args:
-            vm_name: Имя ВМ
-            iso_path: Путь к ISO файлу
-            bus_type: Тип шины (ide, sata, scsi)
-            target_dev: Целевое устройство (hdX, sdX и т.д.)
-
-        Returns:
-            Результат операции
-        """
-
-        try:
-            # Проверяем существование ВМ
-            vm_info = self.get_vm_by_name(vm_name)
-            if not vm_info.success:
-                return vm_info
-
-            # Проверяем существование ISO файла
-            if not os.path.exists(iso_path):
-                return VmMessage(
-                    success=False,
-                    code="ISO_FILE_NOT_FOUND",
-                )
-
-            # Преобразуем строковый bus_type в enum
-            bus_type_enum = BusType.IDE
-            if bus_type.lower() == "sata":
-                bus_type_enum = BusType.SATA
-            elif bus_type.lower() == "scsi":
-                bus_type_enum = BusType.SCSI
-            elif bus_type.lower() == "virtio":
-                bus_type_enum = BusType.VIRTIO
-
-            disk_format = self.config.disk_format_by_path(iso_path)
-            basename = os.path.basename(iso_path)
-            disk_name = basename.replace(f".{disk_format.value}", "")
-            path = iso_path.replace(f"/{basename}", "")
-            disk_attach = DiskAttach(
-                vm_name=vm_name,
-                path=path,
-                name=disk_name,
-                format=disk_format,
-                target_dev=target_dev or self._get_free_cdrom_device(vm_name),
-                bus_type=bus_type_enum,
-                cache_mode=CacheMode.NONE,
-            )
-
-            # Подключаем диск через StorageManager
-            result = self.storage_manager.attach_disk(disk_attach)
-
-            if hasattr(result, "success") and result.success:
-                return VmMessage(
-                    success=True,
-                    code="ISO_ATTACH_SUCCESS",
-                )
-            else:
-                return VmMessage(
-                    success=False,
-                    code="ISO_ATTACH_FAILED",
-                )
-
-        except Exception as e:
-            self.logger.exception(f"Ошибка при подключении ISO к ВМ: {e}")
-            return VmMessage(
-                success=False,
-                code="ISO_ATTACH_EXCEPTION",
-            )
-
-    def _get_free_cdrom_device(self, vm_name: str) -> str:
-        """
-        Получить свободное устройство CDROM для ВМ
-
-        Args:
-            vm_name: Имя ВМ
-
-        Returns:
-            Имя свободного устройства (hdc, hdd и т.д.)
-        """
-        try:
-            current_vm = self.conn.lookupByName(vm_name)
-            xml_desc = current_vm.XMLDesc()
-
-            # Ищем используемые CDROM устройства
-            used_devices = set()
-            root = ElementTree.fromstring(xml_desc)
-
-            for disk in root.findall(".//disk"):
-                if disk.get("device") == "cdrom":
-                    target = disk.find("target")
-                    if target is not None:
-                        used_devices.add(target.get("dev"))
-
-            # Для IDE устройств (hdX)
-            for letter in ["c", "d", "e", "f", "g", "h"]:
-                device = f"hd{letter}"
-                if device not in used_devices:
-                    return device
-
-            # Если все заняты, используем следующий доступный
-            return "hdi"
-
-        except Exception as e:
-            self.logger.error(f"Ошибка при поиске свободного CDROM устройства: {e}")
-            return "hdc"
-
-    def detach_iso_from_vm(self, vm_name: str, target_dev: str) -> VmMessage:
-        """
-        Отключить ISO образ от ВМ
-
-        Args:
-            vm_name: Имя ВМ
-            target_dev: Целевое устройство для отключения
-
-        Returns:
-            Результат операции
-        """
-
-        try:
-            from agent.client.hypervisor.libvirt.models.volume.disk import DiskDetach
-
-            disk_detach = DiskDetach(vm_name=vm_name, target_dev=target_dev)
-
-            # Отключаем диск через StorageManager
-            result = self.storage_manager.detach_disk(disk_detach)
-
-            if result.code == CommandMessagesEnum.disk_successfully_detached.name:
-                return VmMessage(
-                    success=True,
-                    code="ISO_DETACH_SUCCESS",
-                )
-            else:
-                return VmMessage(
-                    success=False,
-                    code="ISO_DETACH_FAILED",
-                )
-
-        except Exception as e:
-            self.logger.exception(f"Ошибка при отключении ISO от ВМ: {e}")
-            return VmMessage(
-                success=False,
-                code="ISO_DETACH_EXCEPTION",
-            )
-
-    def list_vm_disks(self, vm_name: str) -> list[Disk]:
-        """
-        Получить список всех дисков ВМ (включая ISO)
-
-        Args:
-            vm_name: Имя ВМ
-
-        Returns:
-            Список дисков ВМ
-        """
-
-        try:
-            # Используем StorageManager для получения дисков ВМ
-            disks = self.storage_manager.get_disks_by_vm(vm_name)
-            return disks
-
-        except Exception as e:
-            self.logger.exception(f"Ошибка при получении дисков ВМ: {e}")
-            return []
 
     def create_vm_from_xml(self, xml_config: str, autostart: bool = False) -> bool:
         """
@@ -1682,7 +1514,7 @@ class VmManager(LibvirtClient):
 
             video_elem = ElementTree.SubElement(devices_elem, "video")
             model_elem = ElementTree.SubElement(video_elem, "model")
-            model_elem.set("type", vm_update.video_model)
+            model_elem.set("type", vm_update.video_model.value)
 
         if vm_update.machine_type is not None:
             os_elem = root.find("./os")
@@ -1952,6 +1784,17 @@ class VmManager(LibvirtClient):
             if display_logs:
                 self.logger.error(f"Ошибка получения информации о ВМ, \nerr: {e}")
             raise
+
+    def get_vm_state_with_msg(self, name: str, display_logs: bool = False):
+        try:
+            result = self.get_vm_state_by_name(name, display_logs)
+            return VmMessage(code=CommandMessagesEnum.vm_state_info.name,
+                             vm_info=VMStateInfo(vm_name=name, state=VMState(result)),
+                             success=True)
+        except Exception as e:
+            return VmMessage(code=CommandMessagesEnum.vm_state_info_error.name,
+                             success=False,
+                             note=str(e))
 
     def get_vm_state_by_name(self, name: str, display_logs: bool = False) -> int | bool:
         """Получение состояния ВМ по имени"""

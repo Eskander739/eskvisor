@@ -14,7 +14,7 @@ from agent.client.hypervisor.libvirt.models.enum import (
     ControllerType,
     EmulatorType,
     GraphicsType,
-    OSType,
+    OSType, VideoModel,
 )
 from agent.client.hypervisor.libvirt.models.general import (
     MachineType,
@@ -41,6 +41,11 @@ class HostForward(BaseModel):
     @property
     def hostfwd_to_string(self):
         return f'{self.protocol}:{self.host_ip if self.host_ip else ""}:{self.host_port}-:{self.guest_port}'
+
+
+class VMStateInfo(BaseModel):
+    vm_name: str
+    state: VMState
 
 
 class NetQemuCommandline(BaseModel):
@@ -176,8 +181,8 @@ class VMCreateRequest(BaseModel):
         default=None,
         description="Дополнительные аргументы для командной строки установки",
     )
-    video_model: str = Field(
-        default="qxl", description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
+    video_model: VideoModel = Field(
+        default=VideoModel.QXL.value, description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
     )
     boot_uefi: bool = Field(
         default=False, description="Использовать UEFI вместо BIOS для загрузки"
@@ -363,7 +368,9 @@ class VmUpdateRequest(BaseModel):
     description: str | None = None
     name: str | None = None
     graphics: dict[str, Any] | None = None
-    video_model: str | None = None
+    video_model: VideoModel = Field(
+        default=None, description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
+    )
     machine_type: str | None = None
     os_variant: str | None = None
     boot_devices: list[str] | None = None
@@ -372,7 +379,7 @@ class VmUpdateRequest(BaseModel):
     hyperv_features: dict[str, Any] | None = None
     qemu_agent: bool | None = None
     change_live_config: bool = (
-        False  # если включена - изменяет запущенную конфигурацию а не постоянную
+        False  # если включена - изменяет запущенную конфигурацию, а не постоянную
     )
 
 

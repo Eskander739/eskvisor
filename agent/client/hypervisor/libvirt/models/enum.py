@@ -83,3 +83,46 @@ class ControllerType(str, Enum):
     VIRTIO_SERIAL = "virtio-serial"
     CCID = "ccid"
     FDC = "fdc"
+
+
+class VideoModel(str, Enum):
+    """
+    Модели видеокарт для виртуальных машин в libvirt/QEMU.
+    Использование: VideoModel.VIRTIO.value
+    """
+
+    # Паравиртуализированная модель с аппаратным ускорением (virgl)
+    # Лучшая производительность для Linux гостевых ОС
+    VIRTIO = "virtio"
+
+    # Оптимизирован для Spice протокола, хорошая производительность 2D
+    # Поддерживает многомониторность, живую миграцию
+    QXL = "qxl"
+
+    # Совместимость с драйверами VMware SVGA-II
+    # Хороший выбор для Windows гостевых ОС
+    VMWARE = "vmware"
+
+    # Стандартная модель VGA (аналог vmware в некоторых системах)
+    # Базовая совместимость, низкая производительность
+    VGA = "vga"
+
+    # Cirrus Logic GD5446, устаревшая модель
+    # Обратная совместимость со старыми гостями
+    CIRRUS = "cirrus"
+
+    # Базовый дисплей Bochs для простых окружений
+    # Используется в основном для UEFI/OVMF
+    BOCHS = "bochs-display"
+
+    # Паравиртуализированная модель Xen
+    # Только для гипервизора Xen
+    XEN = "xen"
+
+    # RAM framebuffer - простейшая модель
+    # Для загрузки до инициализации графики
+    RAMFB = "ramfb"
+
+    # UEFI Graphics Output Protocol
+    # Для использования GOP в UEFI среде
+    GOP = "gop"

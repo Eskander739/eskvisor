@@ -719,7 +719,7 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка парсинга XML настроек сети: {e}")
             return {}
 
-    def set_network_autostart(self, network_name: str, autostart: bool = True) -> bool:
+    def set_network_autostart(self, network_name: str, autostart: bool = True) -> NetworkMessage:
         """Настройка автозапуска сети"""
         try:
             current_network = self.conn.networkLookupByName(network_name)
@@ -729,13 +729,20 @@ class NetworkManager(LibvirtClient):
                 f"Автозапуск сети '{network_name}' (тип: {network_type}) "
                 f"установлен в {autostart}"
             )
-            return True
+            return NetworkMessage(
+                code=CommandMessagesEnum.virtual_network_successfully_updated.name,
+                success=True,
+            )
 
         except self.libvirtError as e:
             self.logger.error(
                 f"Ошибка установки автозапуска для сети '{network_name}': {e}"
             )
-            return False
+            return NetworkMessage(
+                code=CommandMessagesEnum.virtual_network_update_error.name,
+                success=False,
+                note=str(e)
+            )
 
     def start_network(self, network_name: str) -> NetworkMessage:
         """Запуск сети"""
@@ -766,6 +773,7 @@ class NetworkManager(LibvirtClient):
             return NetworkMessage(
                 code=CommandMessagesEnum.virtual_network_start_error.name,
                 success=False,
+                note=str(e)
             )
 
     def stop_network(self, network_name: str) -> NetworkMessage:

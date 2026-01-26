@@ -23,7 +23,7 @@ from agent.client.hypervisor.libvirt.models.snapshots import (
 )
 from agent.client.hypervisor.libvirt.models.vm import (
     VirtualMachine,
-    VirtualMachinesList,
+    VirtualMachinesList, VMStateInfo,
 )
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtual, ResourcePoolVMS, ResourcePoolConnectedVMS,
@@ -34,6 +34,8 @@ from agent.client.hypervisor.libvirt.models.volume.logic import LogicVolume
 class CommandMessagesEnum(Enum):
     # Виртуальные машины
     vm_storage_used_info = "VM storage used info"
+    vm_state_info = "VM state info"
+    vm_state_info_error = "VM state info error"
     vm_storage_used_info_error = "VM storage used info error"
     vm_with_name_already_exists = "VM with name already exists"
     vm_successfully_deleted_from_virtual_resource_pool = (
@@ -223,7 +225,7 @@ class VmError(DefaultMessage):
 class VmMessage(DefaultMessage):
     success: bool
     command: str | None = None
-    vm_info: None | VirtualMachine | VirtualMachinesList = None
+    vm_info: None | VirtualMachine | VirtualMachinesList | VMStateInfo = None
     stdout: str | None = None
     stderr: str | None = None
     note: str | None = None
