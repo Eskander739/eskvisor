@@ -182,7 +182,7 @@ class VMCreateRequest(BaseModel):
         description="Дополнительные аргументы для командной строки установки",
     )
     video_model: VideoModel = Field(
-        default=VideoModel.QXL.value, description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
+        default=VideoModel.QXL, description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
     )
     boot_uefi: bool = Field(
         default=False, description="Использовать UEFI вместо BIOS для загрузки"

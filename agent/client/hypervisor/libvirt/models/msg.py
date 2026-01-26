@@ -69,6 +69,7 @@ class CommandMessagesEnum(Enum):
 
     # Виртуальные диски
     disk_convert_error = "Disk convert error"
+    nfs_storage_not_available = "NFS storage not available"
     disk_not_found = "Disk not found"
     disk_list_founded = "Disk list founded"
     disk_list_error = "Disk list error"

@@ -11,7 +11,7 @@ import libvirt
 import orjson
 
 from agent.client.cli import CLIControl
-from agent.client.hypervisor.ha.controller import HAController
+from agent.client.stg.controller import NFSController
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
 from agent.client.hypervisor.libvirt.models.volume.disk import (
@@ -25,7 +25,6 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskQuery,
     DiskStatus,
     DiskType,
-    DiskUpdate,
     QemuDisk, VMStorageUsedInfo,
 )
 from agent.client.hypervisor.libvirt.models.msg import (
@@ -46,12 +45,16 @@ class StorageManager(LibvirtClient):
         self.system_disk_path = os.environ.get("SYSTEM_DISK_PATH")
         self.volume_group_manager = VolumeGroupManager()
         self.logic_volume_manager = LogicalVolumeManager()
-        self.ha_controller = HAController()
+        self.ha_controller = NFSController()
 
     def create_disk(self, disk_create: DiskCreate) -> StorageMessage:
-        ha_nfs_storages = self.ha_controller.loaded_ha_nfs_storages.nfs_storages
-        if ha_nfs_storages and disk_create.path is None:
-            ha_nfs_storage = ha_nfs_storages.pop()
+        ha_nfs_storage = self.ha_controller.get_nfs_storage_by_mount(disk_create.path)
+        if ha_nfs_storage:
+            if not self.ha_controller.check_nfs_availability(ha_nfs_storage.source):
+                return StorageMessage(
+                    success=False,
+                    code=CommandMessagesEnum.nfs_storage_not_available.name,
+                )
             disk_create.path = ha_nfs_storage.mount
         elif disk_create.path is None:
             disk_create.path = self.system_disk_path
@@ -536,33 +539,6 @@ class StorageManager(LibvirtClient):
         except Exception as e:
             self.logger.exception(f"Ошибка: {e}")
             return StorageMessage(code=CommandMessagesEnum.disk_extend_error.name, success=False, note=str(e))
-
-    def edit_disk(
-        self,
-        pool_name: str | None = None,
-        disk_name: str | None = None,
-        path: str | None = None,
-        disk_update: DiskUpdate | None = None,
-    ) -> Disk | None:
-        raise NotImplementedError
-        # if not disk_update:
-        #     self.logger.error("Не указана модель обновления")
-        #     return None
-        #
-        # try:
-        #     if pool_name and disk_name:
-        #         return self._edit_pool_disk(pool_name, disk_name, disk_update)
-        #     elif path:
-        #         return self._edit_file_disk(path, disk_update)
-        #     else:
-        #         return None
-        #
-        # except libvirt.libvirtError as e:
-        #     self.logger.error(f"Ошибка libvirt: {e}")
-        #     return None
-        # except Exception as e:
-        #     self.logger.exception(f"Ошибка: {e}")
-        #     return None
 
     def _edit_file_disk(
         self, disk_name: str, path: str, disk_format: DiskFormat, new_size_gb: int
@@ -1142,15 +1118,18 @@ class StorageManager(LibvirtClient):
         disk_format: DiskFormat = DiskFormat.QCOW2,
         is_pool: bool = False,
     ) -> Disk | StorageMessage:
-        ha_nfs_storages = self.ha_controller.loaded_ha_nfs_storages.nfs_storages
-        if ha_nfs_storages and path is None:
-            ha_nfs_storage = ha_nfs_storages.pop()
+        ha_nfs_storage = self.ha_controller.get_nfs_storage_by_mount(path)
+        if ha_nfs_storage:
+            if not self.ha_controller.check_nfs_availability(ha_nfs_storage.source):
+                return StorageMessage(
+                    success=False,
+                    code=CommandMessagesEnum.nfs_storage_not_available.name,
+                )
             path = ha_nfs_storage.mount
         elif path is None:
             path = self.system_disk_path
         try:
             disk_path = str(Path(path) / f"{disk_name}.{disk_format.value}")
-            print("БЛЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯ ПАФ", disk_path)
             if is_pool:
                 if disk_format.value == DiskFormat.QCOW2.value:
                     if Path(disk_path).exists():

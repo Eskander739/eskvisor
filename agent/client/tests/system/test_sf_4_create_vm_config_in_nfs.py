@@ -38,7 +38,7 @@ def test_sf_4_create_vm_config_in_nfs(
     time.sleep(5)
     try:
         # _________________Проверка наличия подключенных HA NFS хранилищ(предусловие)_________________
-        ha_nfs_storages = vm_session.ha_controller.loaded_ha_nfs_storages.nfs_storages
+        ha_nfs_storages = vm_session.ha_controller.loaded_nfs_storages.nfs_storages
         assert ha_nfs_storages, "Отсутствуют HA NFS хранилища"
         ha_nfs_storage = ha_nfs_storages.pop()
         # ____________________________________Создание диска______________________
@@ -86,7 +86,7 @@ def test_sf_4_create_vm_config_in_nfs(
         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb
         # ____________________________________Проверка наличия конфигурации ВМ в NFS хранилище_________________________
         vm_cnfigs_from_ha_storages = (
-            vm_session.ha_controller.vm_configs_from_ha_storages
+            vm_session.ha_controller.vm_configs_from_nfs_storages
         )
         if vm_state.value == vm_state.RUNNING.value:
             assert f"{random_name}.xml" in vm_cnfigs_from_ha_storages[0]

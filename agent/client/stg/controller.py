@@ -16,18 +16,18 @@ from agent.client.models.general import (
 from agent.client.stg.nfs import NFSStorageManager
 
 
-class HAController:
+class NFSController:
     def __init__(self):
-        self.logger = DefaultLogger("HAController")
+        self.logger = DefaultLogger("NFSController")
         self.cli = CLIControl()
         self.nfs_storage_manager = NFSStorageManager()
         self.system_vm_configs_path = os.environ.get("SYSTEM_VM_CONFIGS_PATH")
         self.nfs_vm_config_root = os.environ.get("NFS_VM_CONFIG_ROOT")
-        self.loaded_ha_nfs_storages_path = os.environ.get("LOADED_HA_NFS_STORAGES_PATH")
-        if not Path(self.loaded_ha_nfs_storages_path).exists():
+        self.loaded_nfs_storages_path = os.environ.get("LOADED_NFS_STORAGES_PATH")
+        if not Path(self.loaded_nfs_storages_path).exists():
             nfs_storages_model = NFSStorages(nfs_storages=[]).model_dump_json()
             self.cli.create_file(
-                self.loaded_ha_nfs_storages_path, f"{nfs_storages_model}"
+                self.loaded_nfs_storages_path, f"{nfs_storages_model}"
             )
 
     @staticmethod
@@ -77,13 +77,13 @@ class HAController:
         return vm_configs_list, vm_autostart_configs_list
 
     @property
-    def vm_configs_from_ha_storages(self) -> tuple[list[str], list[str]]:
+    def vm_configs_from_nfs_storages(self) -> tuple[list[str], list[str]]:
         """
-        Возвращает конфиги ВМ и конфиги ВМ в автозапуске из HA NFS хранилищ
+        Возвращает конфиги ВМ и конфиги ВМ в автозапуске из NFS хранилищ
         """
 
         ls_path = "ls {} | grep '.xml$'"
-        storages = self.loaded_ha_nfs_storages
+        storages = self.loaded_nfs_storages
         vm_configs_list = []
         vm_autostart_configs_list = []
 
@@ -105,14 +105,21 @@ class HAController:
 
         return vm_configs_list, vm_autostart_configs_list
 
+    def get_nfs_storage_by_mount(self, mount: str):
+        for _nfs_storage in self.loaded_nfs_storages.nfs_storages:
+            if _nfs_storage.mount == mount:
+                return _nfs_storage
+
+        return None
+
     @property
-    def loaded_ha_nfs_storages(self) -> NFSStorages:
+    def loaded_nfs_storages(self) -> NFSStorages:
         """
         Возвращает список NFS хранилищ
         """
 
-        nfs_storages = self.cli.execute(["cat", self.loaded_ha_nfs_storages_path])
-        self.logger.info(f"Текущий конфиг HA NFS хранилищ: '{nfs_storages}'")
+        nfs_storages = self.cli.execute(["cat", self.loaded_nfs_storages_path])
+        self.logger.info(f"Текущий конфиг NFS хранилищ: '{nfs_storages}'")
         nfs_storages_dict = orjson.loads(nfs_storages)
         nfs_storages_list = nfs_storages_dict.get("nfs_storages")
         nfs_storages_model = NFSStorages(nfs_storages=[])
@@ -172,16 +179,10 @@ class HAController:
             self.logger.error(f"Ошибка при проверке доступности NFS: {e}")
             return False
 
-    def load_and_mount_ha_nfs_storages(self, storages: LoadNFSStorages) -> bool:
+    def load_and_mount_nfs_storages(self, storages: LoadNFSStorages) -> bool:
         """
         Метод подключения NFS хранилищ, если они подгрузились со стороны бэкенда
         """
-
-        if self.loaded_ha_nfs_storages.nfs_storages:
-            self.logger.warning(
-                "Поддержка HA режима с множеством СХД планируются в будущих релизах"
-            )
-            return False
 
         check_valid_list = [
             storage for storage in storages.nfs_storages_for_mount if storage
@@ -191,7 +192,7 @@ class HAController:
                 source = storage.source  # ip NFS сервера
                 current_nfs_name = storage.nfs_name  # имя NFS сервера
                 read_current_config = self.cli.execute(
-                    ["cat", self.loaded_ha_nfs_storages_path]
+                    ["cat", self.loaded_nfs_storages_path]
                 )
                 current_config = NFSStorages.model_validate(
                     orjson.loads(read_current_config)
@@ -212,20 +213,20 @@ class HAController:
                     [
                         "sh",
                         "-c",
-                        f"echo '{current_config.model_dump_json()}' > {self.loaded_ha_nfs_storages_path}",
+                        f"echo '{current_config.model_dump_json()}' > {self.loaded_nfs_storages_path}",
                     ],
                     return_proc=True,
                 )
                 if write_new_nfs_storage.returncode != 0:
                     self.logger.info(
-                        f"Ошибка при обновлении конфигурации HA NFS хранилищ: '{write_new_nfs_storage.stderr}'"
+                        f"Ошибка при обновлении конфигурации NFS хранилищ: '{write_new_nfs_storage.stderr}'"
                     )
                     return False
                 self.logger.info(
                     f"Результат записи нового NFS сервера: '{write_new_nfs_storage}'"
                 )
                 read_updated_config = self.cli.execute(
-                    ["cat", self.loaded_ha_nfs_storages_path]
+                    ["cat", self.loaded_nfs_storages_path]
                 )
                 self.logger.info(
                     f"Результат чтения конфига после записи: '{read_updated_config}'"
@@ -239,13 +240,13 @@ class HAController:
                 return True
         return False
 
-    def umount_ha_nfs_storages(self, storages: NFSStorages) -> bool:
+    def umount_nfs_storages(self, storages: NFSStorages) -> bool:
         """
         Метод отмонтирования(удаления) NFS хранилищ
         """
 
         storages_for_umount = [storage for storage in storages.nfs_storages if storage]
-        current_config = self.loaded_ha_nfs_storages
+        current_config = self.loaded_nfs_storages
         updated_config = NFSStorages(nfs_storages=[])
         deleted_storage_mount_points = []
         if storages_for_umount:
@@ -266,20 +267,20 @@ class HAController:
             [
                 "sh",
                 "-c",
-                f"echo '{updated_config.model_dump_json()}' > {self.loaded_ha_nfs_storages_path}",
+                f"echo '{updated_config.model_dump_json()}' > {self.loaded_nfs_storages_path}",
             ],
             return_proc=True,
         )
         if write_updated_nfs_storage.returncode != 0:
             self.logger.info(
-                f"Ошибка при обновлении конфигурации HA NFS хранилищ: '{write_updated_nfs_storage.stderr}'"
+                f"Ошибка при обновлении конфигурации NFS хранилищ: '{write_updated_nfs_storage.stderr}'"
             )
             return False
         self.logger.info(f"Отмонтированные хранилища: '{deleted_storage_mount_points}'")
         return True
 
     def delete_vm_from_nfs_config(self, vm_name: str):
-        for nfs_storage in self.loaded_ha_nfs_storages.nfs_storages:
+        for nfs_storage in self.loaded_nfs_storages.nfs_storages:
             config_path = Path(
                 f"{nfs_storage.mount}/{self.nfs_vm_config_root}/{vm_name}.xml"
             )
@@ -295,10 +296,10 @@ class HAController:
 
     def sync_nfs_vm_configs(self):
         """Синхронизирует только XML конфиги ВМ с исключением лишнего"""
-        if not self.loaded_ha_nfs_storages_path:
+        if not self.loaded_nfs_storages_path:
             return
 
-        for nfs_storage in self.loaded_ha_nfs_storages.nfs_storages:
+        for nfs_storage in self.loaded_nfs_storages.nfs_storages:
             try:
                 mounted_nfs_dir = Path(f"{nfs_storage.mount}{self.nfs_vm_config_root}")
                 if not mounted_nfs_dir.is_dir():
@@ -344,14 +345,14 @@ class HAController:
 
 
 if __name__ == "__main__":
-    cli = HAController()
+    cli = NFSController()
     # print(cli.vm_configs())
     print(
-        cli.load_and_mount_ha_nfs_storages(
+        cli.load_and_mount_nfs_storages(
             LoadNFSStorages(
                 nfs_storages_for_mount=[
                     NFSStorageForMount(
-                        source="127.0.0.1:/share_622825", nfs_name="ha_cluster"
+                        source="127.0.0.1:/share_622825", nfs_name="nfs_cluster"
                     )
                 ]
             )

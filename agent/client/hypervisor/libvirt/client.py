@@ -50,16 +50,18 @@ class LibvirtClient:
         xml_string = ElementTree.tostring(element_tree_object).decode("utf-8")
         return xml_string
 
-    def connect(self):
+    def connect(self, connection_uri: str | None = None):
         """Подключение к гипервизору"""
+        if connection_uri is None:
+            connection_uri = self.connection_uri
         try:
             # Настройка аутентификации, если указаны учетные данные
             if self.username:
                 # Определяем тип аутентификации по URI
-                if self.connection_uri.startswith("qemu+ssh://"):
+                if connection_uri.startswith("qemu+ssh://"):
                     # Для SSH используем интерактивную аутентификацию
                     self.conn = libvirt.openAuth(
-                        self.connection_uri,
+                        connection_uri,
                         [
                             [libvirt.VIR_CRED_AUTHNAME, libvirt.VIR_CRED_PASSPHRASE],
                             self._auth_callback,
@@ -71,7 +73,7 @@ class LibvirtClient:
                     if self.password:
                         # Если есть пароль, используем аутентификацию
                         self.conn = libvirt.openAuth(
-                            self.connection_uri,
+                            connection_uri,
                             [
                                 [
                                     libvirt.VIR_CRED_AUTHNAME,
@@ -83,20 +85,20 @@ class LibvirtClient:
                         )
                     else:
                         # Если пароля нет, пробуем обычное подключение
-                        self.conn = libvirt.open(self.connection_uri)
+                        self.conn = libvirt.open(connection_uri)
             else:
                 # Подключение без аутентификации
-                self.conn = libvirt.open(self.connection_uri)
+                self.conn = libvirt.open(connection_uri)
 
             if self.conn is None:
-                self.logger.error(f"Не удалось подключиться к {self.connection_uri}")
+                self.logger.error(f"Не удалось подключиться к {connection_uri}")
                 return False
 
             if self.password is None:
-                self.logger.info(f"Успешное подключение к {self.connection_uri}")
+                self.logger.info(f"Успешное подключение к {connection_uri}")
             else:
                 self.logger.info(
-                    f"Успешное подключение под пользователем {self.username} к {self.connection_uri}"
+                    f"Успешное подключение под пользователем {self.username} к {connection_uri}"
                 )
             self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
             self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
