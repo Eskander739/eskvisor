@@ -26,9 +26,7 @@ class NFSController:
         self.loaded_nfs_storages_path = os.environ.get("LOADED_NFS_STORAGES_PATH")
         if not Path(self.loaded_nfs_storages_path).exists():
             nfs_storages_model = NFSStorages(nfs_storages=[]).model_dump_json()
-            self.cli.create_file(
-                self.loaded_nfs_storages_path, f"{nfs_storages_model}"
-            )
+            self.cli.create_file(self.loaded_nfs_storages_path, f"{nfs_storages_model}")
 
     @staticmethod
     def validate_nfs_path_safety(

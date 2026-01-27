@@ -132,7 +132,7 @@ def delete_all_network_info():
     if result:
         bridge_list_for_delete = [bridge for bridge in result.split("\n") if bridge]
         for current_bridge in bridge_list_for_delete:
-            if "test" in current_bridge:
+            if "test" in current_bridge and current_bridge != "virbr-test-ntt2":
                 cmd_args_delete_bridge = ["ip", "link", "delete", current_bridge]
                 cli.execute(cmd_args_delete_bridge)
 
@@ -143,10 +143,11 @@ def delete_all_virtual_machines():
     with VmManager() as vm_manager:
         vms = vm_manager.list_vms().vm_info
         for vm in vms.items:
-            vm_manager.delete_vm_with_force(vm.name)
-            vm_manager.logger.info(
-                f"Удаление ВМ - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}"
-            )
+            if "test" in vm.name.lower():
+                vm_manager.delete_vm_with_force(vm.name)
+                vm_manager.logger.info(
+                    f"Удаление ВМ - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}"
+                )
 
 
 @pytest.fixture(scope="session")

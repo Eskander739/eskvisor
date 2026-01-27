@@ -6,7 +6,8 @@ from agent.client.hypervisor.libvirt.models.volume.disk import Disk, VMStorageUs
 from agent.client.hypervisor.libvirt.models.network import (
     NetworkInfo,
     NetworkInterfacesInfo,
-    NetworkList, NetworkBackup,
+    NetworkList,
+    NetworkBackup,
 )
 
 from agent.client.hypervisor.libvirt.models.snapshots import (
@@ -23,10 +24,13 @@ from agent.client.hypervisor.libvirt.models.snapshots import (
 )
 from agent.client.hypervisor.libvirt.models.vm import (
     VirtualMachine,
-    VirtualMachinesList, VMStateInfo,
+    VirtualMachinesList,
+    VMStateInfo,
 )
 from agent.client.hypervisor.libvirt.models.volume.balansir import (
-    ResourcePoolVirtual, ResourcePoolVMS, ResourcePoolConnectedVMS,
+    ResourcePoolVirtual,
+    ResourcePoolVMS,
+    ResourcePoolConnectedVMS,
 )
 from agent.client.hypervisor.libvirt.models.volume.logic import LogicVolume
 
@@ -117,7 +121,9 @@ class CommandMessagesEnum(Enum):
     )
     networks_list_found = "Networks list found"
     networks_list_not_found = "Networks list not found"
-    virtual_network_backup_successfully_created = "Virtual network backup successfully created"
+    virtual_network_backup_successfully_created = (
+        "Virtual network backup successfully created"
+    )
     virtual_network_backup_create_error = "Virtual network backup create error"
     virtual_network_interface_detach_error = "Virtual network interface detach error"
     virtual_network_interface_not_found = "Virtual network interface not found"
@@ -161,7 +167,9 @@ class CommandMessagesEnum(Enum):
 
     rp_virtual_delete_success = "Virtual resource pool successfully deleted"
     rp_virtual_config_edit_success = "Virtual resource pool config successfully edited"
-    rp_virtual_config_successfully_founded = "Virtual resource pool config successfully founded"
+    rp_virtual_config_successfully_founded = (
+        "Virtual resource pool config successfully founded"
+    )
     rp_virtual_edit_error = "Virtual resource pool edit error"
     file_in_use_by_another_process = "File in use by another process"
     rp_virtual_config_edit_error = "Virtual resource pool config edit error"
@@ -215,6 +223,7 @@ class CommandMessagesEnum(Enum):
     migration_virsh_error = "Migration virsh error"
     migration_timeout_error_with_virsh = "Migration timeout error with virsh"
 
+
 class DefaultMessage(BaseModel):
     code: str
 
@@ -243,7 +252,9 @@ class StorageMessage(DefaultMessage):
 
 class NetworkMessage(DefaultMessage):
     success: bool
-    net_info: NetworkInfo | NetworkInterfacesInfo | NetworkList | NetworkBackup | None = None
+    net_info: (
+        NetworkInfo | NetworkInterfacesInfo | NetworkList | NetworkBackup | None
+    ) = None
     note: str | None = None
 
 
@@ -251,7 +262,9 @@ class RpMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
 
     success: bool
-    rp_info: ResourcePoolVirtual | ResourcePoolVMS | ResourcePoolConnectedVMS | None = None
+    rp_info: ResourcePoolVirtual | ResourcePoolVMS | ResourcePoolConnectedVMS | None = (
+        None
+    )
     note: str | None = None
 
 

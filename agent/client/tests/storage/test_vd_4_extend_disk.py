@@ -57,7 +57,9 @@ def test_vd_04_extend_disk(storage_session, disk_format):
             disk_name=disk_create.name,
             disk_format=disk_format,
         )
-        assert disk_extend_info.code == CommandMessagesEnum.disk_successfully_extended.name, disk_extend_info.note
+        assert (
+            disk_extend_info.code == CommandMessagesEnum.disk_successfully_extended.name
+        ), disk_extend_info.note
         vm_disk = storage_session.get_disk_info(
             disk_name=disk_create.name, disk_format=disk_format
         )

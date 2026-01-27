@@ -443,6 +443,123 @@
             margin-bottom: 0.4rem;
         }
 
+        /* Секция с документом */
+        .certificate-section {
+            background: linear-gradient(180deg, var(--darker) 0%, var(--black) 100%);
+        }
+
+        .certificate-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3rem;
+        }
+
+        .certificate-image-container {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            max-width: 800px;
+            width: 100%;
+            border: 2px solid var(--red);
+            padding: 2rem;
+        }
+
+        .certificate-image {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .certificate-image:hover {
+            transform: scale(1.02);
+        }
+
+        .certificate-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0.8rem 1.5rem;
+            background: var(--red-gradient);
+            color: var(--white);
+            border: none;
+            border-radius: 50px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+            box-shadow: var(--shadow-red);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(220, 38, 38, 0.3);
+        }
+
+        .control-btn.outline {
+            background: transparent;
+            border: 2px solid var(--red);
+            color: var(--red);
+        }
+
+        .control-btn.outline:hover {
+            background: var(--red);
+            color: var(--white);
+        }
+
+        .certificate-info {
+            background: var(--gray-dark);
+            border-radius: var(--radius);
+            padding: 2rem;
+            margin-top: 2rem;
+            border-left: 4px solid var(--red);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .info-item {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius);
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: var(--red);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            color: var(--light);
+            font-size: 1.1rem;
+        }
+
         /* Скрываем dashboard-preview на мобильных устройствах */
         @media (max-width: 768px) {
             .hero-visual {
@@ -455,6 +572,23 @@
             }
 
             .hero-buttons {
+                justify-content: center;
+            }
+
+            .certificate-image-container {
+                margin: 0 -1rem;
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+                padding: 1rem;
+            }
+
+            .certificate-controls {
+                flex-direction: column;
+            }
+
+            .control-btn {
+                width: 100%;
                 justify-content: center;
             }
         }
@@ -678,6 +812,9 @@
                 width: 100%;
                 margin-bottom: 1rem;
             }
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 576px) {
@@ -703,6 +840,7 @@
             <nav>
                 <a href="#" class="logo">esk<span>visor</span></a>
                 <div style="display: flex; gap: 2rem;">
+                    <a href="#certificate" style="color: var(--light); text-decoration: none; font-weight: 600;">Свидетельство</a>
                     <a href="#benefits" style="color: var(--light); text-decoration: none; font-weight: 600;">Преимущества</a>
                     <a href="#for-who" style="color: var(--light); text-decoration: none; font-weight: 600;">Для кого</a>
                     <a href="#contacts" style="color: var(--light); text-decoration: none; font-weight: 600;">Контакты</a>
@@ -729,8 +867,8 @@
                         <a href="mailto:eskander5765@yandex.ru?subject=Демо Eskvisor&body=Здравствуйте! Интересует демонстрация Eskvisor." class="btn">
                             <i class="fas fa-rocket"></i> Запросить демо
                         </a>
-                        <a href="#benefits" class="btn btn-outline">
-                            <i class="fas fa-chart-line"></i> Бизнес-преимущества
+                        <a href="#certificate" class="btn btn-outline">
+                            <i class="fas fa-file-certificate"></i> Официальная регистрация
                         </a>
                     </div>
                 </div>
@@ -766,6 +904,35 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Секция с свидетельством -->
+    <section id="certificate" class="certificate-section">
+        <div class="container">
+            <div class="text-center">
+                <h2>Официальная регистрация в Роспатенте</h2>
+                <p>Программа для ЭВМ Eskvisor зарегистрирована в государственном реестре</p>
+            </div>
+
+            <div class="certificate-container">
+                <div class="certificate-image-container">
+                    <img src="rospatent.jpg" alt="Свидетельство о государственной регистрации программы для ЭВМ Eskvisor №2026612145" class="certificate-image" id="certificateImage">
+
+                    <div class="certificate-controls">
+                        <button onclick="zoomIn()" class="control-btn">
+                            <i class="fas fa-search-plus"></i> Увеличить
+                        </button>
+                        <a href="rospatent.jpg" download="Свидетельство_Eskvisor_2026612145.png" class="control-btn outline">
+                            <i class="fas fa-download"></i> Скачать оригинал
+                        </a>
+                        <a href="https://fips.ru/EGD/072F30c4-1682-48b2-ac19-25ad28165e0f" target="_blank" class="control-btn">
+                            <i class="fas fa-external-link-alt"></i> Проверить в реестре
+                        </a>
+                    </div>
+                </div>
+                
             </div>
         </div>
     </section>
@@ -965,6 +1132,7 @@
                 </div>
 
                 <div style="display: flex; gap: 2rem; list-style: none;">
+                    <a href="#certificate" style="color: #a3a3a3; text-decoration: none;">Свидетельство</a>
                     <a href="#benefits" style="color: #a3a3a3; text-decoration: none;">Преимущества</a>
                     <a href="#for-who" style="color: #a3a3a3; text-decoration: none;">Для кого</a>
                     <a href="#contacts" style="color: #a3a3a3; text-decoration: none;">Контакты</a>
@@ -973,7 +1141,7 @@
 
             <div style="text-align: center; padding-top: 2rem; border-top: 1px solid var(--gray); color: #737373; font-size: 0.9rem;">
                 <p>&copy; 2025 eskvisor. Все права защищены. Индивидуальный предприниматель Байсиев Эскандер Хакимович. ОГРНИП: 325070000046405</p>
-                <p style="margin-top: 0.5rem; color: #8a8a8a;">Проект находится в процессе регистрации в Роспатенте. Коммерческое использование — по лицензионному договору.</p>
+                <p style="margin-top: 0.5rem; color: #8a8a8a;">Программа для ЭВМ Eskvisor зарегистрирована в Роспатенте, свидетельство № 2026612145</p>
             </div>
         </div>
     </footer>
@@ -1016,6 +1184,32 @@
             card.style.transform = 'translateY(30px)';
             card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
             observer.observe(card);
+        });
+
+        // Анимация для свидетельства
+        const certificateElement = document.querySelector('.certificate-image-container');
+        if (certificateElement) {
+            certificateElement.style.opacity = '0';
+            certificateElement.style.transform = 'translateY(30px)';
+            certificateElement.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+            observer.observe(certificateElement);
+        }
+
+        // Функция для увеличения изображения
+        let currentScale = 1;
+        function zoomIn() {
+            const image = document.getElementById('certificateImage');
+            currentScale += 0.2;
+            if (currentScale > 2) currentScale = 1;
+            image.style.transform = `scale(${currentScale})`;
+        }
+
+        // Сброс масштаба при клике на изображение
+        document.getElementById('certificateImage').addEventListener('click', function() {
+            if (currentScale !== 1) {
+                currentScale = 1;
+                this.style.transform = 'scale(1)';
+            }
         });
     </script>
 </body>

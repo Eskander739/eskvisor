@@ -13,9 +13,7 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
 
 
 @pytest.mark.tags("RP‑13", "Синхронизация ресурс пула")
-def test_rp_13_sync_resource_pool(
-    resource_pool_session, create_running_vm_session
-):
+def test_rp_13_sync_resource_pool(resource_pool_session, create_running_vm_session):
     """
     RP‑13: Синхронизация ресурс пула
 
@@ -88,7 +86,10 @@ def test_rp_13_sync_resource_pool(
         )
         # ____________________________________Синхронизация ресурс пулов______________
         sync_rps_info = resource_pool_session.sync_rps_config_vms()
-        assert sync_rps_info.code == CommandMessagesEnum.rp_virtual_config_sync_success.name
+        assert (
+            sync_rps_info.code
+            == CommandMessagesEnum.rp_virtual_config_sync_success.name
+        )
         # ____________________________________Проверка присутствия ВМ в пуле______________
         time.sleep(1)
         get_rp_info = resource_pool_session.get_virtual_resource_pool_by_name(

@@ -14,7 +14,8 @@ from agent.client.hypervisor.libvirt.models.enum import (
     ControllerType,
     EmulatorType,
     GraphicsType,
-    OSType, VideoModel,
+    OSType,
+    VideoModel,
 )
 from agent.client.hypervisor.libvirt.models.general import (
     MachineType,
@@ -182,7 +183,8 @@ class VMCreateRequest(BaseModel):
         description="Дополнительные аргументы для командной строки установки",
     )
     video_model: VideoModel = Field(
-        default=VideoModel.QXL, description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
+        default=VideoModel.QXL,
+        description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д.",
     )
     boot_uefi: bool = Field(
         default=False, description="Использовать UEFI вместо BIOS для загрузки"

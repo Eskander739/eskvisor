@@ -187,4 +187,3 @@ class ResourcePoolVMS(BaseModel):
 
 class ResourcePoolConnectedVMS(BaseModel):
     resource_pools: list[ResourcePoolVMS] = []
-

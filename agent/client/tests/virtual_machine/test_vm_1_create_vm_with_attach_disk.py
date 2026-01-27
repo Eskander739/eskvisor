@@ -12,11 +12,11 @@
 # from agent.client.hypervisor.libvirt.models.vm import VirtualMachine, VMCreateRequest, NetQemuCommandline
 # from agent.client.tools import wait_while_not
 #
-# IMG_PATH = os.environ.get("IMAGE_PATH")
+# IMG_PATH = "/home/eska/AlmaLinux-10.1-x86_64-minimal.iso"
 #
 #
 # @pytest.mark.tags("VM‑01", "Создание ВМ с присоединением диска а не созданием нового")
-# @pytest.mark.skip("Для внутреннего тестирования, не для прода")
+# # @pytest.mark.skip("Для внутреннего тестирования, не для прода")
 # def test_vm_01_create_vm_with_attach_disk(vm_session, network_session):
 #     """
 #     VM‑01: Создание ВМ с присоединением диска, а не созданием нового(DiskAttach)
@@ -36,7 +36,7 @@
 #         autostart_vm=True,
 #         disks=[
 #             DiskCreate(path=IMG_PATH, disk_type=DiskType.CDROM),
-#             DiskCreate(size_gb=2),
+#             DiskCreate(size_gb=6),
 #         ],
 #         vcpus=2,
 #         memory_mb=2048,
@@ -70,7 +70,7 @@
 #         vm_created = True
 #         assert create_vm_info.vm_info is not None
 #         vm_info: VirtualMachine = create_vm_info.vm_info
-#         assert wait_while_not(lambda: get_state(random_name) == VMState.SHUTOFF.value)
+#         assert wait_while_not(lambda: get_state(random_name) == VMState.RUNNING.value)
 #         assert vm_info.vcpus == vm_template.vcpus
 #         assert vm_info.name == vm_template.name
 #         assert kb_to_mb(vm_info.memory) == vm_template.memory_mb

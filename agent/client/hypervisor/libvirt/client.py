@@ -50,66 +50,120 @@ class LibvirtClient:
         xml_string = ElementTree.tostring(element_tree_object).decode("utf-8")
         return xml_string
 
-    def connect(self, connection_uri: str | None = None):
-        """Подключение к гипервизору"""
-        if connection_uri is None:
-            connection_uri = self.connection_uri
+    def connect_classic(self, uri: str = "qemu:///system") -> libvirt.virConnect:
+        """
+        Классическое подключение к локальному гипервизору
+
+        Args:
+            uri: URI подключения (по умолчанию qemu:///system)
+
+        Returns:
+            bool: True если подключение успешно, иначе False
+        """
         try:
-            # Настройка аутентификации, если указаны учетные данные
-            if self.username:
-                # Определяем тип аутентификации по URI
-                if connection_uri.startswith("qemu+ssh://"):
-                    # Для SSH используем интерактивную аутентификацию
-                    self.conn = libvirt.openAuth(
-                        connection_uri,
-                        [
-                            [libvirt.VIR_CRED_AUTHNAME, libvirt.VIR_CRED_PASSPHRASE],
-                            self._auth_callback,
-                        ],
-                        0,
-                    )
-                else:
-                    # Для локальных подключений
-                    if self.password:
-                        # Если есть пароль, используем аутентификацию
-                        self.conn = libvirt.openAuth(
-                            connection_uri,
-                            [
-                                [
-                                    libvirt.VIR_CRED_AUTHNAME,
-                                    libvirt.VIR_CRED_PASSPHRASE,
-                                ],
-                                self._auth_callback,
-                            ],
-                            0,
-                        )
-                    else:
-                        # Если пароля нет, пробуем обычное подключение
-                        self.conn = libvirt.open(connection_uri)
-            else:
-                # Подключение без аутентификации
-                self.conn = libvirt.open(connection_uri)
+            self.conn = libvirt.open(uri)
 
             if self.conn is None:
-                self.logger.error(f"Не удалось подключиться к {connection_uri}")
-                return False
+                self.logger.error(f"Не удалось подключиться к {uri}")
+                raise ValueError(f"Не удалось подключиться к {uri}")
 
-            if self.password is None:
-                self.logger.info(f"Успешное подключение к {connection_uri}")
-            else:
-                self.logger.info(
-                    f"Успешное подключение под пользователем {self.username} к {connection_uri}"
-                )
+            self.logger.info(f"Успешное классическое подключение к {uri}")
             self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
             self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
             return self.conn
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка подключения: {e}")
-            return False
+            raise ValueError(f"Ошибка подключения: {e}")
 
-    def _auth_callback(self, credentials):
-        """Callback функция для аутентификации"""
+    def connect_ssh_with_password(
+        self, host: str, username: str = None, password: str = None
+    ) -> libvirt.virConnect:
+        """
+        Подключение по SSH с использованием пароля
+
+        Args:
+            host: Хост для подключения
+            username: Имя пользователя (если None, будет запрошено)
+            password: Пароль (если None, будет запрошен)
+
+        Returns:
+            bool: True если подключение успешно, иначе False
+        """
+        if username is None:
+            username = input("Введите имя пользователя для SSH: ")
+
+        self.username = username
+        self.password = password
+
+        uri = f"qemu+ssh://{username}@{host}/system"
+
+        try:
+            self.conn = libvirt.openAuth(
+                uri,
+                [
+                    [libvirt.VIR_CRED_AUTHNAME, libvirt.VIR_CRED_PASSPHRASE],
+                    self._ssh_password_auth_callback,
+                ],
+                0,
+            )
+
+            if self.conn is None:
+                self.logger.error(f"Не удалось подключиться к {uri}")
+                raise ValueError(f"Не удалось подключиться к {uri}")
+
+            self.logger.info(f"Успешное подключение по SSH (с паролем) к {uri}")
+            self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
+            self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
+            return self.conn
+
+        except libvirt.libvirtError as e:
+            self.logger.error(f"Ошибка подключения: {e}")
+            raise ValueError(f"Ошибка подключения: {e}")
+
+    def connect_ssh_with_key(
+        self, host: str, username: str = None, keyfile: str = None
+    ) -> libvirt.virConnect:
+        """
+        Подключение по SSH с использованием SSH-ключа
+
+        Args:
+            host: Хост для подключения
+            username: Имя пользователя (если None, будет запрошено)
+            keyfile: Путь к файлу SSH-ключа (если None, используется стандартный)
+
+        Returns:
+            bool: True если подключение успешно, иначе False
+        """
+        if username is None:
+            username = input("Введите имя пользователя для SSH: ")
+
+        # Формируем URI для подключения с SSH-ключом
+        if keyfile:
+            # Если указан ключ, добавляем его в URI
+            uri = f"qemu+ssh://{username}@{host}/system?keyfile={keyfile}&no_verify=1"
+        else:
+            # Используем стандартный ключ из ~/.ssh/
+            uri = f"qemu+ssh://{username}@{host}/system?no_verify=1"
+
+        try:
+            self.conn = libvirt.open(uri)
+
+            if self.conn is None:
+                self.logger.error(f"Не удалось подключиться к {uri}")
+                raise ValueError(f"Не удалось подключиться к {uri}")
+
+            self.logger.info(f"Успешное подключение по SSH (с ключом) к {uri}")
+            self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
+            self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
+            return self.conn
+
+        except libvirt.libvirtError as e:
+            self.logger.error(f"Ошибка подключения: {e}")
+            raise ValueError(f"Ошибка подключения: {e}")
+
+    def _ssh_password_auth_callback(self, credentials):
+        """Callback функция для аутентификации по SSH с паролем"""
         for credential in credentials:
             if credential[0] == libvirt.VIR_CRED_AUTHNAME:
                 # Запрос имени пользователя
@@ -138,7 +192,8 @@ class LibvirtClient:
 
     def __enter__(self):
         """Контекстный менеджер для автоматического подключения"""
-        self.connect()
+        # По умолчанию используем классическое подключение
+        self.connect_classic()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -166,6 +221,29 @@ class LibvirtClient:
 
 
 if __name__ == "__main__":
+    # Пример использования разных режимов подключения
     lib_client = LibvirtClient()
-    lib_client.connect()
-    print(lib_client.get_node_info())
+
+    # 1. Классическое подключение
+    print("1. Тестирование классического подключения:")
+    if lib_client.connect_classic():
+        print(lib_client.get_node_info())
+    lib_client.disconnect()
+
+    print("\n" + "=" * 50 + "\n")
+
+    # 2. Подключение по SSH с ключом
+    print("2. Тестирование подключения по SSH с ключом:")
+    host = input("Введите хост для SSH подключения: ")
+    if lib_client.connect_ssh_with_key(host=host):
+        print(lib_client.get_node_info())
+    lib_client.disconnect()
+
+    print("\n" + "=" * 50 + "\n")
+
+    # 3. Подключение по SSH с паролем
+    print("3. Тестирование подключения по SSH с паролем:")
+    host = input("Введите хост для SSH подключения: ")
+    if lib_client.connect_ssh_with_password(host=host):
+        print(lib_client.get_node_info())
+    lib_client.disconnect()

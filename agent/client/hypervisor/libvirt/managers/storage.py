@@ -25,7 +25,8 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskQuery,
     DiskStatus,
     DiskType,
-    QemuDisk, VMStorageUsedInfo,
+    QemuDisk,
+    VMStorageUsedInfo,
 )
 from agent.client.hypervisor.libvirt.models.msg import (
     CommandMessagesEnum,
@@ -288,7 +289,7 @@ class StorageManager(LibvirtClient):
             ):
                 disk_info = StorageMessage(
                     success=True,
-                    code=CommandMessagesEnum.disk_successfully_attached.name
+                    code=CommandMessagesEnum.disk_successfully_attached.name,
                 )
             elif disk_create.format.value == DiskFormat.QCOW2.value:
                 disk_info = self._create_qcow2_disk(
@@ -473,11 +474,13 @@ class StorageManager(LibvirtClient):
         delete_disk_result = self.delete_disk(disk_path)
 
         if delete_disk_result:
-            return StorageMessage(code=CommandMessagesEnum.disk_successfully_deleted.name,
-                                  success=True)
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_successfully_deleted.name, success=True
+            )
         else:
-            return StorageMessage(code=CommandMessagesEnum.disk_delete_error.name,
-                                  success=True)
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_delete_error.name, success=True
+            )
 
     def delete_disk(
         self,
@@ -522,23 +525,47 @@ class StorageManager(LibvirtClient):
 
         try:
             if path:
-                disk_extend_result = self._edit_file_disk(disk_name, path, disk_format, new_size_gb)
+                disk_extend_result = self._edit_file_disk(
+                    disk_name, path, disk_format, new_size_gb
+                )
                 if isinstance(disk_extend_result, Disk):
-                    return StorageMessage(code=CommandMessagesEnum.disk_successfully_extended.name, disk_info=disk_extend_result, success=True)
-                elif disk_extend_result is not None and disk_extend_result.code == CommandMessagesEnum.disk_founded.name:
-                    return StorageMessage(code=CommandMessagesEnum.disk_successfully_extended.name,
-                                          disk_info=disk_extend_result.disk_info, success=True)
+                    return StorageMessage(
+                        code=CommandMessagesEnum.disk_successfully_extended.name,
+                        disk_info=disk_extend_result,
+                        success=True,
+                    )
+                elif (
+                    disk_extend_result is not None
+                    and disk_extend_result.code == CommandMessagesEnum.disk_founded.name
+                ):
+                    return StorageMessage(
+                        code=CommandMessagesEnum.disk_successfully_extended.name,
+                        disk_info=disk_extend_result.disk_info,
+                        success=True,
+                    )
                 else:
-                    return StorageMessage(code=CommandMessagesEnum.disk_extend_error.name, success=False)
+                    return StorageMessage(
+                        code=CommandMessagesEnum.disk_extend_error.name, success=False
+                    )
             else:
-                return StorageMessage(code=CommandMessagesEnum.disk_extend_error.name, success=False)
+                return StorageMessage(
+                    code=CommandMessagesEnum.disk_extend_error.name, success=False
+                )
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка libvirt: {e}")
-            return StorageMessage(code=CommandMessagesEnum.disk_extend_error.name, success=False, note=str(e))
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_extend_error.name,
+                success=False,
+                note=str(e),
+            )
         except Exception as e:
             self.logger.exception(f"Ошибка: {e}")
-            return StorageMessage(code=CommandMessagesEnum.disk_extend_error.name, success=False, note=str(e))
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_extend_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def _edit_file_disk(
         self, disk_name: str, path: str, disk_format: DiskFormat, new_size_gb: int
@@ -572,7 +599,9 @@ class StorageManager(LibvirtClient):
             source_path = Path(f"{path}/{disk_name}.{disk_format.value}")
             target_path = Path(f"{path}/{target_name}.{disk_format.value}")
             if not source_path.exists():
-                return StorageMessage(code=CommandMessagesEnum.disk_not_found.name, success=False)
+                return StorageMessage(
+                    code=CommandMessagesEnum.disk_not_found.name, success=False
+                )
             if disk_format == DiskFormat.QCOW2:
                 cmd = [
                     "qemu-img",
@@ -600,15 +629,26 @@ class StorageManager(LibvirtClient):
                 disk_name=target_name, path=path, disk_format=disk_format
             )
             if isinstance(disk_info, Disk):
-                return StorageMessage(code=CommandMessagesEnum.disk_successfully_cloned.name, success=True, disk_info=disk_info)
+                return StorageMessage(
+                    code=CommandMessagesEnum.disk_successfully_cloned.name,
+                    success=True,
+                    disk_info=disk_info,
+                )
             elif disk_info.code == CommandMessagesEnum.disk_founded.name:
-                return StorageMessage(code=CommandMessagesEnum.disk_successfully_cloned.name, success=True,
-                                      disk_info=disk_info.disk_info)
+                return StorageMessage(
+                    code=CommandMessagesEnum.disk_successfully_cloned.name,
+                    success=True,
+                    disk_info=disk_info.disk_info,
+                )
             return disk_info
 
         except Exception as e:
             self.logger.exception(f"Ошибка клонирования: {e}")
-            return StorageMessage(code=CommandMessagesEnum.disk_clone_error.name, success=False, note=str(e))
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_clone_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def attach_disk(self, disk_attach: DiskAttach) -> StorageMessage:
         try:
@@ -729,13 +769,17 @@ class StorageManager(LibvirtClient):
             for disk_elem in all_disks:
                 used_storage += disk_elem.allocation_bytes
 
-            return StorageMessage(code=CommandMessagesEnum.vm_storage_used_info.name,
-                                  disk_info=VMStorageUsedInfo(vm_name=vm_name, storage_used=used_storage),
-                                  success=True)
+            return StorageMessage(
+                code=CommandMessagesEnum.vm_storage_used_info.name,
+                disk_info=VMStorageUsedInfo(vm_name=vm_name, storage_used=used_storage),
+                success=True,
+            )
         except Exception as e:
-            return StorageMessage(code=CommandMessagesEnum.vm_storage_used_info_error.name,
-                                  success=False,
-                                  note=str(e))
+            return StorageMessage(
+                code=CommandMessagesEnum.vm_storage_used_info_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def get_disks_by_vm(self, vm_name: str) -> list[Disk]:
         """
@@ -952,14 +996,20 @@ class StorageManager(LibvirtClient):
                 vm.detachDeviceFlags(disk_xml, libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
 
             self.logger.info("Диск успешно отключен")
-            return StorageMessage(code=CommandMessagesEnum.disk_successfully_detached.name, success=True)
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_successfully_detached.name, success=True
+            )
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка отключения: {e}")
-            return StorageMessage(code=CommandMessagesEnum.disk_detach_error.name, success=False)
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_detach_error.name, success=False
+            )
         except Exception as e:
             self.logger.exception(f"Неожиданная ошибка: {e}")
-            return StorageMessage(code=CommandMessagesEnum.disk_detach_error.name, success=False)
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_detach_error.name, success=False
+            )
 
     def list_disks(self, query: DiskQuery | None = None) -> StorageMessage:
         all_disks = []
@@ -970,15 +1020,19 @@ class StorageManager(LibvirtClient):
             all_disks = self._remove_duplicate_disks(all_disks)
             all_disks = self._apply_filters(all_disks, query)
 
-            return StorageMessage(success=True,
+            return StorageMessage(
+                success=True,
                 code=CommandMessagesEnum.disk_list_founded.name,
-                                  disk_info=all_disks)
+                disk_info=all_disks,
+            )
 
         except Exception as e:
             self.logger.exception(f"Ошибка получения списка: {e}")
-            return StorageMessage(success=False,
-                                  code=CommandMessagesEnum.disk_list_error.name,
-                                  note=str(e))
+            return StorageMessage(
+                success=False,
+                code=CommandMessagesEnum.disk_list_error.name,
+                note=str(e),
+            )
 
     def convert_disk_format(
         self,

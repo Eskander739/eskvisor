@@ -39,7 +39,8 @@ from agent.client.hypervisor.libvirt.models.vm import (
     VmUpdateRequest,
     HostForward,
     VirtualMachinesList,
-    SecureBootVM, VMStateInfo,
+    SecureBootVM,
+    VMStateInfo,
 )
 from agent.client.logger_config import DefaultLogger
 
@@ -70,7 +71,7 @@ class VmManager(LibvirtClient):
         self.network_manager = None
 
     def __enter__(self):
-        self.conn = self.connect()
+        self.conn = self.connect_classic()
         self.snapshot = SnapshotManager()
         self.storage_manager = StorageManager()
         self.network_manager = NetworkManager()
@@ -644,7 +645,6 @@ class VmManager(LibvirtClient):
             self.logger.error(f"Ошибка проверки Secure Boot для ВМ {vm_name}: {e}")
             return SecureBootVM(vm_name=vm_name, errors=[str(e)])
 
-
     def get_vm_nvram(self, vm_name: str | libvirt.virDomain):
         if isinstance(vm_name, str):
             domain = self.conn.lookupByName(vm_name)
@@ -710,21 +710,33 @@ class VmManager(LibvirtClient):
 
             # Флаги миграции
             flags = 0
-            flags |= libvirt.VIR_MIGRATE_CHANGE_PROTECTION # Защита от изменений конфига во время миграции
+            flags |= (
+                libvirt.VIR_MIGRATE_CHANGE_PROTECTION
+            )  # Защита от изменений конфига во время миграции
             if live:
-                flags = libvirt.VIR_MIGRATE_LIVE | libvirt.VIR_MIGRATE_ABORT_ON_ERROR # Немедленный откат при ошибке, для критичных ВМ, где важна минимизация риска
-                flags |= libvirt.VIR_MIGRATE_PEER2PEER # Прямая миграция между хостами без прокси когда хосты видят друг друга в сети
+                flags = (
+                    libvirt.VIR_MIGRATE_LIVE | libvirt.VIR_MIGRATE_ABORT_ON_ERROR
+                )  # Немедленный откат при ошибке, для критичных ВМ, где важна минимизация риска
+                flags |= (
+                    libvirt.VIR_MIGRATE_PEER2PEER
+                )  # Прямая миграция между хостами без прокси когда хосты видят друг друга в сети
                 flags |= libvirt.VIR_MIGRATE_TUNNELLED  # Для безопасности
 
             if undefine_source:
-                flags |= libvirt.VIR_MIGRATE_UNDEFINE_SOURCE # Удалить конфиг ВМ с исходного хоста, для "переезда" ВМ без остатков
+                flags |= (
+                    libvirt.VIR_MIGRATE_UNDEFINE_SOURCE
+                )  # Удалить конфиг ВМ с исходного хоста, для "переезда" ВМ без остатков
 
             if migrate_paused:
-                flags |= libvirt.VIR_MIGRATE_PAUSED # Для проверки миграции без запуска
+                flags |= libvirt.VIR_MIGRATE_PAUSED  # Для проверки миграции без запуска
 
             if migrate_disks:
-                flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK # Копировать локальные диски на целевой хост
-                flags |= libvirt.VIR_MIGRATE_NON_SHARED_INC # Для ускорения миграции больших дисков.
+                flags |= (
+                    libvirt.VIR_MIGRATE_NON_SHARED_DISK
+                )  # Копировать локальные диски на целевой хост
+                flags |= (
+                    libvirt.VIR_MIGRATE_NON_SHARED_INC
+                )  # Для ускорения миграции больших дисков.
 
             # Добавляем флаг для миграции persistent конфига
             if not undefine_source and migrate_configs:
@@ -1659,13 +1671,17 @@ class VmManager(LibvirtClient):
     def get_vm_state_with_msg(self, name: str, display_logs: bool = False):
         try:
             result = self.get_vm_state_by_name(name, display_logs)
-            return VmMessage(code=CommandMessagesEnum.vm_state_info.name,
-                             vm_info=VMStateInfo(vm_name=name, state=VMState(result)),
-                             success=True)
+            return VmMessage(
+                code=CommandMessagesEnum.vm_state_info.name,
+                vm_info=VMStateInfo(vm_name=name, state=VMState(result)),
+                success=True,
+            )
         except Exception as e:
-            return VmMessage(code=CommandMessagesEnum.vm_state_info_error.name,
-                             success=False,
-                             note=str(e))
+            return VmMessage(
+                code=CommandMessagesEnum.vm_state_info_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def get_vm_state_by_name(self, name: str, display_logs: bool = False) -> int | bool:
         """Получение состояния ВМ по имени"""
@@ -2114,7 +2130,10 @@ class VmManager(LibvirtClient):
                             clone_disk_info = self.storage_manager.clone_disk(
                                 disk_name, path, disk_format, new_name
                             )
-                            if clone_disk_info.code == CommandMessagesEnum.disk_clone_error.name:
+                            if (
+                                clone_disk_info.code
+                                == CommandMessagesEnum.disk_clone_error.name
+                            ):
                                 return clone_disk_info
                         source_elem.set("file", new_path)
 

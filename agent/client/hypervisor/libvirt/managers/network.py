@@ -131,13 +131,17 @@ class NetworkManager(LibvirtClient):
                 created_at=datetime.datetime.now(),
             )
 
-            return NetworkMessage(code=CommandMessagesEnum.virtual_network_backup_successfully_created.name,
-                                  net_info=backup,
-                                  success=True)
+            return NetworkMessage(
+                code=CommandMessagesEnum.virtual_network_backup_successfully_created.name,
+                net_info=backup,
+                success=True,
+            )
         except self.libvirtError as e:
-            return NetworkMessage(code=CommandMessagesEnum.virtual_network_backup_create_error.name,
-                                  success=False,
-                                  note=str(e))
+            return NetworkMessage(
+                code=CommandMessagesEnum.virtual_network_backup_create_error.name,
+                success=False,
+                note=str(e),
+            )
 
     def restore_network(self, backup: NetworkBackup) -> bool:
         """Восстановление сети из бэкапа"""
@@ -719,7 +723,9 @@ class NetworkManager(LibvirtClient):
             self.logger.error(f"Ошибка парсинга XML настроек сети: {e}")
             return {}
 
-    def set_network_autostart(self, network_name: str, autostart: bool = True) -> NetworkMessage:
+    def set_network_autostart(
+        self, network_name: str, autostart: bool = True
+    ) -> NetworkMessage:
         """Настройка автозапуска сети"""
         try:
             current_network = self.conn.networkLookupByName(network_name)
@@ -741,7 +747,7 @@ class NetworkManager(LibvirtClient):
             return NetworkMessage(
                 code=CommandMessagesEnum.virtual_network_update_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     def start_network(self, network_name: str) -> NetworkMessage:
@@ -773,7 +779,7 @@ class NetworkManager(LibvirtClient):
             return NetworkMessage(
                 code=CommandMessagesEnum.virtual_network_start_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     def stop_network(self, network_name: str) -> NetworkMessage:

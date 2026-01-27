@@ -10,7 +10,8 @@ from agent.client.hypervisor.libvirt.models.msg import (
     NetworkMessage,
     SnapshotMessage,
     RpMessage,
-    VmMessage, StorageMessage,
+    VmMessage,
+    StorageMessage,
 )
 from agent.client.hypervisor.libvirt.models.network import (
     NetworkParameters,
@@ -29,7 +30,8 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     DiskCreate,
     DiskAttach,
     DiskDetach,
-    Disk, DiskQuery,
+    Disk,
+    DiskQuery,
 )
 from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.models import (

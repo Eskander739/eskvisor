@@ -21,7 +21,9 @@ from agent.client.hypervisor.libvirt.models.volume.balansir import (
     ResourcePoolVirtualCreate,
     ResourcePoolVirtual,
     ResourcePoolVirtualEdit,
-    ResourceReservationVM, ResourcePoolConnectedVMS, ResourcePoolVMS,
+    ResourceReservationVM,
+    ResourcePoolConnectedVMS,
+    ResourcePoolVMS,
 )
 from agent.client.hypervisor.libvirt.models.volume.logic import (
     LogicalVolumeSizeType,
@@ -59,7 +61,7 @@ class Balansir(LibvirtClient):
         self.logger.info("Виртуальный менеджер ресурс пулов инициализирован")
 
     def __enter__(self):
-        self.conn = self.connect()
+        self.conn = self.connect_classic()
         self.vm_manager = VmManager()
         self.storage_manager = StorageManager()
         self.storage_manager.conn = self.conn
@@ -79,7 +81,9 @@ class Balansir(LibvirtClient):
     def get_rp_list_from_config(self) -> RpMessage | ResourcePoolConnectedVMS:
         try:
             with open(self.resource_pool_connected_vms, "r") as read_config:
-                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+                current_config = ResourcePoolConnectedVMS.model_validate_json(
+                    read_config.read()
+                )
 
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_successfully_found.name,
@@ -90,12 +94,14 @@ class Balansir(LibvirtClient):
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_not_found.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     def get_rp_from_config(self, rp_name: str) -> RpMessage | ResourcePoolVMS:
         with open(self.resource_pool_connected_vms, "r") as read_config:
-            current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+            current_config = ResourcePoolConnectedVMS.model_validate_json(
+                read_config.read()
+            )
 
         for current_rp in current_config.resource_pools:
             if current_rp.name == rp_name:
@@ -113,16 +119,22 @@ class Balansir(LibvirtClient):
     def add_vms_to_rp_config(self, rp_name: str, vms: list[str]):
         try:
             with open(self.resource_pool_connected_vms, "r") as read_config:
-                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+                current_config = ResourcePoolConnectedVMS.model_validate_json(
+                    read_config.read()
+                )
 
             for current_rp in current_config.resource_pools:
                 if current_rp.name == rp_name:
                     for vm_name in vms:
                         if vm_name not in current_rp.connected_vms:
                             current_rp.connected_vms.append(vm_name)
-                            self.logger.info(f"ВМ '{vm_name}' успешно добавлен в пул '{rp_name}'")
+                            self.logger.info(
+                                f"ВМ '{vm_name}' успешно добавлен в пул '{rp_name}'"
+                            )
                         else:
-                            self.logger.info(f"ВМ '{vm_name}' уже добавлен в пул '{rp_name}'")
+                            self.logger.info(
+                                f"ВМ '{vm_name}' уже добавлен в пул '{rp_name}'"
+                            )
 
             with open(self.resource_pool_connected_vms, "w") as write_config:
                 fcntl.flock(write_config.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -137,28 +149,34 @@ class Balansir(LibvirtClient):
             return RpMessage(
                 code=CommandMessagesEnum.file_in_use_by_another_process.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
         except Exception as e:
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     def add_vm_to_rp_config(self, rp_name: str, vm_name: str) -> RpMessage:
         try:
             with open(self.resource_pool_connected_vms, "r") as read_config:
-                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+                current_config = ResourcePoolConnectedVMS.model_validate_json(
+                    read_config.read()
+                )
 
             for current_rp in current_config.resource_pools:
                 if current_rp.name == rp_name:
                     if vm_name not in current_rp.connected_vms:
                         current_rp.connected_vms.append(vm_name)
-                        self.logger.info(f"ВМ '{vm_name}' успешно добавлен в пул '{rp_name}'")
+                        self.logger.info(
+                            f"ВМ '{vm_name}' успешно добавлен в пул '{rp_name}'"
+                        )
                     else:
-                        self.logger.info(f"ВМ '{vm_name}' уже добавлен в пул '{rp_name}'")
+                        self.logger.info(
+                            f"ВМ '{vm_name}' уже добавлен в пул '{rp_name}'"
+                        )
                     break
             else:
                 return RpMessage(
@@ -179,14 +197,14 @@ class Balansir(LibvirtClient):
             return RpMessage(
                 code=CommandMessagesEnum.file_in_use_by_another_process.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
         except Exception as e:
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     def delete_vms_from_rp_config(self, rp_name: str, vms: str | list[str]):
@@ -194,16 +212,22 @@ class Balansir(LibvirtClient):
             vms = [vms]
         try:
             with open(self.resource_pool_connected_vms, "r") as read_config:
-                current_config = ResourcePoolConnectedVMS.model_validate_json(read_config.read())
+                current_config = ResourcePoolConnectedVMS.model_validate_json(
+                    read_config.read()
+                )
 
             for current_rp in current_config.resource_pools:
                 if current_rp.name == rp_name:
                     for vm_name in vms:
                         if vm_name in current_rp.connected_vms:
                             current_rp.connected_vms.remove(vm_name)
-                            self.logger.info(f"ВМ '{vm_name}' успешно удален из пула '{rp_name}'")
+                            self.logger.info(
+                                f"ВМ '{vm_name}' успешно удален из пула '{rp_name}'"
+                            )
                         else:
-                            self.logger.info(f"ВМ '{vm_name}' отсутствует в пуле '{rp_name}'")
+                            self.logger.info(
+                                f"ВМ '{vm_name}' отсутствует в пуле '{rp_name}'"
+                            )
 
             with open(self.resource_pool_connected_vms, "w") as write_config:
                 fcntl.flock(write_config.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -218,16 +242,15 @@ class Balansir(LibvirtClient):
             return RpMessage(
                 code=CommandMessagesEnum.file_in_use_by_another_process.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
         except Exception as e:
             return RpMessage(
                 code=CommandMessagesEnum.vm_delete_error_from_rp_config.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
-
 
     def sync_rps_config_vms(self):
         """
@@ -251,20 +274,30 @@ class Balansir(LibvirtClient):
                     pool_config: ResourcePoolVMS = pools_config.get(current_rp_name)
                     if pool_config:
                         for current_vm_name in pool_config.connected_vms:
-                            if self.vm_manager.get_vm_state_by_name(current_vm_name) in (VMState.PAUSED.value,
-                                                                                         VMState.RUNNING.value):
+                            if self.vm_manager.get_vm_state_by_name(
+                                current_vm_name
+                            ) in (VMState.PAUSED.value, VMState.RUNNING.value):
                                 vm_pid = self.pycgroup.pid_ctl.vm_pid(current_vm_name)
                                 pids = pycgroup_pool.get("pids")
-                                if pids is None or vm_pid not in pycgroup_pool.get("pids"):
-                                    add_pid_result = self.pycgroup.add_pid_to_pool(current_rp_name, vm_pid)
+                                if pids is None or vm_pid not in pycgroup_pool.get(
+                                    "pids"
+                                ):
+                                    add_pid_result = self.pycgroup.add_pid_to_pool(
+                                        current_rp_name, vm_pid
+                                    )
                                     if str(vm_pid) not in add_pid_result:
                                         self.logger.warning(
-                                            f"Не удалось добавить ВМ '{current_vm_name}' в ресурс пул '{current_rp_name}'")
-                        vm_names = self.pycgroup.pid_ctl.get_vm_names_resource_pool(current_rp_name)
+                                            f"Не удалось добавить ВМ '{current_vm_name}' в ресурс пул '{current_rp_name}'"
+                                        )
+                        vm_names = self.pycgroup.pid_ctl.get_vm_names_resource_pool(
+                            current_rp_name
+                        )
                         if vm_names is not None:
                             for current_vm in vm_names:
                                 if current_vm not in pool_config.connected_vms:
-                                    self.pycgroup.delete_vm_from_pool(current_rp_name, current_vm)
+                                    self.pycgroup.delete_vm_from_pool(
+                                        current_rp_name, current_vm
+                                    )
 
             self.logger.info(f"Конфигурация ресурс пулов завершена")
             return RpMessage(
@@ -276,7 +309,7 @@ class Balansir(LibvirtClient):
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_sync_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     def add_rp_to_config(self, rp_name: str, vms: list[str] | None = None) -> RpMessage:
@@ -285,7 +318,10 @@ class Balansir(LibvirtClient):
             if rp_config.code == CommandMessagesEnum.rp_virtual_successfully_found.name:
                 rp_config = rp_config.rp_info
                 rp_config.resource_pools.append(
-                    ResourcePoolVMS(name=rp_name, connected_vms=vms if vms is not None else []))
+                    ResourcePoolVMS(
+                        name=rp_name, connected_vms=vms if vms is not None else []
+                    )
+                )
                 with open(self.resource_pool_connected_vms, "w") as write_config:
                     write_config.write(rp_config.model_dump_json())
 
@@ -299,11 +335,13 @@ class Balansir(LibvirtClient):
                 success=False,
             )
         except Exception as e:
-            self.logger.info(f"Ошибка добавления ресурс пула '{rp_name}' в конфиг: '{str(e)}'")
+            self.logger.info(
+                f"Ошибка добавления ресурс пула '{rp_name}' в конфиг: '{str(e)}'"
+            )
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     def delete_rp_from_config(self, rp_name: str) -> RpMessage:
@@ -336,7 +374,7 @@ class Balansir(LibvirtClient):
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_config_edit_error.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     @staticmethod
@@ -652,7 +690,7 @@ class Balansir(LibvirtClient):
             return RpMessage(
                 code=CommandMessagesEnum.vm_delete_error_from_virtual_resource_pool.name,
                 success=False,
-                note=str(e)
+                note=str(e),
             )
 
     @property
@@ -801,7 +839,9 @@ class Balansir(LibvirtClient):
 
             # Проверка существования пула через cgroup
             if not self.pycgroup.cgroup_pool_exists(edit_rp.name):
-                self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' не найден")
+                self.logger.warning(
+                    f"Виртуальный ресурс пул '{edit_rp.name}' не найден"
+                )
                 return RpMessage(
                     code=CommandMessagesEnum.rp_virtual_not_found.name,
                     success=False,
@@ -813,7 +853,7 @@ class Balansir(LibvirtClient):
 
             current_virtual_rp = current_virtual_rp.rp_info
             if not self.validate_max_ram_and_max_cpu(
-                    current_virtual_rp.ram_limit_bytes, current_virtual_rp.cpu_core_limit
+                current_virtual_rp.ram_limit_bytes, current_virtual_rp.cpu_core_limit
             ):
                 return RpMessage(
                     code=CommandMessagesEnum.rp_ram_or_cpu_more_than_on_node.name,
@@ -827,8 +867,8 @@ class Balansir(LibvirtClient):
                     self.validate_name(current_name)
                 validate_vm_list_info = self.validate_vm_list(edit_rp)
                 if (
-                        validate_vm_list_info.code
-                        != CommandMessagesEnum.vm_list_is_correct.name
+                    validate_vm_list_info.code
+                    != CommandMessagesEnum.vm_list_is_correct.name
                 ):
                     return validate_vm_list_info
                 self.configuration_vm(
@@ -850,8 +890,8 @@ class Balansir(LibvirtClient):
                     edit_rp.volume_size_type,
                 )
                 if (
-                        f"Logical volume {self.system_volume_group_name}/{edit_rp.name} successfully resized"
-                        not in edit_logic_volume
+                    f"Logical volume {self.system_volume_group_name}/{edit_rp.name} successfully resized"
+                    not in edit_logic_volume
                 ):
                     return RpMessage(
                         code=CommandMessagesEnum.edit_logic_volume_error.name,
@@ -895,7 +935,9 @@ class Balansir(LibvirtClient):
                     f"RAM конфигурация ресурс пула '{edit_rp.ram_limit_bytes}' успешно изменена"
                 )
 
-            self.logger.warning(f"Виртуальный ресурс пул '{edit_rp.name}' успешно изменен")
+            self.logger.warning(
+                f"Виртуальный ресурс пул '{edit_rp.name}' успешно изменен"
+            )
 
             return RpMessage(
                 code=CommandMessagesEnum.rp_virtual_edit_success.name,
@@ -973,7 +1015,9 @@ class Balansir(LibvirtClient):
                     success=False,
                 )
             cgroup_info = self.pycgroup.get_cgroup_pool(name)
-            vms = self.pycgroup.pid_ctl.get_vm_names_resource_pool(cgroup_info.get("path"))
+            vms = self.pycgroup.pid_ctl.get_vm_names_resource_pool(
+                cgroup_info.get("path")
+            )
             vm_reservation_list = None
 
             storage_info = self.logic_volume_manager.get_volume_by_name(
@@ -993,7 +1037,7 @@ class Balansir(LibvirtClient):
 
             if storage_info is not None:
                 storage_allocated = (
-                        storage_info.volume_size - storage_info.available_volume_size
+                    storage_info.volume_size - storage_info.available_volume_size
                 )
                 available_volume_size = storage_info.available_volume_size
             else:
@@ -1083,6 +1127,7 @@ class Balansir(LibvirtClient):
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv()
     with Balansir() as mng:
         mng.delete_vms_from_rp_config("resource_pool_94456", "ESKA-VM-TEST")
