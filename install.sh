@@ -3,10 +3,10 @@
 # install.sh для AlmaLinux - установка зависимостей для Eskvisor
 
 # Цвета для логгирования
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+GREEN='33[0;32m'
+RED='33[0;31m'
+YELLOW='33[1;33m'
+NC='33[0m' # No Color
 
 # Переменные для подсчета результатов
 SUCCESS_COUNT=0
@@ -16,22 +16,22 @@ SKIP_COUNT=0
 # Функция логирования
 log_success() {
     echo -e "${GREEN}[УСПЕХ]${NC} $1"
-    ((SUCCESS_COUNT++))
+    ((SUCCESS_COUNT))
 }
 
 log_error() {
     echo -e "${RED}[ОШИБКА]${NC} $1"
-    ((ERROR_COUNT++))
+    ((ERROR_COUNT))
 }
 
 log_skip() {
     echo -e "${YELLOW}[ПРОПУЩЕНО]${NC} $1"
-    ((SKIP_COUNT++))
+    ((SKIP_COUNT))
 }
 
 # Функция проверки установки пакета
 is_package_installed() {
-    rpm -q "$1" &> /dev/null
+    rpm -q "$1" &>/dev/null
     return $?
 }
 
@@ -102,7 +102,13 @@ echo "Установка зависимостей для виртуализац�
 install_package "qemu-kvm" "QEMU KVM"
 install_package "qemu-img" "QEMU Image Tools"
 install_package "libvirt" "Libvirt"
+install_package "libxml2-devel" "Системная зависимость"
+install_package "libxslt-devel" "Системная зависимость"
+install_package "zlib-devel" "Системная зависимость"
+install_package "make" "Системная зависимость"
+install_package "gcc" "Системная зависимость"
 install_package "libvirt-client" "Libvirt клиент"
+install_package "libvirt-devel" "Libvirt библиотека"
 install_package "virt-install" "Virt-install"
 install_package "virt-viewer" "Virt-viewer"
 install_package "virt-manager" "Virt-manager"
@@ -166,7 +172,7 @@ fi
 
 # Добавление tun в автозагрузку
 if ! grep -q "^tun" /etc/modules-load.d/tun.conf 2>/dev/null; then
-    echo "tun" | sudo tee /etc/modules-load.d/tun.conf > /dev/null
+    echo "tun" | sudo tee /etc/modules-load.d/tun.conf >/dev/null
     log_success "Модуль tun добавлен в автозагрузку"
 else
     log_skip "Модуль tun уже в автозагрузке"
@@ -177,6 +183,7 @@ echo "Установка Python и зависимостей..."
 install_package "python3" "Python 3"
 install_package "python3-pip" "Pip для Python 3"
 install_package "python3-devel" "Разработка Python 3"
+install_package "python3-lxml" "Разработка Python 3"
 install_package "python3-virtualenv" "Virtualenv для Python 3"
 
 # Дополнительные зависимости для Python
@@ -187,7 +194,7 @@ install_package "gdk-pixbuf2-devel" "Разработка GDK-Pixbuf"
 
 # Создание виртуального окружения
 echo "Создание виртуального окружения..."
-if [[ ! -d "eskvisor" ]]; then
+if [[ ! -d "eskvisor_venv" ]]; then
     python3 -m venv eskvisor
     if [[ $? -eq 0 ]]; then
         log_success "Виртуальное окружение создано"
@@ -221,7 +228,10 @@ if [[ -f "eskvisor/bin/activate" ]]; then
 
     # Установка зависимостей из requirements.txt если файл существует
     if [[ -f "requirements.txt" ]]; then
-        pip install -r requirements.txt
+        while read -r package; do
+            [[ -z "$package" ]] || [[ "$package" =~ ^# ]] && continue
+            python3 -m pip install "$package" || echo "Ошибка: $package"
+        done <requirements.txt
         if [[ $? -eq 0 ]]; then
             log_success "Зависимости из requirements.txt установлены"
         else
@@ -243,7 +253,7 @@ if mount | grep -q "cgroup2"; then
 else
     echo "Настройка cgroup v2..."
     if sudo mount -t cgroup2 none /sys/fs/cgroup; then
-        echo "+cpu +memory" | sudo tee /sys/fs/cgroup/cgroup.subtree_control > /dev/null
+        echo " cpu  memory" | sudo tee /sys/fs/cgroup/cgroup.subtree_control >/dev/null
         log_success "Cgroup v2 настроен"
     else
         log_error "Ошибка настройки cgroup v2"
@@ -275,7 +285,7 @@ fi
 
 echo ""
 echo "Проверка основных служб:"
-sudo systemctl is-active sshd &> /dev/null && echo -e "SSH: ${GREEN}активен${NC}" || echo -e "SSH: ${RED}не активен${NC}"
-sudo systemctl is-active libvirtd &> /dev/null && echo -e "Libvirt: ${GREEN}активен${NC}" || echo -e "Libvirt: ${RED}не активен${NC}"
+sudo systemctl is-active sshd &>/dev/null && echo -e "SSH: ${GREEN}активен${NC}" || echo -e "SSH: ${RED}не активен${NC}"
+sudo systemctl is-active libvirtd &>/dev/null && echo -e "Libvirt: ${GREEN}активен${NC}" || echo -e "Libvirt: ${RED}не активен${NC}"
 
 exit $ERROR_COUNT

@@ -1,0 +1,48 @@
+[Unit]
+Description=Eskvisor Virtualization Management Platform
+After=network.target libvirtd.service
+Wants=libvirtd.service
+
+[Service]
+Type=simple
+# Запуск от root - ОПАСНО, но нужно для виртуализации
+User=root
+Group=root
+WorkingDirectory=/eskvisor/agent/client
+
+# Команда запуска
+ExecStart=/eskvisor/bin/python -m uvicorn main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 1 \
+    --timeout-keep-alive 30 \
+    --log-level warning
+
+# Автоматический перезапуск
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Безопасность - ограничение прав
+NoNewPrivileges=true
+#PrivateTmp=true
+#ProtectSystem=strict
+#ReadWritePaths=/var/lib/libvirt/images /etc/libvirt
+
+# Переменные окружения
+Environment="PYTHONPATH=/home/eskvisor/agent"
+Environment="VIRTUAL_ENV=/eskvisor"
+Environment="PATH=/eskvisor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Resource limits (опционально)
+MemoryLimit=2G
+CPUQuota=80%
+
+# Логирование
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=eskvisor
+
+[Install]
+WantedBy=multi-user.target

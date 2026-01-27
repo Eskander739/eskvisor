@@ -80,7 +80,7 @@ class VolumeGroupManager:
             "+vg_extent_size",
         ]
         result = self.cli.execute(cmd_args)
-        if f'Volume group "{volume_group_name}" not found' in result:
+        if f'Volume group "{volume_group_name}" not found' in result or not result:
             self.logger.info(f"Группа томов не найдена: {volume_group_name}")
             return None
         self.logger.info(f"Группа томов найдена: {volume_group_name}")

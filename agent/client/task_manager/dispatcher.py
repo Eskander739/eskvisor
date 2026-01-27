@@ -42,7 +42,7 @@ class TaskDispatcher:
     Диспетчер задач для управления воркерами и распределения задач
     """
 
-    def __init__(self, queue_manager: RedisTaskManager, worker_count: int = 5):
+    def __init__(self, queue_manager: RedisTaskManager, worker_count: int = 12):
         """
         Инициализация диспетчера
 
