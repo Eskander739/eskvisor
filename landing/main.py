@@ -27,11 +27,9 @@ async def get_rospatent_image():
     if not os.path.exists(IMAGE_PATH):
         return {"error": "Изображение не найдено"}
 
-    return FileResponse(
-        IMAGE_PATH,
-        media_type="image/jpeg",
-        filename="rospatent.jpg"
-    )
+    return FileResponse(IMAGE_PATH, media_type="image/jpeg", filename="rospatent.jpg")
+
+
 if __name__ == "__main__":
     import uvicorn
 

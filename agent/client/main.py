@@ -2,11 +2,13 @@ from datetime import datetime
 
 import orjson
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, Request, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 
+from agent.client.constants import AGENT_ENV
 from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
 from agent.client.hypervisor.libvirt.models.vm_stats.stats import CpuAndRamUsage
 from agent.client.logger_config import DefaultLogger
@@ -16,6 +18,7 @@ from agent.client.task_manager.models import TaskAdd, TaskType
 from agent.client.task_manager.ws_notification import WebSocketNotificationHandler
 from agent.client.tools import get_quick_stats
 
+load_dotenv(AGENT_ENV)
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
 templates = Jinja2Templates(directory="task_manager/templates")
 

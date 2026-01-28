@@ -1,6 +1,7 @@
 from enum import Enum
 
 
+AGENT_ENV = "/etc/eskvisor/agent.env"
 DIRECTORIES_FOR_SEARCH = [
     # Основные
     "/usr/bin",

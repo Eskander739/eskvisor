@@ -50,6 +50,29 @@ class LibvirtClient:
         xml_string = ElementTree.tostring(element_tree_object).decode("utf-8")
         return xml_string
 
+    @staticmethod
+    def xml_object_from_string(xml_string: str) -> ElementTree.Element:
+        return ElementTree.fromstring(xml_string)
+
+    @staticmethod
+    def set_element_in_parent(
+        parent_object: ElementTree.Element,
+        child_object: ElementTree.Element,
+        position: int = None,
+    ) -> None:
+        """
+        Вставляет дочерний элемент в родительский
+
+        Args:
+            parent_object: Родительский ElementTree объект
+            child_object: Дочерний ElementTree объект для вставки
+            position: Позиция для вставки (если None - добавляем в конец)
+        """
+        if position is not None and 0 <= position < len(parent_object):
+            parent_object.insert(position, child_object)
+        else:
+            parent_object.append(child_object)
+
     def connect_classic(self, uri: str = "qemu:///system") -> libvirt.virConnect:
         """
         Классическое подключение к локальному гипервизору

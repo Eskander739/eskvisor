@@ -50,7 +50,9 @@ class AgentInstaller:
                 return False
 
             # Устанавливаем SSH ключ с использованием пароля
-            if not self.install_ssh_key_with_password(hostname=hostname, username=username, password=password):
+            if not self.install_ssh_key_with_password(
+                hostname=hostname, username=username, password=password
+            ):
                 self.logger.error(f"Не удалось установить SSH ключ на {hostname}")
                 return False
 
@@ -80,15 +82,28 @@ class AgentInstaller:
             return False
 
         # 5. Выполняем скрипт на удаленном хосте
-        self.logger.info(f"⚙️ Установка ssh ключа {self.public_key_path} на {hostname}...")
+        self.logger.info(
+            f"⚙️ Установка ssh ключа {self.public_key_path} на {hostname}..."
+        )
 
-        execute_cmd = [f"sshpass", "-p", password, "ssh-copy-id", "-o", "StrictHostKeyChecking=no", "-i", f"{self.public_key_path}",
-                       f"{username}@{hostname}"]
+        execute_cmd = [
+            f"sshpass",
+            "-p",
+            password,
+            "ssh-copy-id",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-i",
+            f"{self.public_key_path}",
+            f"{username}@{hostname}",
+        ]
 
         result = self.cli.execute(execute_cmd, return_proc=True)
 
         if result.returncode != 0:
-            self.logger.error(f"Ошибка установки SSH ключа {self.public_key_path} на {hostname}: {result.stderr}")
+            self.logger.error(
+                f"Ошибка установки SSH ключа {self.public_key_path} на {hostname}: {result.stderr}"
+            )
             return False
 
         # 7. Проверяем что ключ установлен
