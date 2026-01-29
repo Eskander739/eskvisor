@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 
 from src.agent_installer import AgentInstaller
-from src.constants import ApiVersion
+from src.constants import ApiVersion, DEFAULT_AGENT_DIR
 from src.logger_config import DefaultLogger
 from src.models.agent import ConnectHostRequest
 from src.security.ssh_keygen import SSHKeyGenerator
@@ -46,7 +46,7 @@ async def add_security_headers(request, call_next):
 async def connect(request: Request, connect_host: ConnectHostRequest):
     agent_installer.install_agent_via_ssh(
         hostname=connect_host.ip,
-        agent_package_path="/home/eska/eskvisor_agent.zip",
+        agent_package_path=connect_host.agent_file if connect_host.agent_file is not None else DEFAULT_AGENT_DIR,
         username=connect_host.admin,
         password=connect_host.password,
     )

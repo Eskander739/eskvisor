@@ -10,7 +10,7 @@ User=root
 Group=root
 
 # Команда запуска
-ExecStart=/eskvisor_venv/bin/python -m uvicorn main:app \
+ExecStart=/eskvisor/eskvisor_venv/bin/python -m uvicorn agent.client.main:app \
     --host 127.0.0.1 \
     --port 8000 \
     --workers 1 \
@@ -20,7 +20,6 @@ ExecStart=/eskvisor_venv/bin/python -m uvicorn main:app \
 # Автоматический перезапуск
 Restart=always
 RestartSec=10
-StartLimitIntervalSec=60
 StartLimitBurst=3
 
 # Безопасность - ограничение прав
@@ -30,12 +29,11 @@ NoNewPrivileges=true
 #ReadWritePaths=/var/lib/libvirt/images /etc/libvirt
 
 # Переменные окружения
-Environment="PYTHONPATH=/eskvisor/"
-Environment="VIRTUAL_ENV=/eskvisor"
-Environment="PATH=/eskvisor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=/opt/eskvisor/"
+Environment="VIRTUAL_ENV=/eskvisor/eskvisor_venv/"
+Environment="PATH=/opt/eskvisor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Resource limits (опционально)
-MemoryLimit=2G
 CPUQuota=80%
 
 # Логирование

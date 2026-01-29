@@ -203,9 +203,9 @@ class AgentInstaller:
 
         install_commands = [
             f"tar -xzf /tmp/eskvisor_agent_package.tar.gz -C /tmp",
-            "cd /tmp/eskvisor && sudo ./install.sh",
+            "mv /tmp/eskvisor /opt/eskvisor && sudo bash /opt/eskvisor/install.sh",
             "rm -f /tmp/eskvisor_agent_package.tar.gz",
-            "sudo systemctl start libvirt-agent",
+            "rm -r /tmp/eskvisor"
         ]
 
         ssh_command = [
@@ -216,13 +216,11 @@ class AgentInstaller:
             "StrictHostKeyChecking=no",
             "-o",
             "UserKnownHostsFile=/dev/null",
-            "-o",
-            "ConnectTimeout=10",
             f"{username}@{hostname}",
             " && ".join(install_commands),
         ]
 
-        result = self.cli.execute(ssh_command, return_proc=True)
+        result = self.cli.execute(ssh_command, return_proc=True, timeout=None)
 
         if result.returncode == 0:
             self.logger.info(f"✅ Агент успешно установлен на {hostname}")

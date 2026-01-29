@@ -6,3 +6,4 @@ class ApiVersion:
 
 KEY_DIR = "/eskvisor/.ssh/"
 KEY_NAME = "eskvisor_master_ed25519"
+DEFAULT_AGENT_DIR = "/home/eska/eskvisor_agent.tar.gz"

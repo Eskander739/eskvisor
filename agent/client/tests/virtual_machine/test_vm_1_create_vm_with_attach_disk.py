@@ -1,4 +1,3 @@
-import os
 import random
 
 import pytest
@@ -6,7 +5,7 @@ import pytest
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
 from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkForward, NetworkBridge, \
     NetworkDHCPRange, VmNetAdapter
-from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate, DiskAttach, DiskFormat, DiskType
+from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate, DiskType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
 from agent.client.hypervisor.libvirt.models.vm import VirtualMachine, VMCreateRequest, NetQemuCommandline
@@ -16,21 +15,20 @@ IMG_PATH = "/home/eska/AlmaLinux-10.1-x86_64-minimal.iso"
 
 
 @pytest.mark.tags("VM‑01", "Создание ВМ с присоединением диска а не созданием нового")
-# @pytest.mark.skip("Для внутреннего тестирования, не для прода")
+@pytest.mark.skip("Для внутреннего тестирования, не для общего запуска")
 def test_vm_01_create_vm_with_attach_disk(vm_session, network_session):
     """
-    VM‑01: Создание ВМ с присоединением диска, а не созданием нового(DiskAttach)
+    VM‑01: Создание ВМ с образом AlmaLinux и отдельной сетью
 
     Указать имя, ресурсы (CPU, RAM, диск), сеть. Проверить, что ВМ появляется в списке в состоянии «Выключена».
     """
     vm_created = None
-    random_name = f"VM-TEST-{random.randint(10000, 99999)}"
+    random_name = f"alma-linux-eskvisor"
 
     def kb_to_mb(kb):
         return kb / 1024
 
     get_state = vm_session.get_vm_state_by_name
-    # disk_name = "eskvisor"
     vm_template = VMCreateRequest(
         name=random_name,
         autostart_vm=True,

@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 import orjson
@@ -20,7 +21,8 @@ from agent.client.tools import get_quick_stats
 
 load_dotenv(AGENT_ENV)
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
-templates = Jinja2Templates(directory="task_manager/templates")
+templates = Jinja2Templates(directory="/opt/eskvisor/agent/client/task_manager/templates")
+# templates = Jinja2Templates(directory="task_manager/templates")
 
 
 logger = DefaultLogger("TaskManagerServer")

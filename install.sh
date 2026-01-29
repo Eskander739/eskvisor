@@ -2,6 +2,10 @@
 
 # install.sh для AlmaLinux - установка зависимостей для Eskvisor
 
+# Лог файл
+LOG_FILE="/var/log/eskvisor_install.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 # Цвета для логгирования
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -17,22 +21,23 @@ SKIP_COUNT=0
 AGENT_PORT=8000
 # Порт для nginx (HTTP)
 NGINX_HTTP_PORT=80
-# Порт для nginx (HTTPS)
-NGINX_HTTPS_PORT=443
 
 # Функция логирования
 log_success() {
-    echo -e "${GREEN}[УСПЕХ]${NC} $1"
+    local message="$1"
+    echo -e "${GREEN}[УСПЕХ]${NC} $message"
     ((SUCCESS_COUNT++))
 }
 
 log_error() {
-    echo -e "${RED}[ОШИБКА]${NC} $1"
+    local message="$1"
+    echo -e "${RED}[ОШИБКА]${NC} $message"
     ((ERROR_COUNT++))
 }
 
 log_skip() {
-    echo -e "${YELLOW}[ПРОПУЩЕНО]${NC} $1"
+    local message="$1"
+    echo -e "${YELLOW}[ПРОПУЩЕНО]${NC} $message"
     ((SKIP_COUNT++))
 }
 
@@ -64,7 +69,7 @@ install_package() {
 
 # Функция настройки сервиса
 setup_service() {
-    local service_file="/tmp/eskvisor/agent/client/eskvisor.service"
+    local service_file="/opt/eskvisor/agent/client/service/eskvisor.service"
     local target_dir="/etc/systemd/system"
 
     echo "Настройка сервиса Eskvisor..."
@@ -112,7 +117,7 @@ setup_service() {
 
 # Функция запуска setup.sh для pycgroup
 run_pycgroup_setup() {
-    local setup_script="/tmp/eskvisor/agent/client/pycgroup/state/setup.sh"
+    local setup_script="/opt/eskvisor/agent/client/pycgroup/state/setup.sh"
 
     echo "Запуск скрипта настройки pycgroup..."
 
@@ -144,72 +149,13 @@ run_pycgroup_setup() {
     fi
 }
 
-# Функция переноса директории eskvisor
-move_eskvisor_directory() {
-    local source_dir="/tmp/eskvisor"
-    local target_dir="/eskvisor"
-
-    echo "Перенос директории eskvisor..."
-
-    # Проверка существования исходной директории
-    if [[ ! -d "$source_dir" ]]; then
-        log_error "Исходная директория не найдена: $source_dir"
-        return 1
-    fi
-
-    # Проверка существования целевой директории
-    if [[ -d "$target_dir" ]]; then
-        echo "Целевая директория уже существует. Создание резервной копии..."
-        local backup_dir="${target_dir}_backup_$(date +%Y%m%d_%H%M%S)"
-        if sudo mv "$target_dir" "$backup_dir"; then
-            log_success "Создана резервная копия: $backup_dir"
-        else
-            log_error "Ошибка создания резервной копии"
-            return 1
-        fi
-    fi
-
-    # Создание целевой директории
-    if sudo mkdir -p "$(dirname "$target_dir")"; then
-        log_success "Родительская директория создана/существует"
-    else
-        log_error "Ошибка создания родительской директории"
-        return 1
-    fi
-
-    # Перенос директории
-    if sudo mv "$source_dir" "$target_dir"; then
-        log_success "Директория успешно перенесена из $source_dir в $target_dir"
-
-        # Установка правильных прав
-        if sudo chmod -R 755 "$target_dir"; then
-            log_success "Права доступа установлены для $target_dir"
-        else
-            log_error "Ошибка установки прав доступа"
-            return 1
-        fi
-
-        # Проверка владельца (при необходимости)
-        if sudo chown -R root:root "$target_dir"; then
-            log_success "Владелец установлен для $target_dir"
-        else
-            log_error "Ошибка установки владельца"
-            return 1
-        fi
-    else
-        log_error "Ошибка переноса директории"
-        return 1
-    fi
-
-    return 0
-}
-
 # Функция установки и настройки nginx
 setup_nginx() {
     echo "Установка и настройка Nginx..."
 
     # Установка nginx
     install_package "nginx" "Nginx"
+    log_success "Права на директорию /run/nginx исправлены"
 
     # Проверка установки
     if ! command -v nginx &> /dev/null; then
@@ -218,13 +164,21 @@ setup_nginx() {
     fi
 
     # Определяем путь к конфигурационному файлу агента
-    local agent_nginx_conf="/eskvisor/agent/nginx.conf"
+    local agent_nginx_conf="/opt/eskvisor/agent/nginx.conf"
     local nginx_main_conf="/etc/nginx/nginx.conf"
-    local nginx_conf_dir="/etc/nginx/conf.d"
 
-    # Проверяем, существует ли конфигурация в агенте
+    # Используем готовую конфигурацию из агента
     if [[ -f "$agent_nginx_conf" ]]; then
-        echo "Обнаружена конфигурация nginx от агента: $agent_nginx_conf"
+        echo "Использование готовой конфигурации nginx из агента..."
+
+        # Проверяем синтаксис перед копированием
+        if sudo nginx -t -c "$agent_nginx_conf" 2>/dev/null; then
+            log_success "Конфигурация агента прошла проверку синтаксиса"
+        else
+            log_error "Конфигурация агента содержит ошибки"
+            sudo nginx -t -c "$agent_nginx_conf"
+            return 1
+        fi
 
         # Создаем резервную копию текущей конфигурации nginx
         local backup_file="/etc/nginx/nginx.conf.backup_$(date +%Y%m%d_%H%M%S)"
@@ -235,275 +189,21 @@ setup_nginx() {
             return 1
         fi
 
-        # Копируем конфигурацию из агента в основную конфигурацию nginx
-        echo "Копирование конфигурации из агента в основную конфигурацию nginx..."
+        # Копируем конфигурацию
         if sudo cp "$agent_nginx_conf" "$nginx_main_conf"; then
-            log_success "Конфигурация агента скопирована в $nginx_main_conf"
-
-            # Проверяем, нужно ли настроить порт агента в конфигурации
-            echo "Проверка конфигурации nginx..."
-
-            # Проверяем, упоминается ли порт агента в конфигурации
-            if ! sudo grep -q "127.0.0.1:$AGENT_PORT" "$nginx_main_conf" && \
-               ! sudo grep -q "localhost:$AGENT_PORT" "$nginx_main_conf"; then
-                echo "Порт агента ($AGENT_PORT) не найден в конфигурации. Добавление проксирования..."
-
-                # Добавляем конфигурацию для проксирования на порт агента
-                local proxy_config="
-# Конфигурация для Eskvisor Agent (добавлено автоматически)
-upstream eskvisor_backend {
-    server 127.0.0.1:$AGENT_PORT;
-    keepalive 64;
-}
-
-server {
-    listen $NGINX_HTTP_PORT;
-    server_name _;
-
-    location /api/ {
-        proxy_pass http://eskvisor_backend;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        # WebSocket поддержка
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \"upgrade\";
-    }
-
-    location /ws/ {
-        proxy_pass http://eskvisor_backend;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        # WebSocket поддержка
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \"upgrade\";
-
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    location /health {
-        proxy_pass http://eskvisor_backend/health;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        access_log off;
-    }
-
-    location / {
-        proxy_pass http://eskvisor_backend;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-"
-
-                # Добавляем конфигурацию в конец файла
-                echo "$proxy_config" | sudo tee -a "$nginx_main_conf" > /dev/null
-                log_success "Добавлена конфигурация проксирования для порта агента $AGENT_PORT"
-            else
-                log_success "Конфигурация агента уже содержит настройки для порта $AGENT_PORT"
-            fi
+            log_success "Конфигурация nginx скопирована из агента"
         else
-            log_error "Ошибка копирования конфигурации агента"
+            log_error "Ошибка копирования конфигурации nginx"
             return 1
         fi
     else
-        echo "Конфигурация nginx от агента не найдена. Создание стандартной конфигурации..."
-
-        # Создание стандартной конфигурации nginx для Eskvisor
-        cat << EOF | sudo tee "$nginx_main_conf" > /dev/null
-# Стандартная конфигурация nginx для Eskvisor
-# Создана автоматически при установке
-
-user nginx;
-worker_processes auto;
-error_log /var/log/nginx/error.log;
-pid /run/nginx.pid;
-
-include /usr/share/nginx/modules/*.conf;
-
-events {
-    worker_connections 1024;
-    use epoll;
-    multi_accept on;
-}
-
-http {
-    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
-                    '\$status \$body_bytes_sent "\$http_referer" '
-                    '"\$http_user_agent" "\$http_x_forwarded_for"';
-
-    access_log /var/log/nginx/access.log main;
-
-    sendfile on;
-    tcp_nopush on;
-    tcp_nodelay on;
-    keepalive_timeout 65;
-    types_hash_max_size 2048;
-
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-
-    # Базовые настройки безопасности
-    server_tokens off;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    # Gzip сжатие
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_proxied any;
-    gzip_comp_level 6;
-    gzip_types
-        application/json
-        application/javascript
-        text/css
-        text/plain
-        text/xml
-        application/xml
-        application/xml+rss;
-
-    # Конфигурация для Eskvisor Agent
-    upstream eskvisor_backend {
-        server 127.0.0.1:$AGENT_PORT;
-        keepalive 64;
-    }
-
-    server {
-        listen $NGINX_HTTP_PORT;
-        listen [::]:$NGINX_HTTP_PORT;
-        server_name _;
-
-        # Ограничение размера запроса
-        client_max_body_size 100M;
-
-        # Таймауты
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-        send_timeout 300s;
-
-        # API эндпоинты
-        location /api/ {
-            proxy_pass http://eskvisor_backend;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-
-            # WebSocket поддержка
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection "upgrade";
-        }
-
-        # WebSocket эндпоинты
-        location /ws/ {
-            proxy_pass http://eskvisor_backend;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-
-            # WebSocket поддержка
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection "upgrade";
-
-            # Таймауты для WebSocket
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
-
-            # Отключение буферизации
-            proxy_buffering off;
-        }
-
-        # Health check
-        location /health {
-            proxy_pass http://eskvisor_backend/health;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-
-            access_log off;
-            allow all;
-        }
-
-        # Статические файлы (если есть)
-        location /static/ {
-            alias /eskvisor/static/;
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-
-        # Все остальные запросы
-        location / {
-            proxy_pass http://eskvisor_backend;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-
-            # WebSocket поддержка
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection "upgrade";
-        }
-
-        # Логирование
-        access_log /var/log/nginx/eskvisor-access.log main;
-        error_log /var/log/nginx/eskvisor-error.log;
-    }
-
-    # Дополнительные конфигурации можно добавить ниже
-    include /etc/nginx/conf.d/*.conf;
-}
-EOF
-
-        if [[ $? -eq 0 ]]; then
-            log_success "Стандартная конфигурация nginx создана"
-        else
-            log_error "Ошибка создания стандартной конфигурации nginx"
-            return 1
-        fi
+        log_error "Конфигурация nginx от агента не найдена: $agent_nginx_conf"
+        return 1
     fi
 
     # Удаляем все конфигурации из conf.d, чтобы избежать конфликтов
     echo "Очистка конфигураций в /etc/nginx/conf.d/..."
     sudo rm -f /etc/nginx/conf.d/*.conf
-
-    # Создаем минимальную конфигурацию для проверки здоровья nginx
-    cat << EOF | sudo tee /etc/nginx/conf.d/health.conf > /dev/null
-# Конфигурация для проверки здоровья nginx
-server {
-    listen 8080;
-    server_name _;
-
-    location /nginx-health {
-        access_log off;
-        return 200 "nginx is healthy\n";
-        add_header Content-Type text/plain;
-    }
-}
-EOF
-
-    # Создаем директорию для статических файлов (если её нет)
-    sudo mkdir -p /eskvisor/static
 
     # Тестирование конфигурации nginx
     echo "Проверка конфигурации nginx..."
@@ -557,6 +257,12 @@ EOF
     # Перезагрузка демона systemd
     sudo systemctl daemon-reload
 
+    # Исправление прав для директории /run
+    echo "Исправление прав для директории /run/..."
+    sudo mkdir -p /run/nginx
+    sudo chown -R nginx:nginx /run/nginx
+    sudo chmod 755 /run/nginx
+
     # Запуск и включение nginx
     echo "Запуск службы nginx..."
     if sudo systemctl enable nginx; then
@@ -570,6 +276,7 @@ EOF
         log_success "Nginx успешно запущен"
     else
         log_error "Ошибка запуска nginx"
+        sudo systemctl status nginx --no-pager
         return 1
     fi
 
@@ -621,12 +328,27 @@ setup_selinux_for_nginx() {
             fi
 
             # Разрешаем доступ к директории eskvisor
-            if sudo semanage fcontext -a -t httpd_sys_content_t "/eskvisor(/.*)?" 2>/dev/null; then
-                sudo restorecon -Rv /eskvisor
-                log_success "Политика доступа к /eskvisor установлена"
+            if sudo semanage fcontext -a -t httpd_sys_content_t "/opt/eskvisor(/.*)?" 2>/dev/null; then
+                sudo restorecon -Rv /opt/eskvisor
+                log_success "Политика доступа к /opt/eskvisor установлена"
             else
                 log_skip "Политика доступа уже установлена или ошибка"
             fi
+
+            # Установите правильный контекст SELinux
+            sudo chcon -R -t bin_t /eskvisor/eskvisor_venv/bin/
+            sudo chcon -R -t bin_t /eskvisor/eskvisor_venv/bin/python
+
+            # Устанавливаем правильный контекст для всей директории nginx
+            sudo semanage fcontext -a -t httpd_config_t "/etc/nginx(/.*)?"
+            sudo restorecon -Rv /etc/nginx/
+
+            # Для /run/nginx.pid
+            sudo semanage fcontext -a -t httpd_var_run_t "/run/nginx.pid"
+            sudo touch /run/nginx.pid
+            sudo restorecon -v /run/nginx.pid
+            sudo chown nginx:nginx /run/nginx.pid
+
 
             # Разрешаем доступ к сокетам
             if sudo setsebool -P httpd_use_nfs 1; then
@@ -649,6 +371,8 @@ echo "========================================="
 echo "Установка зависимостей для Eskvisor на AlmaLinux"
 echo "========================================="
 
+echo "Логирование установки в файл: $LOG_FILE"
+
 # Обновление системы
 echo "Обновление системы..."
 if sudo dnf update -y; then
@@ -670,7 +394,7 @@ sudo systemctl start sshd
 
 echo "Установка файла конфигурации"
 sudo mkdir -p /etc/eskvisor
-sudo mv /tmp/eskvisor/agent/.env /etc/eskvisor/agent.env
+sudo mv /opt/eskvisor/agent/.env /etc/eskvisor/agent.env
 sudo systemctl start sshd
 
 if sudo systemctl is-active --quiet sshd; then
@@ -691,12 +415,6 @@ else
     log_error "Ошибка применения конфигурации SSH"
 fi
 
-# Перенос директории eskvisor (перед настройкой сервиса)
-if move_eskvisor_directory; then
-    log_success "Директория eskvisor перенесена"
-else
-    log_error "Ошибка переноса директории eskvisor"
-fi
 
 # Настройка сервиса eskvisor
 if setup_service; then
@@ -725,7 +443,6 @@ install_package "libvirt-devel" "Libvirt библиотека"
 install_package "virt-install" "Virt-install"
 install_package "virt-viewer" "Virt-viewer"
 install_package "virt-manager" "Virt-manager"
-install_package "@virtualization" "Группа виртуализации"
 
 # Установка инструментов разработки
 install_package "gcc" "Компилятор GCC"
@@ -796,10 +513,22 @@ echo "Установка Python и зависимостей..."
 install_package "python3" "Python 3"
 install_package "python3-pip" "Pip для Python 3"
 install_package "python3-devel" "Разработка Python 3"
-install_package "python3-virtualenv" "Virtualenv для Python 3"
+
+# Установка virtualenv через pip
+echo "Установка virtualenv для Python 3..."
+if python3 -m pip install virtualenv; then
+    log_success "Virtualenv установлен через pip"
+else
+    log_error "Ошибка установки virtualenv через pip"
+fi
+
+# Установка системных зависимостей для PyGObject
+install_package "cairo-devel" "Разработка Cairo"
+install_package "cairo-gobject-devel" "Разработка Cairo GObject"
+install_package "gobject-introspection-devel" "Разработка GObject Introspection"
+install_package "libffi-devel" "Разработка libffi"
 
 # Дополнительные зависимости для Python
-install_package "cairo-devel" "Разработка Cairo"
 install_package "pango-devel" "Разработка Pango"
 install_package "gdk-pixbuf2-devel" "Разработка GDK-Pixbuf"
 
@@ -833,20 +562,26 @@ if [[ -f "/eskvisor/eskvisor_venv/bin/activate" ]]; then
         log_error "Ошибка обновления pip"
     fi
 
-    # Установка PyGObject
-    pip install PyGObject
-    if [[ $? -eq 0 ]]; then
+    # Установка PyGObject с флагом для избежания проблем сборки
+    echo "Установка PyGObject..."
+    if pip install PyGObject --no-build-isolation; then
         log_success "PyGObject установлен"
     else
         log_error "Ошибка установки PyGObject"
+        echo "Попытка альтернативной установки PyGObject..."
+        if pip install pygobject; then
+            log_success "PyGObject установлен альтернативным методом"
+        else
+            log_error "Ошибка альтернативной установки PyGObject"
+        fi
     fi
 
     # Установка зависимостей из requirements.txt если файл существует
-    if [[ -f "/eskvisor/requirements.txt" ]]; then
+    if [[ -f "/opt/eskvisor/requirements.txt" ]]; then
         while read -r package; do
             [[ -z "$package" ]] || [[ "$package" =~ ^# ]] && continue
             python3 -m pip install "$package" || echo "Ошибка: $package"
-        done </eskvisor/requirements.txt
+        done </opt/eskvisor/requirements.txt
         if [[ $? -eq 0 ]]; then
             log_success "Зависимости из requirements.txt установлены"
         else
@@ -924,12 +659,14 @@ sudo systemctl is-active eskvisor &>/dev/null && echo -e "Eskvisor: ${GREEN}ак
 sudo systemctl is-active nginx &>/dev/null && echo -e "Nginx: ${GREEN}активен${NC}" || echo -e "Nginx: ${RED}не активен${NC}"
 
 echo ""
-echo "Расположение Eskvisor: /eskvisor"
+echo "Расположение Eskvisor: /opt/eskvisor"
 echo "Расположение конфигурации: /etc/eskvisor/agent.env"
 echo "Расположение сервиса: /etc/systemd/system/eskvisor.service"
 echo "Расположение конфигурации nginx: /etc/nginx/nginx.conf"
 echo "Порт бэкэнда агента: ${AGENT_PORT}"
 echo "Порт nginx (HTTP): ${NGINX_HTTP_PORT}"
+echo ""
+echo "Лог установки сохранен в: $LOG_FILE"
 echo ""
 echo "Для проверки работы перейдите по адресу: http://ваш_сервер/health"
 echo "Для проверки здоровья nginx: curl http://localhost:8080/nginx-health"
@@ -994,7 +731,7 @@ fi
 
 echo ""
 echo "5. Проверка конфигурационного файла nginx:"
-if [[ -f "/eskvisor/agent/nginx.conf" ]]; then
+if [[ -f "/opt/eskvisor/agent/nginx.conf" ]]; then
     echo -e "  Конфигурация агента: \033[0;32mобнаружена\033[0m"
 else
     echo -e "  Конфигурация агента: \033[0;33mне обнаружена (используется стандартная)\033[0m"

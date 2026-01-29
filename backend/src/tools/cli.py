@@ -28,7 +28,7 @@ class CLIControl:
         command,
         user="root",
         password="root",
-        timeout: int = 10,
+        timeout: int | None = 10,
         return_proc: bool = False,
         shell: bool = False,
         is_text: bool = False,
@@ -52,9 +52,11 @@ class CLIControl:
             shell=shell,
             text=True,
         )
-
         # Критически важно: пароль + \n
-        stdout, stderr = proc.communicate(input=f"{password}\n", timeout=timeout)
+        if timeout is not None:
+            stdout, stderr = proc.communicate(input=f"{password}\n", timeout=timeout)
+        else:
+            stdout, stderr = proc.communicate(input=f"{password}\n")
         if return_proc:
             return ProcessResult(proc.returncode, stdout, stderr)
         return stdout if proc.returncode == 0 else stderr
