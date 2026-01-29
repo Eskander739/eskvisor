@@ -8,11 +8,10 @@ Type=simple
 # Запуск от root - ОПАСНО, но нужно для виртуализации
 User=root
 Group=root
-WorkingDirectory=/eskvisor/agent/client
 
 # Команда запуска
-ExecStart=/eskvisor/bin/python -m uvicorn main:app \
-    --host 0.0.0.0 \
+ExecStart=/eskvisor_venv/bin/python -m uvicorn main:app \
+    --host 127.0.0.1 \
     --port 8000 \
     --workers 1 \
     --timeout-keep-alive 30 \
@@ -31,7 +30,7 @@ NoNewPrivileges=true
 #ReadWritePaths=/var/lib/libvirt/images /etc/libvirt
 
 # Переменные окружения
-Environment="PYTHONPATH=/home/eskvisor/agent"
+Environment="PYTHONPATH=/eskvisor/"
 Environment="VIRTUAL_ENV=/eskvisor"
 Environment="PATH=/eskvisor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 

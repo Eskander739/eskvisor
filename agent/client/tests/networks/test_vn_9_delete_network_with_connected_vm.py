@@ -50,7 +50,7 @@ def test_vn_09_delete_network_with_connected_vm(
             DiskCreate(),
         ],
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
-        qemu_commandline=NetQemuCommandline(),
+        net_qemu_commandline=NetQemuCommandline(),
     )
     network_name = None
     try:

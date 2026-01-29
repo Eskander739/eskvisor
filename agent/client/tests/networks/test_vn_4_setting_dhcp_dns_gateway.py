@@ -53,7 +53,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
             DiskCreate(),
         ],
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
-        qemu_commandline=NetQemuCommandline(),
+        net_qemu_commandline=NetQemuCommandline(),
     )
     network_name = None
     try:
@@ -63,9 +63,9 @@ def test_vn_04_setting_dhcp_dns_gateway(
             name=f"nat-{random_int}",
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(name=f"virbr-test-{random_int}", stp="on", delay=0),
-            ipv4_address=IPv4Network("192.168.100.0/24"),
+            ipv4_address=IPv4Network("192.168.101.0/24"),
             dhcp_ranges=[
-                NetworkDHCPRange(start="192.168.100.100", end="192.168.100.200")
+                NetworkDHCPRange(start="192.168.101.100", end="192.168.101.200")
             ],
             # Добавляем шлюз
             gateway="192.168.100.1",
@@ -105,8 +105,8 @@ def test_vn_04_setting_dhcp_dns_gateway(
         # Проверяем DHCP диапазон
         assert len(get_network_info.net_info.dhcp_ranges) == 1
         dhcp_range = get_network_info.net_info.dhcp_ranges[0]
-        assert dhcp_range.start == IPv4Address("192.168.100.100")
-        assert dhcp_range.end == IPv4Address("192.168.100.200")
+        assert dhcp_range.start == IPv4Address("192.168.101.100")
+        assert dhcp_range.end == IPv4Address("192.168.101.200")
 
         # Проверяем шлюз
         # assert network.gateway == "192.168.100.1" # TODO: Доработать проверку
@@ -173,7 +173,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
             ip_parts = list(map(int, ip_address.split(".")))
             assert ip_parts[0] == 192
             assert ip_parts[1] == 168
-            assert ip_parts[2] == 100
+            assert ip_parts[2] == 101
             assert 100 <= ip_parts[3] <= 200, f"IP {ip_address} не в диапазоне DHCP"
 
         # Проверяем DNS настройки
@@ -182,7 +182,7 @@ def test_vn_04_setting_dhcp_dns_gateway(
 
         # Проверяем шлюз
         route_result = results[-2]  # Результат ip route show default
-        assert "192.168.100.1" in route_result
+        assert "192.168.101.1" in route_result
 
     finally:
         # ____________________________________Удаление ВМ(постусловие)____________

@@ -27,9 +27,9 @@ from agent.client.hypervisor.libvirt.models.network import VmNetAdapter
 
 class HostForward(BaseModel):
     protocol: str | None = None
-    host_port: int
+    host_port: int = Field(..., description="Слушает запросы извне")
     host_ip: str | None = None
-    guest_port: int
+    guest_port: int = Field(..., description="Куда перенаправляет порты")
 
     @model_validator(mode="after")
     def validate_disk_type_constraints(self):
@@ -55,9 +55,9 @@ class NetQemuCommandline(BaseModel):
     ipv4: bool = True
     ipv6: bool = False
     dns: str = "8.8.8.8"
-    hostfwd: HostForward = HostForward(
+    hostfwd: list[HostForward] = [HostForward(
         protocol="tcp", host_port=2222, host_ip=None, guest_port=22
-    )
+    )]
 
     @model_validator(mode="after")
     def validate_disk_type_constraints(self):
@@ -70,15 +70,19 @@ class NetQemuCommandline(BaseModel):
     def qemu_commandline_string(self):
         ipv4 = "on" if self.ipv4 else "off"
         ipv6 = "on" if self.ipv6 else "off"
-        return (
+        qcs = (
             f'--qemu-commandline="'
             f"-netdev {self.net_dev.value},"
             f"id={self.net_id},"
             f"ipv4={ipv4},"
             f"ipv6={ipv6},"
             f"dns={self.dns},"
-            f'hostfwd={self.hostfwd.hostfwd_to_string}"'
         )
+        hostfwd = ""
+        for current_hostfwd in self.hostfwd:
+            hostfwd += "hostfwd=" + current_hostfwd.hostfwd_to_string + ","
+        hostfwd = hostfwd[:-1]
+        return qcs + hostfwd + '"'
 
 
 class VMCreateRequest(BaseModel):
@@ -170,7 +174,7 @@ class VMCreateRequest(BaseModel):
     autostart: bool = Field(
         default=False, description="Автоматически запускать ВМ при перезагрузке хоста"
     )
-    qemu_commandline: NetQemuCommandline | None = Field(
+    net_qemu_commandline: NetQemuCommandline | None = Field(
         default=None, description="Дополнительные аргументы командной строки QEMU"
     )
     boot_devices: list[str] | None = Field(

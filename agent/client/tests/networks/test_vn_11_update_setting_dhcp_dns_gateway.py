@@ -51,7 +51,7 @@ def test_vn_11_update_setting_dhcp_dns_gateway(
         autostart_vm=True,
         disks=[DiskCreate(path=IMG_PATH, disk_type=DiskType.CDROM), DiskCreate()],
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
-        qemu_commandline=NetQemuCommandline(),
+        net_qemu_commandline=NetQemuCommandline(),
     )
     network_name = None
     try:

@@ -44,7 +44,7 @@ def test_vm_2_connect_iso_image(vm_session, storage_session, virsh_console_sessi
             DiskCreate(name=f"disk-{str(random.randint(100000, 999999))}"),
         ],
         networks=[VmNetAdapter(network_type=NetworkType.USER)],
-        qemu_commandline=NetQemuCommandline(),
+        net_qemu_commandline=NetQemuCommandline(),
     )
     try:
         # ____________________________________Создание ВМ_________________________

@@ -52,7 +52,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
             DiskCreate(),
         ],
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
-        qemu_commandline=NetQemuCommandline(),
+        net_qemu_commandline=NetQemuCommandline(),
     )
     network_name = None
     try:

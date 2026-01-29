@@ -104,7 +104,7 @@ async def get_dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
-@app.websocket("/ws")
+@app.websocket("/ws/task")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint для уведомлений"""
     await websocket.accept()
@@ -136,16 +136,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             "type": "tasks_list",
                             "pending": pending_tasks,
                             "processing": processing_tasks,
-                        }
-                    )
-
-                elif action == "subscribe_task":
-                    request_id = message.get("request_id")
-                    await websocket.send_json(
-                        {
-                            "type": "subscription",
-                            "message": f"Подписан на задачу {request_id}",
-                            "request_id": request_id,
                         }
                     )
 
@@ -216,7 +206,7 @@ async def websocket_system_stats(websocket: WebSocket):
         logger.info(f"WebSocket отключен. Осталось: {len(active_connections)}")
 
 
-@app.websocket("/ws/notifications")
+@app.websocket("/ws/notification")
 async def websocket_notifications(websocket: WebSocket):
     """WebSocket только для уведомлений (без обработки команд)"""
     await ws_handler.connect(websocket)

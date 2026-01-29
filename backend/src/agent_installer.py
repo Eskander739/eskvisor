@@ -187,7 +187,7 @@ class AgentInstaller:
             "-o",
             "UserKnownHostsFile=/dev/null",
             agent_package_path,
-            f"{username}@{hostname}:/tmp/agent_package.tar.gz",
+            f"{username}@{hostname}:/tmp/eskvisor_agent_package.tar.gz",
         ]
 
         result = self.cli.execute(scp_command, return_proc=True)
@@ -202,9 +202,9 @@ class AgentInstaller:
         self.logger.info(f"🔧 Установка агента на {hostname}...")
 
         install_commands = [
-            f"tar -xzf /tmp/agent_package.tar.gz -C /tmp",
-            "cd /tmp/agent && sudo ./install.sh",
-            "rm -f /tmp/agent_package.tar.gz",
+            f"tar -xzf /tmp/eskvisor_agent_package.tar.gz -C /tmp",
+            "cd /tmp/eskvisor && sudo ./install.sh",
+            "rm -f /tmp/eskvisor_agent_package.tar.gz",
             "sudo systemctl start libvirt-agent",
         ]
 

@@ -557,7 +557,7 @@ class VmManager(LibvirtClient):
         if config.noautoconsole:
             cmd_parts.append("--noautoconsole")
 
-        if config.qemu_commandline:
+        if config.net_qemu_commandline:
             net_info = self.get_all_hostfwd_and_net_ids()
             all_net_ids = {current_net_info[0] for current_net_info in net_info}
             all_ip_and_port = {
@@ -565,16 +565,17 @@ class VmManager(LibvirtClient):
                 for current_net_info in net_info
             }
 
-            if config.qemu_commandline.net_id in all_net_ids:
-                config.qemu_commandline.net_id = self.generate_new_net_id
+            if config.net_qemu_commandline.net_id in all_net_ids:
+                config.net_qemu_commandline.net_id = self.generate_new_net_id
 
-            if (
-                config.qemu_commandline.hostfwd.host_ip,
-                config.qemu_commandline.hostfwd.host_port,
-            ) in all_ip_and_port:
-                config.qemu_commandline.net_id = self.generate_new_net_id
+            for current_hostfwd in config.net_qemu_commandline.hostfwd:
+                if (
+                        current_hostfwd.host_ip,
+                        current_hostfwd.host_port,
+                ) in all_ip_and_port:
+                    config.net_qemu_commandline.net_id = self.generate_new_net_id
 
-            cmd_parts.append(config.qemu_commandline.qemu_commandline_string)
+            cmd_parts.append(config.net_qemu_commandline.qemu_commandline_string)
 
         return " ".join(cmd_parts)
 
