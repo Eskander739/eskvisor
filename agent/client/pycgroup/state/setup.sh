@@ -43,8 +43,8 @@ mkdir -p /var/log
 
 # 3. Копируем скрипты
 echo "Копирование скриптов..."
-cp save.sh /usr/local/bin/
-cp restore.sh /usr/local/bin/
+cp /opt/eskvisor/agent/client/pycgroup/state/save.sh /usr/local/bin/
+cp /opt/eskvisor/agent/client/pycgroup/state/restore.sh /usr/local/bin/
 chmod 755 /usr/local/bin/*.sh
 
 # 4. Копируем systemd сервисы
