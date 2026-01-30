@@ -21,6 +21,8 @@ SKIP_COUNT=0
 AGENT_PORT=8000
 # Порт для nginx (HTTP)
 NGINX_HTTP_PORT=80
+# Порт Redis
+REDIS_PORT=6379
 
 # Функция логирования
 log_success() {
@@ -65,6 +67,229 @@ install_package() {
         log_error "Ошибка установки $friendly_name"
         return 1
     fi
+}
+
+# Функция установки Redis
+install_redis() {
+    echo "========================================="
+    echo "Установка Redis"
+    echo "========================================="
+
+    # Проверка, установлен ли уже Redis
+    if command -v redis-server &> /dev/null; then
+        log_skip "Redis уже установлен"
+        redis_version=$(redis-server --version | awk '{print $3}' | cut -d'=' -f2)
+        echo "Версия Redis: $redis_version"
+        return 0
+    fi
+
+    # Установка репозитория Remi для Redis
+    echo "Установка репозитория Remi..."
+    if sudo dnf install -y https://rpms.remirepo.net/enterprise/remi-release-10.rpm; then
+        log_success "Репозиторий Remi установлен"
+    else
+        log_error "Ошибка установки репозитория Remi"
+        return 1
+    fi
+
+    # Просмотр доступных модулей Redis
+    echo "Доступные модули Redis:"
+    sudo dnf module list redis 2>/dev/null | grep -E "redis|Name|Stream" || echo "Информация о модулях недоступна"
+
+    # Включение модуля Redis (версия 7.2)
+    echo "Включение модуля Redis:remi-7.2..."
+    if sudo dnf module enable -y redis:remi-7.2; then
+        log_success "Модуль Redis:remi-7.2 включен"
+    else
+        # Попробуем другую версию
+        echo "Попытка включения модуля Redis:remi..."
+        if sudo dnf module enable -y redis:remi; then
+            log_success "Модуль Redis:remi включен"
+        else
+            log_error "Не удалось включить модуль Redis"
+            return 1
+        fi
+    fi
+
+    # Установка Redis
+    echo "Установка Redis сервера..."
+    if sudo dnf install -y redis; then
+        log_success "Redis установлен"
+
+        # Получение версии Redis
+        redis_version=$(redis-server --version 2>/dev/null | awk '{print $3}' | cut -d'=' -f2 || echo "неизвестно")
+        echo "Установлена версия Redis: $redis_version"
+    else
+        log_error "Ошибка установки Redis"
+        return 1
+    fi
+
+    # Настройка Redis
+    echo "Настройка Redis..."
+
+    # Резервное копирование конфигурации
+    if [[ -f /etc/redis.conf ]]; then
+        sudo cp /etc/redis.conf /etc/redis.conf.backup_$(date +%Y%m%d_%H%M%S)
+        log_success "Резервная копия конфигурации Redis создана"
+    fi
+
+    # Настройка базовых параметров
+    REDIS_CONF="/etc/redis.conf"
+    if [[ -f "$REDIS_CONF" ]]; then
+        # Разрешаем доступ со всех интерфейсов (для внутренней сети)
+        sudo sed -i 's/^bind 127.0.0.1 -::1/#bind 127.0.0.1 -::1\nbind 0.0.0.0/' "$REDIS_CONF"
+
+        # Отключаем защищенный режим для локальной сети
+        sudo sed -i 's/^protected-mode yes/protected-mode no/' "$REDIS_CONF"
+
+        # Разрешаем фоновое сохранение
+        sudo sed -i 's/^save 900 1/#save 900 1/' "$REDIS_CONF"
+        sudo sed -i 's/^save 300 10/#save 300 10/' "$REDIS_CONF"
+        sudo sed -i 's/^save 60 10000/#save 60 10000/' "$REDIS_CONF"
+
+        # Включаем AOF (Append Only File) для лучшей надежности
+        echo "appendonly yes" | sudo tee -a "$REDIS_CONF" > /dev/null
+
+        # Настраиваем максимальное использование памяти (1GB)
+        echo "maxmemory 1gb" | sudo tee -a "$REDIS_CONF" > /dev/null
+        echo "maxmemory-policy allkeys-lru" | sudo tee -a "$REDIS_CONF" > /dev/null
+
+        log_success "Конфигурация Redis обновлена"
+    else
+        log_error "Конфигурационный файл Redis не найден: $REDIS_CONF"
+    fi
+
+    # Создание системного юнита (если не существует)
+    if [[ ! -f "/usr/lib/systemd/system/redis.service" ]]; then
+        echo "Создание systemd юнита для Redis..."
+        cat << EOF | sudo tee /etc/systemd/system/redis.service > /dev/null
+[Unit]
+Description=Redis persistent key-value database
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/redis-server /etc/redis.conf --supervised systemd
+ExecStop=/usr/bin/redis-cli shutdown
+Type=notify
+User=redis
+Group=redis
+RuntimeDirectory=redis
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        log_success "Systemd юнит для Redis создан"
+    fi
+
+    # Создание пользователя redis (если не существует)
+    if ! id -u redis &>/dev/null; then
+        sudo useradd -r -s /bin/false redis
+        log_success "Пользователь redis создан"
+    fi
+
+    # Создание директорий и настройка прав
+    sudo mkdir -p /var/lib/redis /var/log/redis
+    sudo chown -R redis:redis /var/lib/redis /var/log/redis
+    sudo chmod 750 /var/lib/redis
+
+    # Перезагрузка демона systemd
+    sudo systemctl daemon-reload
+
+    # Включение и запуск Redis
+    echo "Запуск службы Redis..."
+    if sudo systemctl enable redis; then
+        log_success "Redis добавлен в автозапуск"
+    else
+        log_error "Ошибка добавления Redis в автозапуск"
+    fi
+
+    if sudo systemctl start redis; then
+        log_success "Redis успешно запущен"
+    else
+        log_error "Ошибка запуска Redis"
+        sudo systemctl status redis --no-pager
+        return 1
+    fi
+
+    # Проверка статуса Redis
+    if sudo systemctl is-active --quiet redis; then
+        log_success "Служба Redis активна"
+    else
+        log_error "Служба Redis не активна"
+        return 1
+    fi
+
+    # Проверка работы Redis
+    echo "Проверка работы Redis..."
+    if redis-cli -h 127.0.0.1 ping | grep -q "PONG"; then
+        log_success "Redis работает корректно"
+    else
+        # Подождать и попробовать снова
+        sleep 2
+        if redis-cli -h 127.0.0.1 ping | grep -q "PONG"; then
+            log_success "Redis работает корректно"
+        else
+            log_error "Redis не отвечает на запросы"
+            return 1
+        fi
+    fi
+
+    # Настройка firewalld для Redis порта
+    echo "Настройка firewalld для порта Redis (${REDIS_PORT})..."
+    if command -v firewall-cmd &> /dev/null; then
+        if sudo firewall-cmd --state &> /dev/null; then
+            if sudo firewall-cmd --permanent --add-port=${REDIS_PORT}/tcp; then
+                sudo firewall-cmd --reload
+                log_success "Порт Redis ${REDIS_PORT} открыт в firewalld"
+            else
+                log_error "Ошибка открытия порта Redis в firewalld"
+            fi
+        else
+            log_skip "Firewalld не запущен, пропускаем настройку портов"
+        fi
+    else
+        log_skip "Firewalld не установлен, пропускаем настройку портов"
+    fi
+
+    # Настройка SELinux для Redis (если включен)
+    if command -v sestatus &> /dev/null && sestatus | grep -q "enabled"; then
+        echo "Настройка SELinux для Redis..."
+        # Разрешаем Redis доступ к сети
+        sudo setsebool -P redis_can_network 1
+        # Разрешаем Redis доступ к порту
+        sudo semanage port -a -t redis_port_t -p tcp ${REDIS_PORT} 2>/dev/null || \
+            echo "Порт Redis уже настроен в SELinux или ошибка"
+        log_success "SELinux настроен для Redis"
+    fi
+
+    # Проверка подключения извне
+    echo "Тестирование подключения к Redis:"
+    echo -n "  Локальное подключение: "
+    if redis-cli ping | grep -q "PONG"; then
+        echo -e "${GREEN}успех${NC}"
+    else
+        echo -e "${RED}ошибка${NC}"
+    fi
+
+    echo -n "  Подключение по сети: "
+    if redis-cli -h 0.0.0.0 ping | grep -q "PONG"; then
+        echo -e "${GREEN}успех${NC}"
+    else
+        echo -e "${YELLOW}требуется настройка${NC}"
+    fi
+
+    # Вывод информации о Redis
+    echo ""
+    echo "Информация о Redis:"
+    echo "  Версия: $(redis-server --version 2>/dev/null | awk '{print $3}' | cut -d'=' -f2 || echo 'неизвестно')"
+    echo "  Порт: ${REDIS_PORT}"
+    echo "  Конфигурационный файл: /etc/redis.conf"
+    echo "  Данные: /var/lib/redis"
+    echo "  Логи: /var/log/redis"
+    echo "  Systemd сервис: redis.service"
+
+    return 0
 }
 
 # Функция настройки сервиса
@@ -295,6 +520,29 @@ EOF
 setup_selinux_for_nginx() {
     echo "Настройка SELinux для Nginx..."
 
+    echo "Проверка и отключение фаервола..."
+    if systemctl list-unit-files | grep -q firewalld.service; then
+        echo "Служба firewalld обнаружена, отключаем..."
+
+        # Проверяем, запущена ли служба
+        if systemctl is-active --quiet firewalld; then
+            echo "Останавливаем firewalld..."
+            sudo systemctl stop firewalld
+        fi
+
+        # Проверяем, включена ли автозагрузка
+        if systemctl is-enabled --quiet firewalld 2>/dev/null; then
+            echo "Отключаем автозапуск firewalld..."
+            sudo systemctl disable firewalld
+        else
+            echo "Служба firewalld уже отключена."
+        fi
+
+        echo "firewalld успешно отключен."
+    else
+        echo "Служба firewalld не установлена в системе."
+    fi
+
     # Проверяем, включен ли SELinux
     if command -v sestatus &> /dev/null; then
         local selinux_status=$(sestatus | grep "SELinux status" | awk '{print $3}')
@@ -415,6 +663,12 @@ else
     log_error "Ошибка применения конфигурации SSH"
 fi
 
+# Установка Redis
+if install_redis; then
+    log_success "Redis установлен и настроен"
+else
+    log_error "Ошибка установки Redis"
+fi
 
 # Настройка сервиса eskvisor
 if setup_service; then
@@ -644,9 +898,11 @@ if [[ $ERROR_COUNT -eq 0 ]]; then
     echo "4. Подключитесь по SSH: ssh root@ваш_ip"
     echo "5. Проверьте виртуализацию: sudo virt-host-validate"
     echo "6. Проверьте статус сервиса eskvisor: sudo systemctl status eskvisor"
-    echo "7. Проверьте работу nginx: curl http://localhost/health"
-    echo "8. Проверьте конфигурацию nginx: sudo nginx -t"
-    echo "9. Проверьте логи nginx: sudo tail -f /var/log/nginx/eskvisor-access.log"
+    echo "7. Проверьте работу Redis: redis-cli ping"
+    echo "8. Проверьте работу nginx: curl http://localhost/health"
+    echo "9. Проверьте конфигурацию nginx: sudo nginx -t"
+    echo "10. Проверьте логи nginx: sudo tail -f /var/log/nginx/eskvisor-access.log"
+    echo "11. Проверьте логи Redis: sudo tail -f /var/log/redis/redis.log"
 else
     echo -e "${YELLOW}Были ошибки при установке. Проверьте лог выше.${NC}"
 fi
@@ -655,6 +911,7 @@ echo ""
 echo "Проверка основных служб:"
 sudo systemctl is-active sshd &>/dev/null && echo -e "SSH: ${GREEN}активен${NC}" || echo -e "SSH: ${RED}не активен${NC}"
 sudo systemctl is-active libvirtd &>/dev/null && echo -e "Libvirt: ${GREEN}активен${NC}" || echo -e "Libvirt: ${RED}не активен${NC}"
+sudo systemctl is-active redis &>/dev/null && echo -e "Redis: ${GREEN}активен${NC}" || echo -e "Redis: ${RED}не активен${NC}"
 sudo systemctl is-active eskvisor &>/dev/null && echo -e "Eskvisor: ${GREEN}активен${NC}" || echo -e "Eskvisor: ${RED}не активен${NC}"
 sudo systemctl is-active nginx &>/dev/null && echo -e "Nginx: ${GREEN}активен${NC}" || echo -e "Nginx: ${RED}не активен${NC}"
 
@@ -662,14 +919,18 @@ echo ""
 echo "Расположение Eskvisor: /opt/eskvisor"
 echo "Расположение конфигурации: /etc/eskvisor/agent.env"
 echo "Расположение сервиса: /etc/systemd/system/eskvisor.service"
+echo "Расположение Redis: /etc/redis.conf"
 echo "Расположение конфигурации nginx: /etc/nginx/nginx.conf"
 echo "Порт бэкэнда агента: ${AGENT_PORT}"
 echo "Порт nginx (HTTP): ${NGINX_HTTP_PORT}"
+echo "Порт Redis: ${REDIS_PORT}"
 echo ""
 echo "Лог установки сохранен в: $LOG_FILE"
 echo ""
-echo "Для проверки работы перейдите по адресу: http://ваш_сервер/health"
-echo "Для проверки здоровья nginx: curl http://localhost:8080/nginx-health"
+echo "Для проверки работы:"
+echo "  - Redis: redis-cli ping"
+echo "  - Eskvisor: curl http://ваш_сервер/health"
+echo "  - Nginx: curl http://localhost:8080/nginx-health"
 
 # Создание скрипта для проверки конфигурации
 cat << EOF | sudo tee /usr/local/bin/check-eskvisor-config.sh > /dev/null
@@ -680,7 +941,7 @@ echo ""
 
 # Проверка служб
 echo "1. Проверка служб:"
-services=("sshd" "libvirtd" "eskvisor" "nginx")
+services=("sshd" "libvirtd" "redis" "eskvisor" "nginx")
 for service in "\${services[@]}"; do
     if systemctl is-active --quiet "\$service"; then
         echo -e "  \$service: \033[0;32mактивен\033[0m"
@@ -698,6 +959,13 @@ else
     echo -e "\033[0;31mзакрыт\033[0m"
 fi
 
+echo -n "  Порт ${REDIS_PORT} (redis): "
+if ss -tuln | grep -q ":${REDIS_PORT} "; then
+    echo -e "\033[0;32mоткрыт\033[0m"
+else
+    echo -e "\033[0;31mзакрыт\033[0m"
+fi
+
 echo -n "  Порт ${NGINX_HTTP_PORT} (nginx): "
 if ss -tuln | grep -q ":${NGINX_HTTP_PORT} "; then
     echo -e "\033[0;32mоткрыт\033[0m"
@@ -706,7 +974,19 @@ else
 fi
 
 echo ""
-echo "3. Проверка nginx конфигурации:"
+echo "3. Проверка работы Redis:"
+echo -n "  Подключение к Redis: "
+if redis-cli ping | grep -q "PONG"; then
+    echo -e "\033[0;32mуспех\033[0m"
+    echo -n "  Версия Redis: "
+    redis_version=\$(redis-server --version 2>/dev/null | awk '{print \$3}' | cut -d'=' -f2 || echo "неизвестно")
+    echo "\$redis_version"
+else
+    echo -e "\033[0;31mошибка\033[0m"
+fi
+
+echo ""
+echo "4. Проверка nginx конфигурации:"
 if nginx -t 2>/dev/null; then
     echo -e "  Конфигурация nginx: \033[0;32mвалидна\033[0m"
 else
@@ -714,7 +994,7 @@ else
 fi
 
 echo ""
-echo "4. Быстрый тест доступа:"
+echo "5. Быстрый тест доступа:"
 echo -n "  HTTP запрос к /health: "
 if curl -s -f http://localhost/health > /dev/null; then
     echo -e "\033[0;32mуспех\033[0m"
@@ -730,11 +1010,17 @@ else
 fi
 
 echo ""
-echo "5. Проверка конфигурационного файла nginx:"
+echo "6. Проверка конфигурационных файлов:"
 if [[ -f "/opt/eskvisor/agent/nginx.conf" ]]; then
     echo -e "  Конфигурация агента: \033[0;32mобнаружена\033[0m"
 else
     echo -e "  Конфигурация агента: \033[0;33mне обнаружена (используется стандартная)\033[0m"
+fi
+
+if [[ -f "/etc/redis.conf" ]]; then
+    echo -e "  Конфигурация Redis: \033[0;32mобнаружена\033[0m"
+else
+    echo -e "  Конфигурация Redis: \033[0;33mне обнаружена\033[0m"
 fi
 
 echo ""

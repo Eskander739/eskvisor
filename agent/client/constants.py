@@ -1,7 +1,8 @@
 from enum import Enum
 
 
-AGENT_ENV = "/etc/eskvisor/agent.env"
+PROD_ENV = "/etc/eskvisor/agent.env"
+DEV_ENV_LIST = ["/opt/eskvisor/agent/.env", "/home/eska/eskvisor/agent/.env"]
 DIRECTORIES_FOR_SEARCH = [
     # Основные
     "/usr/bin",

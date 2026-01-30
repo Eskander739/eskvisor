@@ -1,0 +1,32 @@
+[Unit]
+Description=Eskvisor Task Dispatcher
+After=network.target libvirtd.service redis.service
+Wants=libvirtd.service redis.service
+Before=eskvisor.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/eskvisor
+
+# Команда запуска диспетчера задач
+ExecStart=/eskvisor/eskvisor_venv/bin/python agent/client/task_manager/dispatcher.py
+
+# Автоматический перезапуск
+Restart=always
+RestartSec=10
+StartLimitBurst=3
+
+# Переменные окружения
+Environment="PYTHONPATH=/opt/eskvisor/"
+Environment="VIRTUAL_ENV=/eskvisor/eskvisor_venv/"
+Environment="PATH=/eskvisor/eskvisor_venv/bin:/opt/eskvisor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Логирование
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=eskvisor-dispatcher
+
+[Install]
+WantedBy=multi-user.target

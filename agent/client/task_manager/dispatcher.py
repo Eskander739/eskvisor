@@ -5,6 +5,9 @@ import sys
 import threading
 import time
 
+from dotenv import load_dotenv
+
+from agent.client.constants import PROD_ENV
 from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.models import (
     Task,
@@ -145,6 +148,7 @@ class TaskDispatcher:
 
 def main():
     """Основная функция запуска диспетчера"""
+    load_dotenv(PROD_ENV)
     queue_manager = RedisTaskManager()
     dispatcher = TaskDispatcher(queue_manager, worker_count=5)
 

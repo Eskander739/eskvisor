@@ -45,7 +45,7 @@ class PhysicalVolumeManager:
 
     @property
     def protected_volumes(self):
-        return ["/boot/efi", "/home", "/", "/boot", "[SWAP]"]
+        return ["/boot/efi", "/home", "/", "/boot", "[SWAP]", "/opt", "/root", "/etc"]
 
     def delete_physical_volume(self, pv_name: str):
         cmd_mountpoint_args = ["lsblk", "/dev/nvme0n1p2", "--output=MOUNTPOINTS"]
@@ -174,11 +174,13 @@ class PhysicalVolumeManager:
 
 
 if __name__ == "__main__":
-    cli = CLIControl()
-    disk_name = "disk-test-60780"
-    cmd_arg = f"df --output=source,target | grep {disk_name} | awk " + "'{print $2}'"
-    result = cli.execute(cmd_arg, shell=True, is_text=True).split("\n")[0]
-    print("result: ", result)
+
+    print(PhysicalVolumeManager().valid_physical_volumes())
+    # cli = CLIControl()
+    # disk_name = "disk-test-60780"
+    # cmd_arg = f"df --output=source,target | grep {disk_name} | awk " + "'{print $2}'"
+    # result = cli.execute(cmd_arg, shell=True, is_text=True).split("\n")[0]
+    # print("result: ", result)
     # nfs_stg = NFSStorage()
     # nfs_path = f"/srv/nfs/share_{random.randint(100000, 999999)}/"
     # nfs_mount_path = f"/mnt/nfs_{random.randint(100000, 999999)}/"

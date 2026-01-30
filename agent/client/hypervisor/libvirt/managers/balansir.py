@@ -1,8 +1,8 @@
 import fcntl
 import os
 from pathlib import Path
-
-from agent.client.constants import INVALID_LINUX_CHAR
+from dotenv import set_key
+from agent.client.constants import INVALID_LINUX_CHAR, PROD_ENV, DEV_ENV_LIST
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.pycgroup.pycgroup import PYCGroup
 from agent.client.lvm.logical import (
@@ -38,6 +38,8 @@ class Balansir(LibvirtClient):
         self.logger = DefaultLogger("Балансиръ")
         self.logger.info("Инициализация виртуального менеджера ресурс пулов")
         self.resource_pool_connected_vms = os.environ.get("RESOURCE_POOL_CONNECTED_VMS")
+        self.prod_env = Path(PROD_ENV)
+        self.dev_envs = [Path(current_dev_env) for current_dev_env in DEV_ENV_LIST]
         self.exists_rp_config()
         self.system_volume_group_name = os.environ.get("VOLUME_GROUP")
         self.node_info = None
@@ -47,17 +49,7 @@ class Balansir(LibvirtClient):
         self.storage_manager = None
         self.vm_manager = None
         self.pycgroup = PYCGroup()
-        system_volume_group = self.volume_group_manager.get_volume_by_name(
-            self.system_volume_group_name
-        )
-        if system_volume_group is None:
-            valid_physical_volumes = (
-                self.physical_volume_manager.valid_physical_volumes()
-            )
-            self.volume_group_manager.create_volume_group(
-                pv_names=valid_physical_volumes,
-                volume_group_name=self.system_volume_group_name,
-            )
+        self.get_or_create_volume_group(self.system_volume_group_name)
         self.logger.info("Виртуальный менеджер ресурс пулов инициализирован")
 
     def __enter__(self):
@@ -69,6 +61,36 @@ class Balansir(LibvirtClient):
         self.node_info = self.get_node_info()
 
         return self
+
+    def get_or_create_volume_group(self, vg_name: str):
+        system_volume_group = self.volume_group_manager.get_volume_by_name(
+            vg_name
+        )
+        if system_volume_group is None:
+            valid_physical_volumes = (
+                self.physical_volume_manager.valid_physical_volumes()
+            )
+            if not valid_physical_volumes:
+                vg_list = self.volume_group_manager.get_volume_list()
+                if not vg_list:
+                    raise ValueError("Отсутствуют доступные Physical Volume и доступные Volume Group")
+                vg_name = vg_list[0].volume_name
+                if self.prod_env.exists():
+                    set_key(self.prod_env, "VOLUME_GROUP", vg_name)
+                for current_dev_env in self.dev_envs:
+                    if current_dev_env.exists():
+                        set_key(self.prod_env, "VOLUME_GROUP", vg_name)
+                system_volume_group = self.volume_group_manager.get_volume_by_name(
+                    vg_name
+                )
+                if system_volume_group is None:
+                    raise ValueError("Некорректная установка существующего Volume Group")
+
+            else:
+                self.volume_group_manager.create_volume_group(
+                    pv_names=valid_physical_volumes,
+                    volume_group_name=vg_name,
+                )
 
     def exists_rp_config(self):
         rp_config_path = Path(self.resource_pool_connected_vms)

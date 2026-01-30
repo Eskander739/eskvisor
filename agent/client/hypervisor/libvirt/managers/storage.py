@@ -49,14 +49,14 @@ class StorageManager(LibvirtClient):
         self.ha_controller = NFSController()
 
     def create_disk(self, disk_create: DiskCreate) -> StorageMessage:
-        ha_nfs_storage = self.ha_controller.get_nfs_storage_by_mount(disk_create.path)
-        if ha_nfs_storage:
-            if not self.ha_controller.check_nfs_availability(ha_nfs_storage.source):
+        nfs_storage = self.ha_controller.get_nfs_storage_by_mount(disk_create.path)
+        if nfs_storage:
+            if not self.ha_controller.check_nfs_availability(nfs_storage.source):
                 return StorageMessage(
                     success=False,
                     code=CommandMessagesEnum.nfs_storage_not_available.name,
                 )
-            disk_create.path = ha_nfs_storage.mount
+            disk_create.path = nfs_storage.mount
         elif disk_create.path is None:
             disk_create.path = self.system_disk_path
         try:

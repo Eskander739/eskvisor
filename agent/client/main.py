@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 
-from agent.client.constants import AGENT_ENV
+from agent.client.constants import PROD_ENV
 from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
 from agent.client.hypervisor.libvirt.models.vm_stats.stats import CpuAndRamUsage
 from agent.client.logger_config import DefaultLogger
@@ -19,7 +19,7 @@ from agent.client.task_manager.models import TaskAdd, TaskType
 from agent.client.task_manager.ws_notification import WebSocketNotificationHandler
 from agent.client.tools import get_quick_stats
 
-load_dotenv(AGENT_ENV)
+load_dotenv(PROD_ENV)
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
 templates = Jinja2Templates(directory="/opt/eskvisor/agent/client/task_manager/templates")
 # templates = Jinja2Templates(directory="task_manager/templates")
@@ -55,50 +55,6 @@ async def add_security_headers(request, call_next):
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
-
-
-@app.delete("/api/tasks/clear")
-async def clear_all_tasks():
-    """Очистить все задачи из очереди"""
-    try:
-        # Получаем все задачи
-        pending_tasks = queue_manager.get_all_tasks()
-        processing_tasks = queue_manager.get_process_tasks()
-
-        # Преобразуем JSON строки обратно в объекты, если необходимо
-        all_tasks = []
-
-        # Обрабатываем pending задачи
-        for task_json in pending_tasks:
-            try:
-                task = orjson.loads(task_json.model_dump_json())
-                all_tasks.append(task.get("request_id"))
-            except Exception:
-                pass
-
-        # Обрабатываем processing задачи
-        for task_json in processing_tasks:
-            try:
-                task = orjson.loads(task_json.model_dump_json())
-                all_tasks.append(task.get("request_id"))
-            except Exception:
-                pass
-
-        deleted_count = queue_manager.delete_all_tasks()
-        deleted_count_working = queue_manager.delete_all_tasks(
-            queue_manager.processing_queue_name
-        )
-        deleted_count += deleted_count_working
-        logger.info(f"Удалено задач: {deleted_count}")
-
-        return JSONResponse(
-            {"deleted": deleted_count, "message": f"Удалено {deleted_count} задач"}
-        )
-
-    except Exception as e:
-        logger.error(f"Ошибка очистки задач: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
-
 
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard(request: Request):
@@ -139,6 +95,41 @@ async def websocket_endpoint(websocket: WebSocket):
                             "pending": pending_tasks,
                             "processing": processing_tasks,
                         }
+                    )
+
+                elif action == "clear_all_tasks":
+                    # Получаем все задачи
+                    pending_tasks = queue_manager.get_all_tasks()
+                    processing_tasks = queue_manager.get_process_tasks()
+
+                    # Преобразуем JSON строки обратно в объекты, если необходимо
+                    all_tasks = []
+
+                    # Обрабатываем pending задачи
+                    for task_json in pending_tasks:
+                        try:
+                            task = orjson.loads(task_json.model_dump_json())
+                            all_tasks.append(task.get("request_id"))
+                        except Exception:
+                            pass
+
+                    # Обрабатываем processing задачи
+                    for task_json in processing_tasks:
+                        try:
+                            task = orjson.loads(task_json.model_dump_json())
+                            all_tasks.append(task.get("request_id"))
+                        except Exception:
+                            pass
+
+                    deleted_count = queue_manager.delete_all_tasks()
+                    deleted_count_working = queue_manager.delete_all_tasks(
+                        queue_manager.processing_queue_name
+                    )
+                    deleted_count += deleted_count_working
+                    logger.info(f"Удалено задач: {deleted_count}")
+
+                    await websocket.send_json(
+                        {"deleted": deleted_count, "message": f"Удалено {deleted_count} задач"}
                     )
 
                 else:

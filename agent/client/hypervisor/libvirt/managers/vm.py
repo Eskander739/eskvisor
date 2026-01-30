@@ -62,7 +62,7 @@ class VmManager(LibvirtClient):
     libvirtError = None
 
     def __init__(self):
-        self.ha_controller = NFSController()
+        self.nfs_controller = NFSController()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger("VmManager")
         super().__init__()
@@ -820,9 +820,9 @@ class VmManager(LibvirtClient):
                     )
 
             # Проверяем доступность NFS хранилищ
-            ha_storages = self.ha_controller.loaded_nfs_storages
-            for storage in ha_storages.nfs_storages:
-                if not self.ha_controller.check_nfs_availability(storage.source):
+            nfs_storages = self.nfs_controller.loaded_nfs_storages
+            for storage in nfs_storages.nfs_storages:
+                if not self.nfs_controller.check_nfs_availability(storage.source):
                     compatibility["errors"].append(
                         f"NFS хранилище {storage.source} недоступно"
                     )
