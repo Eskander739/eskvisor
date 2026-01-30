@@ -292,12 +292,12 @@ EOF
     return 0
 }
 
-# Функция настройки сервиса
-setup_service() {
+# Функция настройки основного сервиса eskvisor
+setup_eskvisor_service() {
     local service_file="/opt/eskvisor/agent/client/service/eskvisor.service"
     local target_dir="/etc/systemd/system"
 
-    echo "Настройка сервиса Eskvisor..."
+    echo "Настройка основного сервиса Eskvisor..."
 
     # Проверка существования файла сервиса
     if [[ ! -f "$service_file" ]]; then
@@ -334,6 +334,54 @@ setup_service() {
         log_success "Сервис eskvisor запущен"
     else
         log_error "Ошибка запуска сервиса eskvisor"
+        return 1
+    fi
+
+    return 0
+}
+
+# Функция настройки сервиса диспетчера задач eskvisor-task-manager
+setup_eskvisor_task_manager_service() {
+    local service_file="/opt/eskvisor/agent/client/service/eskvisor-task-manager.service"
+    local target_dir="/etc/systemd/system"
+
+    echo "Настройка сервиса Eskvisor Task Manager..."
+
+    # Проверка существования файла сервиса
+    if [[ ! -f "$service_file" ]]; then
+        log_error "Файл сервиса не найден: $service_file"
+        return 1
+    fi
+
+    # Копирование файла сервиса
+    if sudo cp "$service_file" "$target_dir/"; then
+        log_success "Файл сервиса скопирован в $target_dir/"
+    else
+        log_error "Ошибка копирования файла сервиса"
+        return 1
+    fi
+
+    # Перезагрузка демона systemd
+    if sudo systemctl daemon-reload; then
+        log_success "Демон systemd перезагружен"
+    else
+        log_error "Ошибка перезагрузки демона systemd"
+        return 1
+    fi
+
+    # Включение автозапуска сервиса
+    if sudo systemctl enable eskvisor-task-manager.service; then
+        log_success "Сервис eskvisor-task-manager добавлен в автозапуск"
+    else
+        log_error "Ошибка добавления сервиса eskvisor-task-manager в автозапуск"
+        return 1
+    fi
+
+    # Запуск сервиса
+    if sudo systemctl start eskvisor-task-manager.service; then
+        log_success "Сервис eskvisor-task-manager запущен"
+    else
+        log_error "Ошибка запуска сервиса eskvisor-task-manager"
         return 1
     fi
 
@@ -597,7 +645,6 @@ setup_selinux_for_nginx() {
             sudo restorecon -v /run/nginx.pid
             sudo chown nginx:nginx /run/nginx.pid
 
-
             # Разрешаем доступ к сокетам
             if sudo setsebool -P httpd_use_nfs 1; then
                 log_success "Политика httpd_use_nfs установлена"
@@ -670,11 +717,18 @@ else
     log_error "Ошибка установки Redis"
 fi
 
-# Настройка сервиса eskvisor
-if setup_service; then
-    log_success "Сервис eskvisor настроен"
+# Настройка основного сервиса eskvisor
+if setup_eskvisor_service; then
+    log_success "Основной сервис eskvisor настроен"
 else
-    log_error "Ошибка настройки сервиса eskvisor"
+    log_error "Ошибка настройки основного сервиса eskvisor"
+fi
+
+# Настройка сервиса диспетчера задач eskvisor-task-manager
+if setup_eskvisor_task_manager_service; then
+    log_success "Сервис диспетчера задач eskvisor-task-manager настроен"
+else
+    log_error "Ошибка настройки сервиса диспетчера задач eskvisor-task-manager"
 fi
 
 # Запуск скрипта настройки pycgroup
@@ -898,11 +952,13 @@ if [[ $ERROR_COUNT -eq 0 ]]; then
     echo "4. Подключитесь по SSH: ssh root@ваш_ip"
     echo "5. Проверьте виртуализацию: sudo virt-host-validate"
     echo "6. Проверьте статус сервиса eskvisor: sudo systemctl status eskvisor"
-    echo "7. Проверьте работу Redis: redis-cli ping"
-    echo "8. Проверьте работу nginx: curl http://localhost/health"
-    echo "9. Проверьте конфигурацию nginx: sudo nginx -t"
-    echo "10. Проверьте логи nginx: sudo tail -f /var/log/nginx/eskvisor-access.log"
-    echo "11. Проверьте логи Redis: sudo tail -f /var/log/redis/redis.log"
+    echo "7. Проверьте статус сервиса диспетчера задач: sudo systemctl status eskvisor-task-manager"
+    echo "8. Проверьте работу Redis: redis-cli ping"
+    echo "9. Проверьте работу nginx: curl http://localhost/health"
+    echo "10. Проверьте конфигурацию nginx: sudo nginx -t"
+    echo "11. Проверьте логи nginx: sudo tail -f /var/log/nginx/eskvisor-access.log"
+    echo "12. Проверьте логи Redis: sudo tail -f /var/log/redis/redis.log"
+    echo "13. Проверьте логи диспетчера задач: sudo journalctl -u eskvisor-task-manager -f"
 else
     echo -e "${YELLOW}Были ошибки при установке. Проверьте лог выше.${NC}"
 fi
@@ -913,12 +969,14 @@ sudo systemctl is-active sshd &>/dev/null && echo -e "SSH: ${GREEN}активе�
 sudo systemctl is-active libvirtd &>/dev/null && echo -e "Libvirt: ${GREEN}активен${NC}" || echo -e "Libvirt: ${RED}не активен${NC}"
 sudo systemctl is-active redis &>/dev/null && echo -e "Redis: ${GREEN}активен${NC}" || echo -e "Redis: ${RED}не активен${NC}"
 sudo systemctl is-active eskvisor &>/dev/null && echo -e "Eskvisor: ${GREEN}активен${NC}" || echo -e "Eskvisor: ${RED}не активен${NC}"
+sudo systemctl is-active eskvisor-task-manager &>/dev/null && echo -e "Eskvisor Task Manager: ${GREEN}активен${NC}" || echo -e "Eskvisor Task Manager: ${RED}не активен${NC}"
 sudo systemctl is-active nginx &>/dev/null && echo -e "Nginx: ${GREEN}активен${NC}" || echo -e "Nginx: ${RED}не активен${NC}"
 
 echo ""
 echo "Расположение Eskvisor: /opt/eskvisor"
 echo "Расположение конфигурации: /etc/eskvisor/agent.env"
-echo "Расположение сервиса: /etc/systemd/system/eskvisor.service"
+echo "Расположение основного сервиса: /etc/systemd/system/eskvisor.service"
+echo "Расположение сервиса диспетчера задач: /etc/systemd/system/eskvisor-task-manager.service"
 echo "Расположение Redis: /etc/redis.conf"
 echo "Расположение конфигурации nginx: /etc/nginx/nginx.conf"
 echo "Порт бэкэнда агента: ${AGENT_PORT}"
@@ -931,6 +989,7 @@ echo "Для проверки работы:"
 echo "  - Redis: redis-cli ping"
 echo "  - Eskvisor: curl http://ваш_сервер/health"
 echo "  - Nginx: curl http://localhost:8080/nginx-health"
+echo "  - Диспетчер задач: sudo journalctl -u eskvisor-task-manager -n 10"
 
 # Создание скрипта для проверки конфигурации
 cat << EOF | sudo tee /usr/local/bin/check-eskvisor-config.sh > /dev/null
@@ -941,7 +1000,7 @@ echo ""
 
 # Проверка служб
 echo "1. Проверка служб:"
-services=("sshd" "libvirtd" "redis" "eskvisor" "nginx")
+services=("sshd" "libvirtd" "redis" "eskvisor" "eskvisor-task-manager" "nginx")
 for service in "\${services[@]}"; do
     if systemctl is-active --quiet "\$service"; then
         echo -e "  \$service: \033[0;32mактивен\033[0m"
@@ -994,7 +1053,12 @@ else
 fi
 
 echo ""
-echo "5. Быстрый тест доступа:"
+echo "5. Проверка логов диспетчера задач:"
+echo "  Последние записи в логах диспетчера задач:"
+sudo journalctl -u eskvisor-task-manager -n 5 --no-pager | grep -E "(Starting|Started|ERROR|WARNING)" || echo "    Логи отсутствуют или пусты"
+
+echo ""
+echo "6. Быстрый тест доступа:"
 echo -n "  HTTP запрос к /health: "
 if curl -s -f http://localhost/health > /dev/null; then
     echo -e "\033[0;32mуспех\033[0m"
@@ -1010,7 +1074,7 @@ else
 fi
 
 echo ""
-echo "6. Проверка конфигурационных файлов:"
+echo "7. Проверка конфигурационных файлов:"
 if [[ -f "/opt/eskvisor/agent/nginx.conf" ]]; then
     echo -e "  Конфигурация агента: \033[0;32mобнаружена\033[0m"
 else
@@ -1021,6 +1085,12 @@ if [[ -f "/etc/redis.conf" ]]; then
     echo -e "  Конфигурация Redis: \033[0;32mобнаружена\033[0m"
 else
     echo -e "  Конфигурация Redis: \033[0;33mне обнаружена\033[0m"
+fi
+
+if [[ -f "/opt/eskvisor/agent/client/task_manager/dispatcher.py" ]]; then
+    echo -e "  Диспетчер задач: \033[0;32mобнаружен\033[0m"
+else
+    echo -e "  Диспетчер задач: \033[0;33mне обнаружен\033[0m"
 fi
 
 echo ""
