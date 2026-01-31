@@ -14,7 +14,6 @@ import libvirt
 from dotenv import load_dotenv
 from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 
-from agent.client.constants import PROD_ENV
 from agent.client.stg.controller import NFSController
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
@@ -599,7 +598,6 @@ class VmManager(LibvirtClient):
             result = SecureBootVM(vm_name=vm_name)
 
             root = ElementTree.fromstring(xml_desc)
-            print(xml_desc)
 
             # Проверяем наличие UEFI
             os_elem = root.find(".//os")

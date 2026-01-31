@@ -60,7 +60,7 @@ def test_sn_02_create_snapshot_stopped_vm(
         ):
             assert current_disk.name == snapshot_disk.name
             assert current_disk.path == snapshot_disk.path
-            assert snapshot_disk.type.value == DiskType.SNAPSHOT.value
+            assert snapshot_disk.role.value == DiskType.SNAPSHOT.value
             assert current_disk.format.value == snapshot_disk.format.value
     finally:
         # ______________________________Удаление снапшота(постусловие)____________

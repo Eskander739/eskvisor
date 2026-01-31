@@ -1,12 +1,12 @@
-from enum import StrEnum
+from enum import Enum
 from typing import Any
-from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
-from permissions import Permission, RolePermissions
+from src.rbac.permissions import Permission, RolePermissions
 
 
-class UserStatus(StrEnum):
+class UserStatus(Enum):
     """Статус пользователя"""
 
     ACTIVE = "active"
@@ -15,7 +15,7 @@ class UserStatus(StrEnum):
     PENDING = "pending"
 
 
-class UserRole(StrEnum):
+class UserRole(Enum):
     """Роли пользователей в системе"""
 
     SUPER_ADMIN = "super_admin"
@@ -37,16 +37,6 @@ class Group(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "name": "Разработчики",
-                "description": "Группа разработчиков приложения",
-                "is_system": False,
-            }
-        }
-
 
 class User(BaseModel):
     """Модель пользователя"""
@@ -57,7 +47,7 @@ class User(BaseModel):
     username: str = Field(
         ..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_\-\.]+$"
     )
-    email: EmailStr
+    email: str
     full_name: str = Field("", max_length=200)
     role: UserRole = UserRole.VIEWER
     status: UserStatus = UserStatus.ACTIVE
@@ -136,19 +126,6 @@ class User(BaseModel):
         """Может ли управлять пользователями"""
         return self.has_permission("system", "manage_users")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "username": "ivanov",
-                "email": "ivanov@company.com",
-                "full_name": "Иванов Иван Иванович",
-                "role": "virtualizator",
-                "status": "active",
-                "group_ids": ["223e4567-e89b-12d3-a456-426614174001"],
-            }
-        }
-
 
 class UserCreate(BaseModel):
     """Модель для создания пользователя"""
@@ -156,7 +133,7 @@ class UserCreate(BaseModel):
     username: str = Field(
         ..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_\-\.]+$"
     )
-    email: EmailStr
+    email: str
     full_name: str = Field("", max_length=200)
     password: str = Field(..., min_length=8)  # В реальном приложении - хэш
     role: UserRole = UserRole.VIEWER
@@ -176,7 +153,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """Модель для обновления пользователя"""
 
-    email: EmailStr | None = None
+    email: str | None = None
     full_name: str | None = None
     role: UserRole | None = None
     status: UserStatus | None = None

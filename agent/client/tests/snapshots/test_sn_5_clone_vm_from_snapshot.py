@@ -94,7 +94,7 @@ def test_sn_05_clone_vm_from_snapshot(
         for disk_cloned, just_disk in zip(disks_cloned_vm, disks_vm):
             assert disk_cloned.name != just_disk.name
             assert disk_cloned.path != just_disk.path
-            assert disk_cloned.type.value == just_disk.type.value
+            assert disk_cloned.role.value == just_disk.role.value
             assert disk_cloned.bus_type.value == just_disk.bus_type.value
             assert disk_cloned.format.value == just_disk.format.value
             assert disk_cloned.target_dev == just_disk.target_dev

@@ -75,7 +75,7 @@ def test_vd_06_clone_disk(storage_session, sparse, disk_format):
 
         assert vm_disk.status.value == DiskStatus.DETACHED.value
         assert vm_disk.format.value == disk_format.value
-        assert vm_disk.type.value == DiskType.EXTERNAL_DISK.value
+        assert vm_disk.role.value == DiskType.EXTERNAL_DISK.value
         assert vm_disk.file_path_exists is True
         assert vm_disk.name == cloned_disk_name
 

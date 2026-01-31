@@ -31,7 +31,7 @@ def test_vn_01_create_isolated_network(network_session):
             == CommandMessagesEnum.virtual_network_successfully_created.name
         )
         isolated_network = created_network_info.net_info
-        assert isolated_network.network_type.type == "no-forward"
+        assert isolated_network.network_type.role == "no-forward"
         assert isolated_network.name == isolated_params.name
         assert isolated_network.active is True
         assert isolated_network.autostart is True

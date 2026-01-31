@@ -3,7 +3,7 @@ from pathlib import Path
 
 from src.logger_config import DefaultLogger
 from src.tools.cli import CLIControl
-from src.constants import KEY_DIR
+from src.constants import KEY_DIR, TMP_AGENT_DIR, SCRIPT_INSTALL_DIR
 from src.constants import KEY_NAME
 
 
@@ -56,7 +56,6 @@ class AgentInstaller:
                 self.logger.error(f"Не удалось установить SSH ключ на {hostname}")
                 return False
 
-        # Теперь устанавливаем агент с использованием ключа
         return self._install_agent_with_key(hostname, username, agent_package_path)
 
     def install_ssh_key_with_password(
@@ -74,16 +73,16 @@ class AgentInstaller:
         Returns:
             bool: True если ключ успешно установлен
         """
-        self.logger.info(f"🔑 Установка SSH ключа на {hostname}...")
+        self.logger.info(f"Установка SSH ключа на {hostname}...")
 
         # 1. Проверяем наличие публичного ключа
         if not self.public_key_path.exists():
             self.logger.error(f"Публичный ключ не найден: {self.public_key_path}")
             return False
 
-        # 5. Выполняем скрипт на удаленном хосте
+        # 2. Выполняем скрипт на удаленном хосте
         self.logger.info(
-            f"⚙️ Установка ssh ключа {self.public_key_path} на {hostname}..."
+            f"⚙Установка ssh ключа {self.public_key_path} на {hostname}..."
         )
 
         execute_cmd = [
@@ -106,12 +105,12 @@ class AgentInstaller:
             )
             return False
 
-        # 7. Проверяем что ключ установлен
+        # 3. Проверяем что ключ установлен
         if self._test_ssh_key_access(hostname, username, port):
-            self.logger.info(f"✅ SSH ключ успешно установлен на {hostname}")
+            self.logger.info(f"SSH ключ успешно установлен на {hostname}")
             return True
         else:
-            self.logger.error(f"❌ SSH ключ не работает после установки")
+            self.logger.error(f"SSH ключ не работает после установки")
             return False
 
     def _test_ssh_key_access(
@@ -175,7 +174,6 @@ class AgentInstaller:
             self.logger.error(f"SSH ключ не найден: {self.ssh_key_path}")
             return False
 
-        # 1. Копируем агент на удаленный хост
         self.logger.info(f"📦 Копирование агента на {hostname}...")
 
         scp_command = [
@@ -187,24 +185,24 @@ class AgentInstaller:
             "-o",
             "UserKnownHostsFile=/dev/null",
             agent_package_path,
-            f"{username}@{hostname}:/tmp/eskvisor_agent_package.tar.gz",
+            f"{username}@{hostname}:{TMP_AGENT_DIR}",
         ]
 
         result = self.cli.execute(scp_command, return_proc=True)
 
         if result.returncode != 0:
-            self.logger.error(f"❌ Ошибка копирования: {result.stderr}")
+            self.logger.error(f"Ошибка копирования: {result.stderr}")
             return False
 
-        self.logger.info("✅ Агент скопирован")
+        self.logger.info("Агент скопирован")
 
         # 2. Устанавливаем агент на удаленном хосте
-        self.logger.info(f"🔧 Установка агента на {hostname}...")
+        self.logger.info(f"Установка агента на {hostname}...")
 
         install_commands = ["dnf install tar",
-            f"tar -xzf /tmp/eskvisor_agent_package.tar.gz -C /tmp",
-            "mv /tmp/eskvisor /opt/eskvisor && sudo bash /opt/eskvisor/install.sh",
-            "rm -f /tmp/eskvisor_agent_package.tar.gz",
+            f"tar -xzf {TMP_AGENT_DIR} -C /tmp",
+            f"mv /tmp/eskvisor /opt/eskvisor && sudo bash {SCRIPT_INSTALL_DIR}",
+            f"rm -f {TMP_AGENT_DIR}",
             "rm -r /tmp/eskvisor"
         ]
 
@@ -223,13 +221,13 @@ class AgentInstaller:
         result = self.cli.execute(ssh_command, return_proc=True, timeout=None)
 
         if result.returncode == 0:
-            self.logger.info(f"✅ Агент успешно установлен на {hostname}")
+            self.logger.info(f"Агент успешно установлен на {hostname}")
 
             # Проверяем статус службы
             self._check_agent_status(hostname, username)
             return True
         else:
-            self.logger.error(f"❌ Ошибка установки: {result.stderr}")
+            self.logger.error(f"Ошибка установки: {result.stderr}")
             return False
 
     def _check_agent_status(self, hostname, username):
@@ -247,7 +245,7 @@ class AgentInstaller:
         result = subprocess.run(check_command, capture_output=True, text=True)
 
         if result.returncode == 0:
-            self.logger.info("📊 Статус агента:")
+            self.logger.info("Статус агента:")
             self.logger.info(result.stdout[:500])
         else:
-            self.logger.warning("⚠️ Не удалось проверить статус агента")
+            self.logger.warning("Не удалось проверить статус агента")

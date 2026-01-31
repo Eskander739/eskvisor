@@ -40,7 +40,7 @@ def test_vn_02_create_nat_network(network_session):
             == CommandMessagesEnum.virtual_network_successfully_created.name
         )
         nat_network = created_network_info.net_info
-        assert nat_network.network_type.type == "nat"
+        assert nat_network.network_type.role == "nat"
         assert nat_network.name == nat_params.name
         assert nat_network.active is True
         assert nat_network.autostart is True

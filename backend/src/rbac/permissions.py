@@ -368,9 +368,9 @@ class RolePermissions:
         PermissionSet.VM_VIEW_ALL,
         PermissionSet.VM_FORCE_DELETE,
         # Disks - управление всеми
-        PermissionSet.DISK_CREATE._replace(scope=PermissionScope.GLOBAL),
+        PermissionSet.DISK_CREATE.__replace__(scope=PermissionScope.GLOBAL),
         PermissionSet.DISK_DELETE_GLOBAL,
-        PermissionSet.DISK_EXTEND_OWNED._replace(scope=PermissionScope.GLOBAL),
+        PermissionSet.DISK_EXTEND_OWNED.__replace__(scope=PermissionScope.GLOBAL),
         # Networks - полное управление
         PermissionSet.NETWORK_MANAGE,
         PermissionSet.NETWORK_VIEW,
@@ -389,7 +389,7 @@ class RolePermissions:
         PermissionSet.VM_CREATE_OWNED,
         PermissionSet.VM_DELETE_OWNED,
         PermissionSet.VM_UPDATE_OWNED,
-        PermissionSet.VM_START_STOP._replace(scope=PermissionScope.OWNED),
+        PermissionSet.VM_START_STOP.__replace__(scope=PermissionScope.OWNED),
         PermissionSet.VM_CONSOLE_OWNED,
         PermissionSet.VM_CLONE_OWNED,
         PermissionSet.VM_MIGRATE_OWNED,
@@ -411,7 +411,7 @@ class RolePermissions:
     OPERATOR = {
         # VM - просмотр всех + управление состоянием
         PermissionSet.VM_VIEW_ALL,
-        PermissionSet.VM_START_STOP._replace(scope=PermissionScope.GLOBAL),
+        PermissionSet.VM_START_STOP.__replace__(scope=PermissionScope.GLOBAL),
         PermissionSet.VM_CONSOLE_GLOBAL,
         # Disks - только просмотр
         Permission(

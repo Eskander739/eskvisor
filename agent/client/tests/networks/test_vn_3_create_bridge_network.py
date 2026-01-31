@@ -33,7 +33,7 @@ def test_vn_03_create_bridge_network(network_session):
             == CommandMessagesEnum.virtual_network_successfully_created.name
         )
         bridge_network = created_network_info.net_info
-        assert bridge_network.network_type.type == "bridge"
+        assert bridge_network.network_type.role == "bridge"
         assert bridge_network.name == bridge_params.name
         assert bridge_network.active is True
         assert bridge_network.autostart is True
