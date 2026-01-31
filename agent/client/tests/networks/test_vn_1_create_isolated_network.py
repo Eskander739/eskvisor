@@ -18,7 +18,7 @@ def test_vn_01_create_isolated_network(network_session):
     try:
         # ____________________________________Создание виртуальной изолированной с
         isolated_params = NetworkParameters(
-            name=f"isolated-{random.randint(1000, 9999)}",
+            name=f"isolated-test-{random.randint(1000, 9999)}",
             ipv4=True,
             ipv4_address=IPv4Network("192.168.101.0/24"),
             isolated=True,

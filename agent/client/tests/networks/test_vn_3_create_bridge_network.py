@@ -21,7 +21,7 @@ def test_vn_03_create_bridge_network(network_session):
         # ____________________________________Создание виртуальной Bridge сети____
         random_int = random.randint(1000, 9999)
         bridge_params = NetworkParameters(
-            name=f"bridge-{random_int}",
+            name=f"bridge-test-{random_int}",
             forward=NetworkForward(mode="bridge"),
             bridge=NetworkBridge(name=f"virbr-test-{random_int}"),
             autostart=True,

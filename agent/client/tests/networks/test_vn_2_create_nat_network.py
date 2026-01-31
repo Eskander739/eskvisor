@@ -24,7 +24,7 @@ def test_vn_02_create_nat_network(network_session):
         # ____________________________________Создание виртуальной NAT сети_______
         random_int = random.randint(1000, 9999)
         nat_params = NetworkParameters(
-            name=f"nat-{random_int}",
+            name=f"nat-test-{random_int}",
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(name=f"virbr-test-{random_int}", stp="on", delay=0),
             ipv4_address=IPv4Network("192.168.100.0/24"),

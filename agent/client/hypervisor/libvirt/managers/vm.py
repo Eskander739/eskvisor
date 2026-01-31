@@ -11,8 +11,10 @@ from pathlib import Path
 from typing import Any
 
 import libvirt
+from dotenv import load_dotenv
 from libvirt import VIR_DOMAIN_UNDEFINE_MANAGED_SAVE, VIR_DOMAIN_UNDEFINE_NVRAM
 
+from agent.client.constants import PROD_ENV
 from agent.client.stg.controller import NFSController
 from agent.client.hypervisor.libvirt.client import LibvirtClient
 from agent.client.hypervisor.libvirt.config import LibvirtConfig
@@ -62,6 +64,7 @@ class VmManager(LibvirtClient):
     libvirtError = None
 
     def __init__(self):
+        load_dotenv()
         self.nfs_controller = NFSController()
         self.config = LibvirtConfig()
         self.logger = DefaultLogger("VmManager")
@@ -721,7 +724,6 @@ class VmManager(LibvirtClient):
                 flags |= (
                     libvirt.VIR_MIGRATE_PEER2PEER
                 )  # Прямая миграция между хостами без прокси когда хосты видят друг друга в сети
-                flags |= libvirt.VIR_MIGRATE_TUNNELLED  # Для безопасности
 
             if undefine_source:
                 flags |= (
@@ -735,9 +737,8 @@ class VmManager(LibvirtClient):
                 flags |= (
                     libvirt.VIR_MIGRATE_NON_SHARED_DISK
                 )  # Копировать локальные диски на целевой хост
-                flags |= (
-                    libvirt.VIR_MIGRATE_NON_SHARED_INC
-                )  # Для ускорения миграции больших дисков.
+                if not dest_uri.startswith("qemu+tcp://"):
+                    raise ValueError("Для миграции дисков без удаленного хранилища требуется qemu+tcp подключение")
 
             # Добавляем флаг для миграции persistent конфига
             if not undefine_source and migrate_configs:
@@ -746,18 +747,12 @@ class VmManager(LibvirtClient):
             if migrate_nvram:
                 self.migrate_nvram(vm_name, dest_uri)
 
-            # Дополнительные параметры для миграции
-            migrate_params = {
-                "uri": dest_uri,
-                "bandwidth": 0,  # 0 = неограниченная полоса
-                "timeout": 300,  # 5 минут
-            }
 
             # Выполняем миграцию
             self.logger.info(f"Выполнение миграции с флагами: {flags}")
             try:
                 migrated_domain = domain.migrateToURI3(
-                    dest_uri, params=migrate_params, flags=flags
+                    dest_uri, params={}, flags=flags
                 )
 
                 if migrated_domain:
@@ -2160,7 +2155,13 @@ if __name__ == "__main__":
 
     # Инициализация менеджера
     with VmManager() as vm_manager:
-        print(vm_manager.migrate_nvram("VM-TEST-15271"))
+        # new_connect = vm_manager.connect_ssh_with_key()
+        # Создайте пустой CA файл
+        print(vm_manager.migrate_vm("VM-TEST-92086",
+                                    dest_uri="qemu+tcp://192.168.100.185/system",
+                                    # dest_uri="qemu+tcp://192.168.100.185/system",
+                                    # dest_uri="qemu+ssh://root@192.168.100.185/system?keyfile=/eskvisor/.ssh/eskvisor_master_ed25519",
+                                    migrate_nvram=False, migrate_disks=True))
         # print(vm_manager.delete_vm("test-vm-03"))
         # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
         # result = vm_manager.create_vm(simple_hotplug_vm_config)

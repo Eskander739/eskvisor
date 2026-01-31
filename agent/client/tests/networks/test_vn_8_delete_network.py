@@ -17,7 +17,7 @@ from agent.client.hypervisor.libvirt.models.network import (
     "network_model",
     (
         NetworkParameters(
-            name=f"nat-{random.randint(1000, 9999)}",
+            name=f"nat-test-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(
                 name=f"virbr-test-{random.randint(1000, 9999)}", stp="on", delay=0
@@ -29,14 +29,14 @@ from agent.client.hypervisor.libvirt.models.network import (
             autostart=True,
         ),
         NetworkParameters(
-            name=f"isolated-{random.randint(1000, 9999)}",
+            name=f"isolated-test-{random.randint(1000, 9999)}",
             ipv4=True,
             ipv4_address=IPv4Network("192.168.101.0/24"),
             isolated=True,
             autostart=True,
         ),
         NetworkParameters(
-            name=f"bridge-{random.randint(1000, 9999)}",
+            name=f"bridge-test-{random.randint(1000, 9999)}",
             forward=NetworkForward(mode="bridge"),
             bridge=NetworkBridge(name=f"virbr-test-{random.randint(1000, 9999)}"),
             autostart=True,

@@ -118,36 +118,36 @@ def create_nfs_storage_session():
     cli.execute(nfs_local_rmdir)
 
 
-# @pytest.fixture(scope="session", autouse=True)
-# def delete_all_network_info():
-#     cli = CLIControl()
-#     yield
-#     with NetworkManager() as nm:
-#         for network in nm.list_all_networks().net_info.items:
-#             if network.name != "default":
-#                 nm.delete_network(network.name, force=True)
-#
-#     cmd_arg = "ip link show | grep virbr | awk -F': ' '{print $2}'"
-#     result = cli.execute(cmd_arg, shell=True, is_text=True)
-#     if result:
-#         bridge_list_for_delete = [bridge for bridge in result.split("\n") if bridge]
-#         for current_bridge in bridge_list_for_delete:
-#             if "test" in current_bridge and current_bridge != "virbr-test-ntt2":
-#                 cmd_args_delete_bridge = ["ip", "link", "delete", current_bridge]
-#                 cli.execute(cmd_args_delete_bridge)
-#
-#
-# @pytest.fixture(scope="session", autouse=True)
-# def delete_all_virtual_machines():
-#     yield
-#     with VmManager() as vm_manager:
-#         vms = vm_manager.list_vms().vm_info
-#         for vm in vms.items:
-#             if "test" in vm.name.lower():
-#                 vm_manager.delete_vm_with_force(vm.name)
-#                 vm_manager.logger.info(
-#                     f"Удаление ВМ - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}"
-#                 )
+@pytest.fixture(scope="session", autouse=True)
+def delete_all_network_info():
+    cli = CLIControl()
+    yield
+    with NetworkManager() as nm:
+        for network in nm.list_all_networks().net_info.items:
+            if network.name != "default" and "test" in network.name:
+                nm.delete_network(network.name, force=True)
+
+    cmd_arg = "ip link show | grep virbr | awk -F': ' '{print $2}'"
+    result = cli.execute(cmd_arg, shell=True, is_text=True)
+    if result:
+        bridge_list_for_delete = [bridge for bridge in result.split("\n") if bridge]
+        for current_bridge in bridge_list_for_delete:
+            if "test" in current_bridge and current_bridge != "virbr-test-ntt2":
+                cmd_args_delete_bridge = ["ip", "link", "delete", current_bridge]
+                cli.execute(cmd_args_delete_bridge)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def delete_all_virtual_machines():
+    yield
+    with VmManager() as vm_manager:
+        vms = vm_manager.list_vms().vm_info
+        for vm in vms.items:
+            if "test" in vm.name.lower():
+                vm_manager.delete_vm_with_force(vm.name)
+                vm_manager.logger.info(
+                    f"Удаление ВМ - {vm.name}: {vm.state}, {vm.memory} KB RAM, {vm.vcpus} vCPUs, UUID: {vm.uuid}, NET_ID: {vm.net_id}"
+                )
 
 
 @pytest.fixture(scope="session")
@@ -298,7 +298,7 @@ def create_resource_pool_session():
 @pytest.fixture(scope="session")
 def create_nat_network_session():
     with NetworkManager() as vn_manager:
-        network_name = f"network-name-{random.randint(10000, 99999)}"
+        network_name = f"network-test-name-{random.randint(10000, 99999)}"
         nat_params = NetworkParameters(
             name=network_name,
             forward=NetworkForward(mode="nat"),

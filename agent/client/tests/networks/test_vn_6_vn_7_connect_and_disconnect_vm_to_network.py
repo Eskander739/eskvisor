@@ -59,7 +59,7 @@ def test_vn_06_vn_07_connect_and_disconnect_vm_to_network(
         # ____________________________________Создание NAT сети________________
         random_int = random.randint(1000, 9999)
         nat_params = NetworkParameters(
-            name=f"nat-{random_int}",
+            name=f"nat-test-{random_int}",
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(name=f"virbr-test-{random_int}", stp="on", delay=0),
             ipv4_address=IPv4Network("192.168.100.0/24"),

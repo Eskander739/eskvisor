@@ -58,7 +58,7 @@ def test_vn_11_update_setting_dhcp_dns_gateway(
         # ____________________________________Создание виртуальной изолированной с
         random_int = random.randint(1000, 9999)
         nat_params = NetworkParameters(
-            name=f"nat-{random_int}",
+            name=f"nat-test-{random_int}",
             forward=NetworkForward(mode="nat"),
             bridge=NetworkBridge(name=f"virbr-test-{random_int}", stp="on", delay=0),
             ipv4_address="192.168.100.0/24",

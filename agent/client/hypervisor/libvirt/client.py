@@ -145,41 +145,94 @@ class LibvirtClient:
             raise ValueError(f"Ошибка подключения: {e}")
 
     def connect_ssh_with_key(
-        self, host: str, username: str = None, keyfile: str = None
-    ) -> libvirt.virConnect:
+        self, hostname: str, username: str = None, keyfile: str = None, dest_uri: bool = False
+    ) -> libvirt.virConnect | str:
         """
         Подключение по SSH с использованием SSH-ключа
 
         Args:
-            host: Хост для подключения
+            hostname: Хост для подключения
             username: Имя пользователя (если None, будет запрошено)
             keyfile: Путь к файлу SSH-ключа (если None, используется стандартный)
+            dest_uri: Не подключаться, вернуть только URI для подключения
 
         Returns:
             bool: True если подключение успешно, иначе False
         """
+        if hostname is None:
+            raise ValueError("Отсутствует host")
         if username is None:
-            username = input("Введите имя пользователя для SSH: ")
+            raise ValueError("Отсутствует имя пользователя")
 
         # Формируем URI для подключения с SSH-ключом
         if keyfile:
             # Если указан ключ, добавляем его в URI
-            uri = f"qemu+ssh://{username}@{host}/system?keyfile={keyfile}&no_verify=1"
+            uri = f"qemu+ssh://{username}@{hostname}/system?keyfile={keyfile}"
         else:
             # Используем стандартный ключ из ~/.ssh/
-            uri = f"qemu+ssh://{username}@{host}/system?no_verify=1"
+            uri = f"qemu+ssh://{username}@{hostname}/system"
 
         try:
-            self.conn = libvirt.open(uri)
+            if not dest_uri:
+                self.conn = libvirt.open(uri)
 
-            if self.conn is None:
-                self.logger.error(f"Не удалось подключиться к {uri}")
-                raise ValueError(f"Не удалось подключиться к {uri}")
+                if self.conn is None:
+                    self.logger.error(f"Не удалось подключиться к {uri}")
+                    raise ValueError(f"Не удалось подключиться к {uri}")
 
-            self.logger.info(f"Успешное подключение по SSH (с ключом) к {uri}")
-            self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
-            self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
-            return self.conn
+                self.logger.info(f"Успешное подключение по SSH (с ключом) к {uri}")
+                self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
+                self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
+                return self.conn
+            return uri
+
+        except libvirt.libvirtError as e:
+            self.logger.error(f"Ошибка подключения: {e}")
+            raise ValueError(f"Ошибка подключения: {e}")
+
+    def connect_tcp_with_key(
+        self, hostname: str, tls_cert: str | None = None, tls_key: str | None = None, tls_ca: str | None = None, dest_uri: bool = False
+    ) -> libvirt.virConnect | str:
+        """
+        Подключение по TCP с использованием TCP сертификата, индентификатора и ключа
+
+        Args:
+            hostname: Хост для подключения
+            tls_cert: Проверяет подлинность сервера
+            tls_key: Ваш идентификатор для сервера
+            tls_ca: Ваш секретный ключ для подписи
+            dest_uri: Не подключаться, вернуть только URI для подключения
+
+        см, пример:
+
+        virsh -c 'qemu+tcp://192.168.100.185/system' \
+          --tls-cert=/path/to/client-cert.pem \
+          --tls-key=/path/to/client-key.pem \
+          --tls-ca=/path/to/ca-cert.pem
+
+        Returns:
+            bool: True если подключение успешно, иначе False
+        """
+        if hostname is None:
+            raise ValueError("Отсутствует host")
+
+        # Формируем URI для подключения по TCP
+        uri = f"qemu+tcp://{hostname}/system --tls-cert={tls_cert} --tls-key={tls_key} --tls-ca={tls_ca}"
+
+        try:
+            if not dest_uri:
+                self.conn = libvirt.open(uri)
+
+                if self.conn is None:
+                    self.logger.error(f"Не удалось подключиться к {uri}")
+                    raise ValueError(f"Не удалось подключиться к {uri}")
+
+                self.logger.info(f"Успешное подключение по SSH (с ключом) к {uri}")
+                self.logger.info(f"Hypervisor: {self.conn.getHostname()}")
+                self.logger.info(f"Libvirt version: {self.conn.getLibVersion()}")
+                return self.conn
+            else:
+                return uri
 
         except libvirt.libvirtError as e:
             self.logger.error(f"Ошибка подключения: {e}")
@@ -248,25 +301,26 @@ if __name__ == "__main__":
     lib_client = LibvirtClient()
 
     # 1. Классическое подключение
-    print("1. Тестирование классического подключения:")
-    if lib_client.connect_classic():
-        print(lib_client.get_node_info())
-    lib_client.disconnect()
-
-    print("\n" + "=" * 50 + "\n")
+    # print("1. Тестирование классического подключения:")
+    # if lib_client.connect_classic():
+    #     print(lib_client.get_node_info())
+    # lib_client.disconnect()
+    #
+    # print("\n" + "=" * 50 + "\n")
 
     # 2. Подключение по SSH с ключом
     print("2. Тестирование подключения по SSH с ключом:")
-    host = input("Введите хост для SSH подключения: ")
-    if lib_client.connect_ssh_with_key(host=host):
+    host = "192.168.100.185"
+    # host = input("Введите хост для SSH подключения: ")
+    if lib_client.connect_ssh_with_key(host=host, username="root", keyfile="/eskvisor/.ssh/eskvisor_master_ed25519"):
         print(lib_client.get_node_info())
     lib_client.disconnect()
 
-    print("\n" + "=" * 50 + "\n")
-
+    # print("\n" + "=" * 50 + "\n")
+    #
     # 3. Подключение по SSH с паролем
-    print("3. Тестирование подключения по SSH с паролем:")
-    host = input("Введите хост для SSH подключения: ")
-    if lib_client.connect_ssh_with_password(host=host):
-        print(lib_client.get_node_info())
-    lib_client.disconnect()
+    # print("3. Тестирование подключения по SSH с паролем:")
+    # host = input("Введите хост для SSH подключения: ")
+    # if lib_client.connect_ssh_with_password(host=host):
+    #     print(lib_client.get_node_info())
+    # lib_client.disconnect()
