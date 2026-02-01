@@ -14,7 +14,9 @@ router = APIRouter(
     prefix=f"{ApiVersion.V0}/ws",
     tags=["ws"],
 )
-active_connections = []
+active_connections_task = []
+active_connections_notification = []
+active_connections_system_stats = []
 node_connections: list[NodeWebsocketConnection] = []
 
 
@@ -25,8 +27,8 @@ async def task(
     logger=Depends(get_logger),
 ):
     await websocket.accept()
-    active_connections.append(websocket)
-    logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections)}")
+    active_connections_task.append(websocket)
+    logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections_task)}")
     uri_startswith = "ws://{}/ws/task"
     for cluster in clusters_db.get_cluster_list():
         for node in cluster.nodes:
@@ -65,8 +67,8 @@ async def task(
                     ).model_dump_json()
                 )
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
-        logger.info(f"WebSocket отключен. Осталось: {len(active_connections)}")
+        active_connections_task.remove(websocket)
+        logger.info(f"WebSocket отключен. Осталось: {len(active_connections_task)}")
 
 
 @router.websocket(f"/notification")
@@ -76,8 +78,10 @@ async def notification(
     logger=Depends(get_logger),
 ):
     await websocket.accept()
-    active_connections.append(websocket)
-    logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections)}")
+    active_connections_notification.append(websocket)
+    logger.info(
+        f"Новое WebSocket подключение. Всего: {len(active_connections_notification)}"
+    )
     uri_startswith = "ws://{}/ws/notification"
     for cluster in clusters_db.get_cluster_list():
         for node in cluster.nodes:
@@ -113,8 +117,10 @@ async def notification(
                     ).model_dump_json()
                 )
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
-        logger.info(f"WebSocket отключен. Осталось: {len(active_connections)}")
+        active_connections_notification.remove(websocket)
+        logger.info(
+            f"WebSocket отключен. Осталось: {len(active_connections_notification)}"
+        )
 
 
 @router.websocket(f"/system-stats")
@@ -124,8 +130,10 @@ async def system_stats(
     logger=Depends(get_logger),
 ):
     await websocket.accept()
-    active_connections.append(websocket)
-    logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections)}")
+    active_connections_system_stats.append(websocket)
+    logger.info(
+        f"Новое WebSocket подключение. Всего: {len(active_connections_system_stats)}"
+    )
     uri_startswith = "ws://{}/ws/system-stats"
     for cluster in clusters_db.get_cluster_list():
         for node in cluster.nodes:
@@ -166,5 +174,7 @@ async def system_stats(
                     ).model_dump_json()
                 )
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
-        logger.info(f"WebSocket отключен. Осталось: {len(active_connections)}")
+        active_connections_system_stats.remove(websocket)
+        logger.info(
+            f"WebSocket отключен. Осталось: {len(active_connections_system_stats)}"
+        )

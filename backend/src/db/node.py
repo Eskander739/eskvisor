@@ -59,21 +59,21 @@ class NodesDB:
             self.engine, class_=AsyncSession, expire_on_commit=False
         )
 
-    async def add_hypervisor(self, data: dict):
+    async def add_node(self, data: dict):
         async with self.async_session() as session:
-            hypervisor = NodeModel(**data)
-            session.add(hypervisor)
+            node = NodeModel(**data)
+            session.add(node)
             await session.commit()
-            return hypervisor.id
+            return node.id
 
-    async def get_hypervisor(self, hypervisor_id: int):
+    async def get_node(self, node_id: int):
         async with self.async_session() as session:
             result = await session.execute(
-                select(NodeModel).where(NodeModel.id == hypervisor_id)
+                select(NodeModel).where(NodeModel.id == node_id)
             )
             return result.scalar_one_or_none()
 
-    async def get_all_hypervisors(self, cluster_id=None, enabled=True):
+    async def get_all_nodes(self, cluster_id=None, enabled=True):
         async with self.async_session() as session:
             query = select(NodeModel)
             if cluster_id:
@@ -84,24 +84,20 @@ class NodesDB:
             result = await session.execute(query)
             return result.scalars().all()
 
-    async def update_status(
-        self, hypervisor_id: int, status: str, resources: dict = None
-    ):
+    async def delete_node_by_id(self, node_id: int) -> None:
+        """Удаляет node по id."""
+        async with await self.async_session() as session:
+            stmt = delete(NodeModel).where(NodeModel.id == node_id)
+            await session.execute(stmt)
+            await session.commit()
+
+    async def update_status(self, node_id: int, status: str, resources: dict = None):
         async with self.async_session() as session:
             update_data = {"status": status, "last_seen": datetime.now()}
             if resources:
                 update_data.update(resources)
 
             await session.execute(
-                update(NodeModel)
-                .where(NodeModel.id == hypervisor_id)
-                .values(**update_data)
-            )
-            await session.commit()
-
-    async def delete_hypervisor(self, hypervisor_id: int):
-        async with self.async_session() as session:
-            await session.execute(
-                delete(NodeModel).where(NodeModel.id == hypervisor_id)
+                update(NodeModel).where(NodeModel.id == node_id).values(**update_data)
             )
             await session.commit()

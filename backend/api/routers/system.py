@@ -28,6 +28,13 @@ async def install_agent(
     )
 
 
+@router.post(f"/update-agent")
+async def update_agent(
+    connect_host: ConnectHostRequest, agent_installer=Depends(get_agent_installer)
+):
+    raise NotImplementedError
+
+
 @router.get(f"/health")
 async def health(
     redis_service=Depends(get_redis_service), users_db=Depends(get_users_db)

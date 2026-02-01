@@ -1,7 +1,7 @@
 import os
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, update
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, update, delete
 from sqlalchemy import func, select
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
@@ -72,8 +72,6 @@ class ClustersDB:
 
     async def get_cluster(self, cluster_id: int):
         async with self.async_session() as session:
-            from sqlalchemy import select
-
             result = await session.execute(
                 select(ClusterModel).where(ClusterModel.id == cluster_id)
             )
@@ -81,10 +79,15 @@ class ClustersDB:
 
     async def get_cluster_list(self):
         async with self.async_session() as session:
-            from sqlalchemy import select
-
             result = await session.execute(select(ClusterModel).where())
             return result.scalar_one_or_none()
+
+    async def delete_cluster_by_id(self, cluster_id: int) -> None:
+        """Удаляет cluster по id."""
+        async with await self.async_session() as session:
+            stmt = delete(ClusterModel).where(ClusterModel.id == cluster_id)
+            await session.execute(stmt)
+            await session.commit()
 
     async def update_cluster_stats(self, cluster_id: int):
         """Обновляет агрегированные статистики кластера"""
