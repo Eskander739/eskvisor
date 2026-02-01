@@ -51,6 +51,17 @@ class UsersDB:
         """Создает и возвращает новую асинхронную сессию."""
         return self.async_session_maker()
 
+    async def check_connection(self) -> bool:
+        """Проверяет соединение с БД"""
+        try:
+            async with await self._get_session() as session:
+                result = await session.execute(select(1))
+                value = result.scalar()
+                return value == 1
+        except Exception as e:
+            print(f"Connection error: {e}")
+            return False
+
     @staticmethod
     def _model_to_user(model: UserModel) -> UserInDB:
         """Преобразует модель SQLAlchemy в Pydantic модель."""

@@ -5,10 +5,6 @@ class HashService:
 
     @staticmethod
     def hash_password(password: str, rounds: int = 14) -> str:
-        # Отладочная информация
-        print(f"Получен пароль: {repr(password)}")
-        print(f"Длина в символах: {len(password)}")
-        print(f"Длина в байтах: {len(password.encode('utf-8'))}")
 
         # Проверяем на не-ASCII символы
         for i, char in enumerate(password):

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# install.sh для AlmaLinux - установка зависимостей для Eskvisor
+# install_agent.sh для AlmaLinux - установка зависимостей для Eskvisor Agent
 
 # Лог файл
 LOG_FILE="/var/log/eskvisor_install.log"

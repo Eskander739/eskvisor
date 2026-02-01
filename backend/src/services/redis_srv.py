@@ -31,6 +31,20 @@ class RedisJWTManager:
         self.tech_works_key = tech_works_key
         self._connections = {}
 
+    async def check_connection(self, db: int | None = None) -> bool:
+        try:
+            redis_connect = self.get_redis_connection(db)
+
+            # Простой ping
+            pong = await redis_connect.ping()
+            if pong:
+                return True
+            else:
+                return False
+
+        except Exception:
+            return False
+
     def get_redis_connection(self, db: int | None = None):
         """Создает или возвращает существующее подключение к Redis"""
         if isinstance(db, str):
