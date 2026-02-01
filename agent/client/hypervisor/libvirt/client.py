@@ -117,7 +117,11 @@ class LibvirtClient(XmlClient):
             raise ValueError(f"Ошибка подключения: {e}")
 
     def connect_ssh_with_key(
-        self, hostname: str, username: str = None, keyfile: str = None, dest_uri: bool = False
+        self,
+        hostname: str,
+        username: str = None,
+        keyfile: str = None,
+        dest_uri: bool = False,
     ) -> libvirt.virConnect | str:
         """
         Подключение по SSH с использованием SSH-ключа
@@ -163,7 +167,12 @@ class LibvirtClient(XmlClient):
             raise ValueError(f"Ошибка подключения: {e}")
 
     def connect_tcp_with_key(
-        self, hostname: str, tls_cert: str | None = None, tls_key: str | None = None, tls_ca: str | None = None, dest_uri: bool = False
+        self,
+        hostname: str,
+        tls_cert: str | None = None,
+        tls_key: str | None = None,
+        tls_ca: str | None = None,
+        dest_uri: bool = False,
     ) -> libvirt.virConnect | str:
         """
         Подключение по TCP с использованием TCP сертификата, индентификатора и ключа
@@ -284,7 +293,9 @@ if __name__ == "__main__":
     print("2. Тестирование подключения по SSH с ключом:")
     host = "192.168.100.185"
     # host = input("Введите хост для SSH подключения: ")
-    if lib_client.connect_ssh_with_key(host=host, username="root", keyfile="/eskvisor/.ssh/eskvisor_master_ed25519"):
+    if lib_client.connect_ssh_with_key(
+        host=host, username="root", keyfile="/eskvisor/.ssh/eskvisor_master_ed25519"
+    ):
         print(lib_client.get_node_info())
     lib_client.disconnect()
 

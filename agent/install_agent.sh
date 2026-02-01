@@ -69,6 +69,39 @@ install_package() {
     fi
 }
 
+# Функция отключения SELinux
+disable_selinux() {
+    echo "========================================="
+    echo "Отключение SELinux"
+    echo "========================================="
+
+    # Проверяем текущий статус SELinux
+    if command -v sestatus &> /dev/null; then
+        echo "Текущий статус SELinux:"
+        sestatus
+
+        # Отключаем SELinux временно
+        echo "Временное отключение SELinux (setenforce 0)..."
+        sudo setenforce 0
+        if [ $? -eq 0 ]; then
+            log_success "SELinux временно отключен"
+        else
+            log_error "Не удалось временно отключить SELinux"
+        fi
+
+        # Отключаем SELinux постоянно через конфигурационный файл
+        echo "Постоянное отключение SELinux через конфигурацию..."
+        sudo sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+        sudo sed -i 's/^SELINUXTYPE=.*/SELINUXTYPE=targeted/' /etc/selinux/config
+
+        log_success "SELinux отключен в конфигурации (требуется перезагрузка)"
+    else
+        log_skip "SELinux не установлен"
+    fi
+
+    return 0
+}
+
 # Функция установки Redis
 install_redis() {
     echo "========================================="
@@ -252,17 +285,6 @@ EOF
         log_skip "Firewalld не установлен, пропускаем настройку портов"
     fi
 
-    # Настройка SELinux для Redis (если включен)
-    if command -v sestatus &> /dev/null && sestatus | grep -q "enabled"; then
-        echo "Настройка SELinux для Redis..."
-        # Разрешаем Redis доступ к сети
-        sudo setsebool -P redis_can_network 1
-        # Разрешаем Redis доступ к порту
-        sudo semanage port -a -t redis_port_t -p tcp ${REDIS_PORT} 2>/dev/null || \
-            echo "Порт Redis уже настроен в SELinux или ошибка"
-        log_success "SELinux настроен для Redis"
-    fi
-
     # Проверка подключения извне
     echo "Тестирование подключения к Redis:"
     echo -n "  Локальное подключение: "
@@ -422,13 +444,12 @@ run_pycgroup_setup() {
     fi
 }
 
-# Функция установки и настройки nginx
+# Функция настройки nginx (без SELinux)
 setup_nginx() {
     echo "Установка и настройка Nginx..."
 
     # Установка nginx
     install_package "nginx" "Nginx"
-    log_success "Права на директорию /run/nginx исправлены"
 
     # Проверка установки
     if ! command -v nginx &> /dev/null; then
@@ -530,11 +551,16 @@ EOF
     # Перезагрузка демона systemd
     sudo systemctl daemon-reload
 
-    # Исправление прав для директории /run
-    echo "Исправление прав для директории /run/..."
+    # Исправление прав для директории /run/nginx
+    echo "Исправление прав для директории /run/nginx..."
     sudo mkdir -p /run/nginx
     sudo chown -R nginx:nginx /run/nginx
     sudo chmod 755 /run/nginx
+
+    # Создание и настройка PID файла
+    sudo touch /run/nginx.pid
+    sudo chown nginx:nginx /run/nginx.pid
+    sudo chmod 644 /run/nginx.pid
 
     # Запуск и включение nginx
     echo "Запуск службы nginx..."
@@ -564,109 +590,15 @@ EOF
     return 0
 }
 
-# Функция настройки SELinux для nginx (если SELinux включен)
-setup_selinux_for_nginx() {
-    echo "Настройка SELinux для Nginx..."
-
-    echo "Проверка и отключение фаервола..."
-    if systemctl list-unit-files | grep -q firewalld.service; then
-        echo "Служба firewalld обнаружена, отключаем..."
-
-        # Проверяем, запущена ли служба
-        if systemctl is-active --quiet firewalld; then
-            echo "Останавливаем firewalld..."
-            sudo systemctl stop firewalld
-        fi
-
-        # Проверяем, включена ли автозагрузка
-        if systemctl is-enabled --quiet firewalld 2>/dev/null; then
-            echo "Отключаем автозапуск firewalld..."
-            sudo systemctl disable firewalld
-        else
-            echo "Служба firewalld уже отключена."
-        fi
-
-        echo "firewalld успешно отключен."
-    else
-        echo "Служба firewalld не установлена в системе."
-    fi
-
-    # Проверяем, включен ли SELinux
-    if command -v sestatus &> /dev/null; then
-        local selinux_status=$(sestatus | grep "SELinux status" | awk '{print $3}')
-        local selinux_mode=$(sestatus | grep "Current mode" | awk '{print $3}')
-
-        if [[ "$selinux_status" == "enabled" ]]; then
-            log_success "SELinux включен (режим: $selinux_mode)"
-
-            # Устанавливаем необходимые политики для nginx
-            echo "Установка политик SELinux для nginx..."
-
-            # Разрешаем nginx проксировать сетевые соединения
-            if sudo setsebool -P httpd_can_network_connect 1; then
-                log_success "Политика httpd_can_network_connect установлена"
-            else
-                log_error "Ошибка установки политики SELinux"
-            fi
-
-            # Разрешаем nginx работать как обратный прокси
-            if sudo setsebool -P httpd_can_network_relay 1; then
-                log_success "Политика httpd_can_network_relay установлена"
-            else
-                log_error "Ошибка установки политики SELinux"
-            fi
-
-            # Разрешаем nginx доступ к портам
-            if sudo semanage port -a -t http_port_t -p tcp ${NGINX_HTTP_PORT} 2>/dev/null; then
-                log_success "Порт ${NGINX_HTTP_PORT} добавлен в политику SELinux"
-            else
-                log_skip "Порт ${NGINX_HTTP_PORT} уже разрешен в SELinux или ошибка"
-            fi
-
-            # Разрешаем доступ к директории eskvisor
-            if sudo semanage fcontext -a -t httpd_sys_content_t "/opt/eskvisor(/.*)?" 2>/dev/null; then
-                sudo restorecon -Rv /opt/eskvisor
-                log_success "Политика доступа к /opt/eskvisor установлена"
-            else
-                log_skip "Политика доступа уже установлена или ошибка"
-            fi
-
-            # Установите правильный контекст SELinux
-            sudo chcon -R -t bin_t /eskvisor/eskvisor_venv/bin/
-            sudo chcon -R -t bin_t /eskvisor/eskvisor_venv/bin/python
-
-            # Устанавливаем правильный контекст для всей директории nginx
-            sudo semanage fcontext -a -t httpd_config_t "/etc/nginx(/.*)?"
-            sudo restorecon -Rv /etc/nginx/
-
-            # Для /run/nginx.pid
-            sudo semanage fcontext -a -t httpd_var_run_t "/run/nginx.pid"
-            sudo touch /run/nginx.pid
-            sudo restorecon -v /run/nginx.pid
-            sudo chown nginx:nginx /run/nginx.pid
-
-            # Разрешаем доступ к сокетам
-            if sudo setsebool -P httpd_use_nfs 1; then
-                log_success "Политика httpd_use_nfs установлена"
-            else
-                log_skip "Ошибка установки политики httpd_use_nfs"
-            fi
-        else
-            log_skip "SELinux отключен, пропускаем настройку"
-        fi
-    else
-        log_skip "SELinux не установлен, пропускаем настройку"
-    fi
-
-    return 0
-}
-
 # Начало скрипта
 echo "========================================="
 echo "Установка зависимостей для Eskvisor на AlmaLinux"
 echo "========================================="
 
 echo "Логирование установки в файл: $LOG_FILE"
+
+# Отключение SELinux
+disable_selinux
 
 # Обновление системы
 echo "Обновление системы..."
@@ -842,7 +774,6 @@ install_package "gdk-pixbuf2-devel" "Разработка GDK-Pixbuf"
 
 # Установка дополнительных пакетов для сетевой безопасности
 install_package "firewalld" "FirewallD"
-install_package "policycoreutils-python-utils" "Утилиты SELinux"
 
 # Создание виртуального окружения
 echo "Создание виртуального окружения..."
@@ -885,11 +816,11 @@ if [[ -f "/eskvisor/eskvisor_venv/bin/activate" ]]; then
     fi
 
     # Установка зависимостей из requirements.txt если файл существует
-    if [[ -f "/opt/eskvisor/requirements.txt" ]]; then
+    if [[ -f "/opt/eskvisor/agent/requirements.txt" ]]; then
         while read -r package; do
             [[ -z "$package" ]] || [[ "$package" =~ ^# ]] && continue
             python3 -m pip install "$package" || echo "Ошибка: $package"
-        done </opt/eskvisor/requirements.txt
+        done </opt/eskvisor/agent/requirements.txt
         if [[ $? -eq 0 ]]; then
             log_success "Зависимости из requirements.txt установлены"
         else
@@ -909,13 +840,6 @@ if setup_nginx; then
     log_success "Nginx установлен и настроен"
 else
     log_error "Ошибка установки и настройки nginx"
-fi
-
-# Настройка SELinux для nginx
-if setup_selinux_for_nginx; then
-    log_success "SELinux настроен для работы с nginx"
-else
-    log_error "Ошибка настройки SELinux для nginx"
 fi
 
 # Настройка cgroup v2 (если необходимо)

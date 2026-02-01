@@ -223,55 +223,46 @@ class CommandMessagesEnum(Enum):
     migration_virsh_error = "Migration virsh error"
     migration_timeout_error_with_virsh = "Migration timeout error with virsh"
 
+    incorrect_json_format = "Incorrect JSON format"
+
 
 class DefaultMessage(BaseModel):
+    success: bool
     code: str
-
-
-class VmError(DefaultMessage):
-    pass
+    note: str | None = None
 
 
 class VmMessage(DefaultMessage):
-    success: bool
     command: str | None = None
     vm_info: None | VirtualMachine | VirtualMachinesList | VMStateInfo = None
     stdout: str | None = None
     stderr: str | None = None
-    note: str | None = None
 
 
 class StorageMessage(DefaultMessage):
-    success: bool
     target_path: str | None = None
-    note: str | None = None
     disk_info: Disk | LogicVolume | list[Disk] | VMStorageUsedInfo | None = None
     stdout: str | None = None
     stderr: str | None = None
 
 
 class NetworkMessage(DefaultMessage):
-    success: bool
     net_info: (
         NetworkInfo | NetworkInterfacesInfo | NetworkList | NetworkBackup | None
     ) = None
-    note: str | None = None
 
 
 class RpMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
 
-    success: bool
     rp_info: ResourcePoolVirtual | ResourcePoolVMS | ResourcePoolConnectedVMS | None = (
         None
     )
-    note: str | None = None
 
 
 class SnapshotMessage(DefaultMessage):
     """Сообщение для работы с пулами ресурсов"""
 
-    success: bool
     snapshot_info: (
         SnapshotWithParent
         | DeleteSnapshotInfo
@@ -285,4 +276,3 @@ class SnapshotMessage(DefaultMessage):
         | SnapshotsChain
         | None
     ) = None
-    note: str | None = None

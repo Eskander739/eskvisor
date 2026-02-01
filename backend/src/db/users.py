@@ -17,7 +17,7 @@ Base = declarative_base()
 
 
 class UserModel(Base):
-    __tablename__ = 'users'
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
     role = Column(String)
@@ -41,7 +41,7 @@ class UsersDB:
         # Используем асинхронный драйвер asyncpg
         self.engine = create_async_engine(
             f"postgresql+asyncpg://{self.user}:{self.password}@{self.db_host}:{self.db_port}/postgres",
-            echo=True
+            echo=True,
         )
         self.async_session_maker = async_sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
@@ -75,15 +75,18 @@ class UsersDB:
             created=model.created,
             deleted=model.deleted,
             blocked=model.blocked,
-            created_by=model.created_by
+            created_by=model.created_by,
         )
 
     async def add_user(self, user: UserAddInDb) -> None:
         """Добавляет нового пользователя с использованием SQLAlchemy ORM."""
         async with await self._get_session() as session:
             user_model = user.model_dump()
-            user_model["role"] = user_model["role"].value if isinstance(user_model["role"], UserRole) else user_model[
-                "role"]
+            user_model["role"] = (
+                user_model["role"].value
+                if isinstance(user_model["role"], UserRole)
+                else user_model["role"]
+            )
             user_model["blocked"] = False
             user_model = UserModel(**user_model)
             session.add(user_model)
@@ -106,12 +109,12 @@ class UsersDB:
             return self._model_to_user(user) if user else None
 
     async def get_users(
-            self,
-            limit: int = 10,
-            page: int = 1,
-            role: UserRole = None,
-            blocked: str = None,
-            search: str = None,
+        self,
+        limit: int = 10,
+        page: int = 1,
+        role: UserRole = None,
+        blocked: str = None,
+        search: str = None,
     ) -> tuple[list[UserInDB], int, int]:
         """Получает список пользователей с пагинацией."""
         async with await self._get_session() as session:
@@ -173,11 +176,7 @@ class UsersDB:
     async def block_user_by_id(self, user_id: str) -> None:
         """Блокирует пользователя по id."""
         async with await self._get_session() as session:
-            stmt = (
-                update(UserModel)
-                .where(UserModel.id == user_id)
-                .values(blocked=True)
-            )
+            stmt = update(UserModel).where(UserModel.id == user_id).values(blocked=True)
             await session.execute(stmt)
             await session.commit()
 
@@ -185,9 +184,7 @@ class UsersDB:
         """Верифицирует пользователя по id."""
         async with await self._get_session() as session:
             stmt = (
-                update(UserModel)
-                .where(UserModel.id == user_id)
-                .values(verified=True)
+                update(UserModel).where(UserModel.id == user_id).values(verified=True)
             )
             await session.execute(stmt)
             await session.commit()
@@ -196,9 +193,7 @@ class UsersDB:
         """Отменяет верификацию пользователя по id."""
         async with await self._get_session() as session:
             stmt = (
-                update(UserModel)
-                .where(UserModel.id == user_id)
-                .values(verified=False)
+                update(UserModel).where(UserModel.id == user_id).values(verified=False)
             )
             await session.execute(stmt)
             await session.commit()
@@ -207,9 +202,7 @@ class UsersDB:
         """Разблокирует пользователя по id."""
         async with await self._get_session() as session:
             stmt = (
-                update(UserModel)
-                .where(UserModel.id == user_id)
-                .values(blocked=False)
+                update(UserModel).where(UserModel.id == user_id).values(blocked=False)
             )
             await session.execute(stmt)
             await session.commit()

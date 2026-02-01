@@ -11,7 +11,7 @@ from api.dependencies import get_jwt_service, get_redis_service
 from api.routers import users, system, vm
 from src.constants import ApiVersion, PROD_ENV
 from src.logger_config import DefaultLogger
-from src.models.error import ErrorMessage, DefaultError
+from src.models.error import ErrorMessage, DefaultMessage
 from src.services.ssh_keygen import SSHKeyGenerator
 
 app = FastAPI(title="Eskvisor Backend", version="1.0.0")
@@ -32,7 +32,12 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def check_token(request: Request, call_next, jwt_service = Depends(get_jwt_service), redis_service = Depends(get_redis_service)):
+async def check_token(
+    request: Request,
+    call_next,
+    jwt_service=Depends(get_jwt_service),
+    redis_service=Depends(get_redis_service),
+):
     """
     Проверяет токен на:
 
@@ -55,9 +60,10 @@ async def check_token(request: Request, call_next, jwt_service = Depends(get_jwt
 
     access_token = request.cookies.get("access_token")
     if not access_token:
-        error_model = DefaultError(
+        error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
             code=ErrorMessage.token_not_found.name,
+            success=False,
         ).model_dump()
         logger.info(
             f"- StatusCode: {status.HTTP_401_UNAUTHORIZED} - Body: {error_model} - Headers: {dict(request.headers)}"
@@ -66,9 +72,10 @@ async def check_token(request: Request, call_next, jwt_service = Depends(get_jwt
             status_code=status.HTTP_401_UNAUTHORIZED, content=error_model
         )
     if not jwt_service.validate_token(access_token):
-        error_model = DefaultError(
+        error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
             code=ErrorMessage.token_expired.name,
+            success=False,
         ).model_dump()
         logger.info(
             f"- StatusCode: {status.HTTP_401_UNAUTHORIZED} - Body: {error_model} - Headers: {dict(request.headers)}"
@@ -81,9 +88,10 @@ async def check_token(request: Request, call_next, jwt_service = Depends(get_jwt
         )
         return json_response
     if not await redis_service.is_token_valid(access_token):
-        error_model = DefaultError(
+        error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
             code=ErrorMessage.token_invalid.name,
+            success=False,
         ).model_dump()
         logger.info(
             f"- StatusCode: {status.HTTP_401_UNAUTHORIZED} - Body: {error_model} - Headers: {dict(request.headers)}"
@@ -102,6 +110,7 @@ async def check_token(request: Request, call_next, jwt_service = Depends(get_jwt
 
     response = await call_next(request)
     return response
+
 
 # Подключаем роутеры
 app.include_router(users.router)

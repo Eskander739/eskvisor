@@ -64,6 +64,20 @@ class RedisTaskManager:
             **password
         )
 
+    def check_connection(self, db: int | None = None) -> bool:
+        try:
+            redis_connect = self.redis_session(db)
+
+            # Простой ping
+            pong = redis_connect.ping()
+            if pong:
+                return True
+            else:
+                return False
+
+        except Exception:
+            return False
+
     def get_task_len(self, queue_name: str | None = None) -> int:
         """
         Возвращает список всех задач в Redis

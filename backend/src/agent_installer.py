@@ -199,11 +199,12 @@ class AgentInstaller:
         # 2. Устанавливаем агент на удаленном хосте
         self.logger.info(f"Установка агента на {hostname}...")
 
-        install_commands = ["dnf install tar",
+        install_commands = [
+            "dnf install tar -y",
             f"tar -xzf {TMP_AGENT_DIR} -C /tmp",
             f"mv /tmp/eskvisor /opt/eskvisor && sudo bash {SCRIPT_INSTALL_DIR}",
             f"rm -f {TMP_AGENT_DIR}",
-            "rm -r /tmp/eskvisor"
+            "rm -r /tmp/eskvisor",
         ]
 
         ssh_command = [

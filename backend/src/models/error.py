@@ -3,9 +3,11 @@ from enum import Enum
 from pydantic import BaseModel
 
 
-class DefaultError(BaseModel):
+class DefaultMessage(BaseModel):
+    success: bool
     request_id: str
     code: str
+    note: str | None = None
 
 
 class ErrorMessage(Enum):
@@ -32,3 +34,4 @@ class ErrorMessage(Enum):
     token_not_found = "Токен не найден"
     token_expired = "Срок токена истек"
     token_invalid = "Некорректный токен"
+    incorrect_json_format = "Incorrect JSON format"

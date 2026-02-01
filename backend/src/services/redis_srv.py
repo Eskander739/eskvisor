@@ -12,9 +12,9 @@ class RedisJWTManager:
     """
 
     def __init__(
-            self,
-            jwt_prefix: str = "jwt_",
-            tech_works_key: str = "tech_works_status",
+        self,
+        jwt_prefix: str = "jwt_",
+        tech_works_key: str = "tech_works_status",
     ):
         """
         Инициализация подключения к Redis.
@@ -93,7 +93,9 @@ class RedisJWTManager:
         """
         key = f"{self.jwt_prefix}{token}"
         redis_connect = self.get_redis_connection()
-        result = await redis_connect.delete(key)  # 1, если удален; 0, если не существовал
+        result = await redis_connect.delete(
+            key
+        )  # 1, если удален; 0, если не существовал
         return bool(result)
 
     async def get_all_tokens(self) -> List[str]:
@@ -105,8 +107,8 @@ class RedisJWTManager:
         redis_connect = self.get_redis_connection()
         keys = await redis_connect.keys(f"{self.jwt_prefix}*")
         # Убираем префикс из ключей
-        print([key[len(self.jwt_prefix):] for key in keys])
-        return [key[len(self.jwt_prefix):] for key in keys]
+        print([key[len(self.jwt_prefix) :] for key in keys])
+        return [key[len(self.jwt_prefix) :] for key in keys]
 
     async def is_token_valid(self, token: str) -> bool:
         """
@@ -135,7 +137,9 @@ class RedisJWTManager:
         print([key for key in keys])
         return [key for key in keys]
 
-    async def add_request(self, cache_key: str, data: Any, expire_seconds: int = 6) -> bool:
+    async def add_request(
+        self, cache_key: str, data: Any, expire_seconds: int = 6
+    ) -> bool:
         """
         Добавляет запрос в Redis с TTL.
 

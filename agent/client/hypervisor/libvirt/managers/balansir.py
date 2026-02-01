@@ -63,9 +63,7 @@ class Balansir(LibvirtClient):
         return self
 
     def get_or_create_volume_group(self, vg_name: str):
-        system_volume_group = self.volume_group_manager.get_volume_by_name(
-            vg_name
-        )
+        system_volume_group = self.volume_group_manager.get_volume_by_name(vg_name)
         if system_volume_group is None:
             valid_physical_volumes = (
                 self.physical_volume_manager.valid_physical_volumes()
@@ -73,7 +71,9 @@ class Balansir(LibvirtClient):
             if not valid_physical_volumes:
                 vg_list = self.volume_group_manager.get_volume_list()
                 if not vg_list:
-                    raise ValueError("Отсутствуют доступные Physical Volume и доступные Volume Group")
+                    raise ValueError(
+                        "Отсутствуют доступные Physical Volume и доступные Volume Group"
+                    )
                 vg_name = vg_list[0].volume_name
                 if self.prod_env.exists():
                     set_key(self.prod_env, "VOLUME_GROUP", vg_name)
@@ -84,7 +84,9 @@ class Balansir(LibvirtClient):
                     vg_name
                 )
                 if system_volume_group is None:
-                    raise ValueError("Некорректная установка существующего Volume Group")
+                    raise ValueError(
+                        "Некорректная установка существующего Volume Group"
+                    )
 
             else:
                 self.volume_group_manager.create_volume_group(

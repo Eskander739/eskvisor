@@ -59,19 +59,19 @@ class TaskHandler:
     """
 
     def __init__(self):
-        with VmManager() as vm_manager:
-            self.vm_manager = vm_manager
-            self.net_manager = NetworkManager()
-            self.snapshot_manager = SnapshotManager()
-            self.storage_manager = StorageManager()
-            self.balansir = Balansir()
+        self.vm_manager = VmManager()
+        self.vm_manager.connect_classic()
+        self.net_manager = NetworkManager()
+        self.snapshot_manager = SnapshotManager()
+        self.storage_manager = StorageManager()
+        self.balansir = Balansir()
 
-            self.storage_manager.conn = self.vm_manager.conn
-            self.snapshot_manager.conn = self.vm_manager.conn
-            self.net_manager.conn = self.vm_manager.conn
-            self.balansir.conn = self.vm_manager.conn
-            self.balansir.vm_manager = self.vm_manager
-            self.balansir.storage_manager = self.storage_manager
+        self.storage_manager.conn = self.vm_manager.conn
+        self.snapshot_manager.conn = self.vm_manager.conn
+        self.net_manager.conn = self.vm_manager.conn
+        self.balansir.conn = self.vm_manager.conn
+        self.balansir.vm_manager = self.vm_manager
+        self.balansir.storage_manager = self.storage_manager
 
     def handle_task(
         self, task_type: TaskType, action: str, params: dict[str, Any]

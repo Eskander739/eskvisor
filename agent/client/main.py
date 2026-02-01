@@ -11,6 +11,10 @@ from starlette.middleware.cors import CORSMiddleware
 
 from agent.client.constants import PROD_ENV
 from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
+from agent.client.hypervisor.libvirt.models.msg import (
+    DefaultMessage,
+    CommandMessagesEnum,
+)
 from agent.client.hypervisor.libvirt.models.vm_stats.stats import CpuAndRamUsage
 from agent.client.logger_config import DefaultLogger
 from agent.client.task_manager.ctl_queue import RedisTaskManager
@@ -21,7 +25,9 @@ from agent.client.tools import get_quick_stats
 
 load_dotenv(PROD_ENV)
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
-templates = Jinja2Templates(directory="/opt/eskvisor/agent/client/task_manager/templates")
+templates = Jinja2Templates(
+    directory="/opt/eskvisor/agent/client/task_manager/templates"
+)
 # templates = Jinja2Templates(directory="task_manager/templates")
 
 
@@ -56,6 +62,7 @@ async def add_security_headers(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
+
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard(request: Request):
     """Для тестирования управления задачами"""
@@ -63,8 +70,8 @@ async def get_dashboard(request: Request):
 
 
 @app.websocket("/ws/task")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint для уведомлений"""
+async def websocket_task(websocket: WebSocket):
+    """WebSocket task для уведомлений"""
     await websocket.accept()
     active_connections.append(websocket)
     logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections)}")
@@ -129,7 +136,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.info(f"Удалено задач: {deleted_count}")
 
                     await websocket.send_json(
-                        {"deleted": deleted_count, "message": f"Удалено {deleted_count} задач"}
+                        {
+                            "deleted": deleted_count,
+                            "message": f"Удалено {deleted_count} задач",
+                        }
                     )
 
                 else:
@@ -142,19 +152,24 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     task_dispatcher.submit_task(task)
 
-            except orjson.JSONDecodeError:
+            except orjson.JSONDecodeError as err:
                 await websocket.send_json(
-                    {"type": "error", "message": "Неверный формат JSON"}
+                    DefaultMessage(
+                        code=CommandMessagesEnum.incorrect_json_format.value,
+                        success=False,
+                        note=str(err),
+                    ).model_dump_json()
                 )
 
     except WebSocketDisconnect:
         active_connections.remove(websocket)
+        ws_handler.disconnect(websocket)
         logger.info(f"WebSocket отключен. Осталось: {len(active_connections)}")
 
 
 @app.websocket("/ws/system-stats")
 async def websocket_system_stats(websocket: WebSocket):
-    """WebSocket endpoint для получения статистики о системе"""
+    """WebSocket system_stats для получения статистики о системе"""
     await websocket.accept()
     active_connections.append(websocket)
     logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections)}")
@@ -189,13 +204,18 @@ async def websocket_system_stats(websocket: WebSocket):
                 elif object == "storage":
                     await websocket.send_json({"error": "Не реализовано"})
 
-            except orjson.JSONDecodeError:
+            except orjson.JSONDecodeError as err:
                 await websocket.send_json(
-                    {"type": "error", "message": "Неверный формат JSON"}
+                    DefaultMessage(
+                        code=CommandMessagesEnum.incorrect_json_format.value,
+                        success=False,
+                        note=str(err),
+                    ).model_dump_json()
                 )
 
     except WebSocketDisconnect:
         active_connections.remove(websocket)
+        ws_handler.disconnect(websocket)
         logger.info(f"WebSocket отключен. Осталось: {len(active_connections)}")
 
 
@@ -203,19 +223,29 @@ async def websocket_system_stats(websocket: WebSocket):
 async def websocket_notifications(websocket: WebSocket):
     """WebSocket только для уведомлений (без обработки команд)"""
     await ws_handler.connect(websocket)
+    active_connections.append(websocket)
 
     try:
         while True:
             # Просто держим соединение открытым
             await websocket.receive_text()
     except WebSocketDisconnect:
+        active_connections.remove(websocket)
         ws_handler.disconnect(websocket)
 
 
 @app.get("/health")
 async def health_check():
     """Проверка здоровья сервера"""
-    return JSONResponse({"status": "healthy", "service": "task-manager-ws"})
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "redis": queue_manager.check_connection(),
+            "websocket_connections": {
+                "total_active": len(active_connections),
+            },
+        }
+    )
 
 
 if __name__ == "__main__":

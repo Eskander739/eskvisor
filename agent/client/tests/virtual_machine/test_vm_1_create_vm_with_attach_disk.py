@@ -3,19 +3,28 @@ import random
 import pytest
 
 from agent.client.hypervisor.libvirt.models.enum import NetworkType
-from agent.client.hypervisor.libvirt.models.network import NetworkParameters, NetworkForward, NetworkBridge, \
-    NetworkDHCPRange, VmNetAdapter
+from agent.client.hypervisor.libvirt.models.network import (
+    NetworkParameters,
+    NetworkForward,
+    NetworkBridge,
+    NetworkDHCPRange,
+    VmNetAdapter,
+)
 from agent.client.hypervisor.libvirt.models.volume.disk import DiskCreate, DiskType
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import CommandMessagesEnum
-from agent.client.hypervisor.libvirt.models.vm import VirtualMachine, VMCreateRequest, NetQemuCommandline
+from agent.client.hypervisor.libvirt.models.vm import (
+    VirtualMachine,
+    VMCreateRequest,
+    NetQemuCommandline,
+)
 from agent.client.tools import wait_while_not
 
 IMG_PATH = "/home/eska/AlmaLinux-10.1-x86_64-minimal.iso"
 
 
 @pytest.mark.tags("VM‑01", "Создание ВМ с присоединением диска а не созданием нового")
-@pytest.mark.skip("Для внутреннего тестирования, не для общего запуска")
+# @pytest.mark.skip("Для внутреннего тестирования, не для общего запуска")
 def test_vm_01_create_vm_with_attach_disk(vm_session, network_session):
     """
     VM‑01: Создание ВМ с образом AlmaLinux и отдельной сетью
@@ -39,7 +48,8 @@ def test_vm_01_create_vm_with_attach_disk(vm_session, network_session):
         vcpus=2,
         memory_mb=2048,
         networks=[VmNetAdapter(network_type=NetworkType.NETWORK)],
-        qemu_commandline=[NetQemuCommandline()])
+        qemu_commandline=[NetQemuCommandline()],
+    )
     try:
         # ____________________________________Создание NAT сети________________
         nat_params = NetworkParameters(

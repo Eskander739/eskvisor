@@ -56,6 +56,7 @@ class UserLow(BaseModel):
     blocked: bool = False
     created_by: int | None = None
 
+
 class UserMedium(BaseModel):
     id: int
     role: UserRole
@@ -84,11 +85,13 @@ class UsersListLite(BaseModel):
     limit: int
     items: list[UserLite]
 
+
 class UsersList(BaseModel):
     total: int
     page: int
     limit: int
     items: list[UserInDB]
+
 
 class HelpUser(BaseModel):
     email: str

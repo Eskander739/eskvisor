@@ -13,20 +13,30 @@ router = APIRouter(
 
 
 @router.post(f"/install-agent")
-async def install_agent(connect_host: ConnectHostRequest, agent_installer = Depends(get_agent_installer)):
+async def install_agent(
+    connect_host: ConnectHostRequest, agent_installer=Depends(get_agent_installer)
+):
     agent_installer.install_agent_via_ssh(
         hostname=connect_host.ip,
-        agent_package_path=connect_host.agent_file if connect_host.agent_file is not None else DEFAULT_AGENT_DIR,
+        agent_package_path=(
+            connect_host.agent_file
+            if connect_host.agent_file is not None
+            else DEFAULT_AGENT_DIR
+        ),
         username=connect_host.admin,
         password=connect_host.password,
     )
 
 
 @router.get(f"/health")
-async def health(redis_service = Depends(get_redis_service), users_db = Depends(get_users_db)):
+async def health(
+    redis_service=Depends(get_redis_service), users_db=Depends(get_users_db)
+):
     """Проверка здоровья сервера"""
-    health_info = HealthInfo(postgres_db=await users_db.check_connection(),
-                             redis=await redis_service.check_connection())
+    health_info = HealthInfo(
+        postgres_db=await users_db.check_connection(),
+        redis=await redis_service.check_connection(),
+    )
 
     if health_info.postgres_db and health_info.redis:
         return JSONResponse({"status": "healthy", "services": health_info.model_dump()})

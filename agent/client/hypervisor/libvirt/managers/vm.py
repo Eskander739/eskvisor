@@ -31,7 +31,6 @@ from agent.client.hypervisor.libvirt.models.enum import (
 from agent.client.hypervisor.libvirt.models.general import VMState
 from agent.client.hypervisor.libvirt.models.msg import (
     CommandMessagesEnum,
-    VmError,
     VmMessage,
 )
 from agent.client.hypervisor.libvirt.models.vm import (
@@ -105,7 +104,7 @@ class VmManager(LibvirtClient):
 
     def create_vm(
         self, config: VMCreateRequest, dry_run: bool = False
-    ) -> dict | VmError | VmMessage:
+    ) -> dict | VmMessage:
         """
         Создание виртуальной машины через virt-install
 
@@ -150,8 +149,9 @@ class VmManager(LibvirtClient):
 
             existing_vm = self.get_vm_by_name(config.name)
             if existing_vm.code == CommandMessagesEnum.vm_successfully_found.name:
-                return VmError(
+                return VmMessage(
                     code=CommandMessagesEnum.vm_with_name_already_exists.name,
+                    success=False,
                 )
 
             # Создаем диски через StorageManager
@@ -572,8 +572,8 @@ class VmManager(LibvirtClient):
 
             for current_hostfwd in config.net_qemu_commandline.hostfwd:
                 if (
-                        current_hostfwd.host_ip,
-                        current_hostfwd.host_port,
+                    current_hostfwd.host_ip,
+                    current_hostfwd.host_port,
                 ) in all_ip_and_port:
                     config.net_qemu_commandline.net_id = self.generate_new_net_id
 
@@ -736,7 +736,9 @@ class VmManager(LibvirtClient):
                     libvirt.VIR_MIGRATE_NON_SHARED_DISK
                 )  # Копировать локальные диски на целевой хост
                 if not dest_uri.startswith("qemu+tcp://"):
-                    raise ValueError("Для миграции дисков без удаленного хранилища требуется qemu+tcp подключение")
+                    raise ValueError(
+                        "Для миграции дисков без удаленного хранилища требуется qemu+tcp подключение"
+                    )
 
             # Добавляем флаг для миграции persistent конфига
             if not undefine_source and migrate_configs:
@@ -745,13 +747,10 @@ class VmManager(LibvirtClient):
             if migrate_nvram:
                 self.migrate_nvram(vm_name, dest_uri)
 
-
             # Выполняем миграцию
             self.logger.info(f"Выполнение миграции с флагами: {flags}")
             try:
-                migrated_domain = domain.migrateToURI3(
-                    dest_uri, params={}, flags=flags
-                )
+                migrated_domain = domain.migrateToURI3(dest_uri, params={}, flags=flags)
 
                 if migrated_domain:
                     self.logger.info(f"ВМ '{vm_name}' успешно мигрирована")
@@ -1515,6 +1514,7 @@ class VmManager(LibvirtClient):
         if not self.conn:
             raise ConnectionError("Сначала подключитесь к гипервизору")
 
+        err = None
         virtual_machines = []
         try:
             if only_active:
@@ -1527,8 +1527,8 @@ class VmManager(LibvirtClient):
                 for domain in domains:
                     virtual_machines.append(self.get_vm_info(domain))
 
-        except self.libvirtError as e:
-            self.logger.error(f"Ошибка получения списка ВМ, \nerr: {e}")
+        except self.libvirtError as err:
+            self.logger.error(f"Ошибка получения списка ВМ, \nerr: {err}")
 
         if virtual_machines:
             return VmMessage(
@@ -1544,6 +1544,7 @@ class VmManager(LibvirtClient):
             vm_info=VirtualMachinesList(
                 items=virtual_machines, total=len(virtual_machines)
             ),
+            note=str(err),
         )
 
     @staticmethod
@@ -2155,11 +2156,16 @@ if __name__ == "__main__":
     with VmManager() as vm_manager:
         # new_connect = vm_manager.connect_ssh_with_key()
         # Создайте пустой CA файл
-        print(vm_manager.migrate_vm("VM-TEST-92086",
-                                    dest_uri="qemu+tcp://192.168.100.185/system",
-                                    # dest_uri="qemu+tcp://192.168.100.185/system",
-                                    # dest_uri="qemu+ssh://root@192.168.100.185/system?keyfile=/eskvisor/.ssh/eskvisor_master_ed25519",
-                                    migrate_nvram=False, migrate_disks=True))
+        print(
+            vm_manager.migrate_vm(
+                "VM-TEST-92086",
+                dest_uri="qemu+tcp://192.168.100.185/system",
+                # dest_uri="qemu+tcp://192.168.100.185/system",
+                # dest_uri="qemu+ssh://root@192.168.100.185/system?keyfile=/eskvisor/.ssh/eskvisor_master_ed25519",
+                migrate_nvram=False,
+                migrate_disks=True,
+            )
+        )
         # print(vm_manager.delete_vm("test-vm-03"))
         # Пример создания ВМ /var/lib/libvirt/images/disk-859480.qcow2
         # result = vm_manager.create_vm(simple_hotplug_vm_config)

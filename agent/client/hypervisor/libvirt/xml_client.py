@@ -31,7 +31,9 @@ class XmlClient:
         else:
             parent_object.append(child_object)
 
-    def children(self, xml_desc: str | ElementTree.Element, is_string: bool = False) -> list[ElementTree.Element] | list[str]:
+    def children(
+        self, xml_desc: str | ElementTree.Element, is_string: bool = False
+    ) -> list[ElementTree.Element] | list[str]:
         if isinstance(xml_desc, str):
             xml_element = self.xml_object_from_string(xml_desc)
         else:
@@ -44,7 +46,8 @@ class XmlClient:
 
 
 if __name__ == "__main__":
-    root = ElementTree.fromstring("""<domain type='kvm' id='1'>
+    root = ElementTree.fromstring(
+        """<domain type='kvm' id='1'>
   <name>alma-linux-eskvisor</name>
   <uuid>8dd078fc-321c-4057-946a-3c088f177d89</uuid>
   <memory unit='KiB'>2097152</memory>
@@ -378,7 +381,8 @@ if __name__ == "__main__":
     <label>+107:+107</label>
     <imagelabel>+107:+107</imagelabel>
   </seclabel>
-</domain>""")
+</domain>"""
+    )
     xml_client = XmlClient()
 
     # Проверяем наличие UEFI

@@ -55,9 +55,9 @@ class NetQemuCommandline(BaseModel):
     ipv4: bool = True
     ipv6: bool = False
     dns: str = "8.8.8.8"
-    hostfwd: list[HostForward] = [HostForward(
-        protocol="tcp", host_port=2222, host_ip=None, guest_port=22
-    )]
+    hostfwd: list[HostForward] = [
+        HostForward(protocol="tcp", host_port=2222, host_ip=None, guest_port=22)
+    ]
 
     @model_validator(mode="after")
     def validate_disk_type_constraints(self):

@@ -97,7 +97,14 @@ class VolumeGroupManager:
         nosuffix: bool = False,
     ) -> list[VolumeGroup]:
         self.logger.info("Получение списка групп томов")
-        cmd_args = ["vgs", "--reportformat=json", "-o", "+vg_extent_size",  "--sort",  "-vg_size"]
+        cmd_args = [
+            "vgs",
+            "--reportformat=json",
+            "-o",
+            "+vg_extent_size",
+            "--sort",
+            "-vg_size",
+        ]
 
         if noheadings:
             cmd_args.append("--noheadings")
