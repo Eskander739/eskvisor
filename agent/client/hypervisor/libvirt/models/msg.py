@@ -224,6 +224,13 @@ class CommandMessagesEnum(Enum):
     migration_timeout_error_with_virsh = "Migration timeout error with virsh"
 
     incorrect_json_format = "Incorrect JSON format"
+    vnc_connection_successfully_created = "VNC connection created successfully"
+    vnc_status_successfully_readed = "VNC status successfully readed"
+    vnc_proxy_successfully_restarted = "VNC proxy successfully restarted"
+    vnc_successfully_disconnected = "VNC successfully disconnected"
+    not_implemented_error = "Not Implemented Error"
+    unknown_command_error = "Unknown command error"
+    internal_error = "Internal error"
 
 
 class DefaultMessage(BaseModel):

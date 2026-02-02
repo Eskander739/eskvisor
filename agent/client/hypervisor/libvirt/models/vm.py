@@ -156,7 +156,7 @@ class VMCreateRequest(BaseModel):
         description="Тип графического интерфейса: VNC, SPICE, none и т.д.",
     )
     graphics_port: int | None = Field(
-        default=None,
+        default=5921,
         description="Порт для графического интерфейса (если не указан, выбирается автоматически)",
     )
     graphics_listen: str = Field(

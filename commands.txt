@@ -88,3 +88,9 @@ newgrp disk
 sudo systemctl daemon-reload
 sudo systemctl restart virtqemud.socket
 sudo systemctl restart virtqemud
+
+# Нагрузить ОЗУ на 1 ГБ
+# timeout 5 stress --vm 1 --vm-bytes 1G --vm-keep
+
+# Нагрузить все ядра на 5 секунд
+# timeout 5 stress --cpu $(nproc) --timeout 5s

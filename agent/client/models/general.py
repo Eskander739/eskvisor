@@ -2,6 +2,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, IPvAnyNetwork, model_validator, Field
 
+from agent.client.hypervisor.libvirt.models.msg import DefaultMessage
+
 
 class NFSStorageModel(BaseModel):
     source: str  # ip:dir на стороне NFS сервера
@@ -43,3 +45,19 @@ class LoadNFSStorages(BaseModel):
     nfs_storages_for_mount: list[NFSStorageForMount] = Field(
         default_factory=list, description="Список NFS хранилищ для монтирования"
     )
+
+class VNCConnectInfo(DefaultMessage):
+    vm_name: str
+    vnc_port: int
+    ws_port: int
+    ws_url: str
+
+class VNCStatusInfo(DefaultMessage):
+    vm_name: str
+    status: dict
+
+
+class VNCRestartProxy(DefaultMessage):
+    vm_name: str
+    new_ws_port: int
+    new_ws_url: str

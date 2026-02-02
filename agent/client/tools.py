@@ -1,3 +1,6 @@
+import asyncio
+import subprocess
+
 import psutil
 import time
 from datetime import datetime
@@ -261,6 +264,36 @@ def get_quick_stats():
         "disk": psutil.disk_usage("/").percent,
         "load": load_percent if load_percent is not None else None,
     }
+
+
+
+async def check_vnc_service(vm_name: str, vnc_port: int) -> tuple[bool, str]:
+    """
+    Проверка доступности VNC сервиса для VM
+
+    Args:
+        vm_name: Имя виртуальной машины
+        vnc_port: Порт VNC
+
+    Returns:
+        Tuple[доступен ли, сообщение]
+    """
+    try:
+        # Используем netcat или telnet для проверки порта
+        result = await asyncio.create_subprocess_exec(
+            'nc', '-z', 'localhost', str(vnc_port),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        await result.communicate()
+
+        if result.returncode == 0:
+            return True, f"VNC сервис для {vm_name} доступен на порту {vnc_port}"
+        else:
+            return False, f"VNC сервис для {vm_name} недоступен на порту {vnc_port}"
+
+    except Exception as e:
+        return False, f"Ошибка проверки VNC сервиса: {str(e)}"
 
 
 if __name__ == "__main__":
