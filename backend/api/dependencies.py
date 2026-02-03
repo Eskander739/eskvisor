@@ -14,42 +14,34 @@ from src.services.ssh_keygen import SSHKeyGenerator
 load_dotenv()
 load_dotenv(PROD_ENV)
 logger = DefaultLogger("Eskvisor Backend")
-ssh_key_generator = SSHKeyGenerator()
-agent_installer = AgentInstaller()
-redis_service = RedisJWTManager()
-jwt_service = JWTService()
-hash_service = HashService()
-users_db = UsersDB()
-nodes_db = NodesDB()
-clusters_db = ClustersDB()
 
 
 async def get_redis_service() -> RedisJWTManager:
-    return redis_service
+    return RedisJWTManager()
 
 
 async def get_jwt_service() -> JWTService:
-    return jwt_service
+    return JWTService()
 
 
 async def get_hash_service() -> HashService:
-    return hash_service
+    return HashService()
 
 
 async def get_users_db() -> UsersDB:
-    return users_db
+    return UsersDB()
 
 
 async def get_nodes_db() -> NodesDB:
-    return nodes_db
+    return NodesDB()
 
 
 async def get_clusters_db() -> ClustersDB:
-    return clusters_db
+    return ClustersDB()
 
 
 async def get_agent_installer() -> AgentInstaller:
-    return agent_installer
+    return AgentInstaller()
 
 
 async def get_logger() -> DefaultLogger:
@@ -57,4 +49,4 @@ async def get_logger() -> DefaultLogger:
 
 
 async def get_ssh_key_generator() -> SSHKeyGenerator:
-    return ssh_key_generator
+    return SSHKeyGenerator()

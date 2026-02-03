@@ -24,7 +24,7 @@ active_connections: list[WebSocket] = []
 
 
 @router.websocket("/task")
-async def websocket_task(websocket: WebSocket,
+async def task(websocket: WebSocket,
                          logger = Depends(get_logger),
                          queue_manager = Depends(get_queue_manager_service),
                          ws_handler = Depends(get_ws_handler),
@@ -120,11 +120,11 @@ async def websocket_task(websocket: WebSocket,
         logger.error(f"Ошибка в WebSocket: {err}")
         await websocket.send_json(DefaultMessage(code=CommandMessagesEnum.internal_error.name,
                                                  success=False,
-                                                 note=str(err)))
+                                                 note=str(err)).model_dump())
 
 
 @router.websocket("/system-stats")
-async def websocket_system_stats(websocket: WebSocket,
+async def system_stats(websocket: WebSocket,
                                  logger=Depends(get_logger),
                                  vm_live_monitor=Depends(get_vm_live_monitor_service),
                                  ws_handler = Depends(get_ws_handler)):
@@ -183,11 +183,11 @@ async def websocket_system_stats(websocket: WebSocket,
         logger.error(f"Ошибка в WebSocket: {err}")
         await websocket.send_json(DefaultMessage(code=CommandMessagesEnum.internal_error.name,
                                                  success=False,
-                                                 note=str(err)))
+                                                 note=str(err)).model_dump())
 
 
 @router.websocket("/notification")
-async def websocket_notifications(websocket: WebSocket,
+async def notification(websocket: WebSocket,
                                   logger = Depends(get_logger),
                                   ws_handler = Depends(get_ws_handler)):
     """WebSocket только для уведомлений (без обработки команд)"""
@@ -207,11 +207,11 @@ async def websocket_notifications(websocket: WebSocket,
         logger.error(f"Ошибка в WebSocket: {err}")
         await websocket.send_json(DefaultMessage(code=CommandMessagesEnum.internal_error.name,
                                                  success=False,
-                                                 note=str(err)))
+                                                 note=str(err)).model_dump())
 
 
 @router.websocket("/vnc/{vm_name}")
-async def websocket_vnc(websocket: WebSocket, vm_name: str,
+async def vnc(websocket: WebSocket, vm_name: str,
                         logger = Depends(get_logger),
                         vnc_manager = Depends(get_vnc_manager)):
     """
@@ -258,7 +258,7 @@ async def websocket_vnc(websocket: WebSocket, vm_name: str,
                                                             vm_name=vm_name,
                                                             success=True if status else False,
                                                             status=status or {"error": "Прокси не найден"}
-                                                            ))
+                                                            ).model_dump())
 
                 elif action == "restart_proxy":
                     vnc_manager.stop_vnc_proxy(vm_name)
@@ -267,18 +267,18 @@ async def websocket_vnc(websocket: WebSocket, vm_name: str,
                                                               vm_name=vm_name,
                                                               new_ws_port=ws_port,
                                                               new_ws_url=f"ws://localhost:{ws_port}", # TODO: Изменить localhost на наш ip
-                                                              success=True))
+                                                              success=True).model_dump())
 
                 elif action == "disconnect":
                     await websocket.send_json(DefaultMessage(code=CommandMessagesEnum.vnc_successfully_disconnected.name,
-                                                             success=True))
+                                                             success=True).model_dump())
                     break
 
                 else:
                     msg = f"Команда: {action}, available_actions: {['get_status', 'restart_proxy', 'disconnect']}"
                     await websocket.send_json(DefaultMessage(code=CommandMessagesEnum.unknown_command_error.name,
                                                              success=False,
-                                                             note=msg))
+                                                             note=msg).model_dump())
 
             except orjson.JSONDecodeError as err:
                 await websocket.send_json(
@@ -295,4 +295,4 @@ async def websocket_vnc(websocket: WebSocket, vm_name: str,
         logger.error(f"Ошибка в VNC WebSocket для {vm_name}: {err}")
         await websocket.send_json(DefaultMessage(code=CommandMessagesEnum.internal_error.name,
                                                  success=False,
-                                                 note=str(err)))
+                                                 note=str(err)).model_dump())

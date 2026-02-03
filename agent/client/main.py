@@ -8,6 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 from agent.client.constants import PROD_ENV
 from agent.client.api.routers import ws, system
 
+load_dotenv()
 load_dotenv(PROD_ENV)
 app = FastAPI(title="Task Manager WebSocket Server", version="1.0.0")
 templates = Jinja2Templates(

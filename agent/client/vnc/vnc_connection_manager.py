@@ -1,5 +1,4 @@
 import subprocess
-from typing import Optional
 import threading
 import socket
 import time
@@ -21,7 +20,7 @@ class VNCWebSocketProxy:
         self.vnc_host = vnc_host
         self.vnc_port = vnc_port
         self.process = None
-        self.server_thread: Optional[threading.Thread] = None
+        self.server_thread: threading.Thread | None = None
         self.running = False
         self.ws_port = None
 
@@ -243,7 +242,7 @@ class VNCConnectionManager:
             del self.proxies[vm_name]
             logger.info(f"Прокси для {vm_name} остановлен")
 
-    def get_vm_proxy_status(self, vm_name: str) -> Optional[dict]:
+    def get_vm_proxy_status(self, vm_name: str) -> dict | None:
         """Получение статуса прокси для VM"""
         if vm_name in self.proxies:
             return self.proxies[vm_name].get_proxy_status()

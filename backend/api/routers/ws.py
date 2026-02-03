@@ -14,10 +14,6 @@ router = APIRouter(
     prefix=f"{ApiVersion.V0}/ws",
     tags=["ws"],
 )
-active_connections_task = []
-active_connections_notification = []
-active_connections_system_stats = []
-node_connections: list[NodeWebsocketConnection] = []
 
 
 @router.websocket(f"/task")
@@ -27,16 +23,16 @@ async def task(
     logger=Depends(get_logger),
 ):
     await websocket.accept()
-    active_connections_task.append(websocket)
-    logger.info(f"Новое WebSocket подключение. Всего: {len(active_connections_task)}")
+    logger.info(f"Новое WebSocket подключение")
     uri_startswith = "ws://{}/ws/task"
+    local_node_connections = []
     for cluster in clusters_db.get_cluster_list():
         for node in cluster.nodes:
             try:
                 connect = await websockets.connect(
                     uri_startswith.format(node.ip_address)
                 )
-                node_connections.append(
+                local_node_connections.append(
                     NodeWebsocketConnection(
                         cluster_id=cluster.id, node_id=node.id, connection=connect
                     )
@@ -50,7 +46,7 @@ async def task(
             try:
                 node_id = data["node_id"]
                 cluster_id = data["cluster_id"]
-                for current_node in node_connections:
+                for current_node in local_node_connections:
                     if (
                         current_node.node_id == node_id
                         and current_node.cluster_id == cluster_id
@@ -67,8 +63,14 @@ async def task(
                     ).model_dump_json()
                 )
     except WebSocketDisconnect:
-        active_connections_task.remove(websocket)
-        logger.info(f"WebSocket отключен. Осталось: {len(active_connections_task)}")
+        logger.info(f"WebSocket отключен")
+
+    except Exception as err:
+        logger.error(f"Ошибка в WebSocket: {err}")
+        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
+                                                 code=ErrorMessage.internal_error.name,
+                                                 success=False,
+                                                 note=str(err)).model_dump())
 
 
 @router.websocket(f"/notification")
@@ -78,18 +80,16 @@ async def notification(
     logger=Depends(get_logger),
 ):
     await websocket.accept()
-    active_connections_notification.append(websocket)
-    logger.info(
-        f"Новое WebSocket подключение. Всего: {len(active_connections_notification)}"
-    )
+    logger.info("Новое WebSocket подключение" )
     uri_startswith = "ws://{}/ws/notification"
+    local_node_connections = []
     for cluster in clusters_db.get_cluster_list():
         for node in cluster.nodes:
             try:
                 connect = await websockets.connect(
                     uri_startswith.format(node.ip_address)
                 )
-                node_connections.append(
+                local_node_connections.append(
                     NodeWebsocketConnection(
                         cluster_id=cluster.id, node_id=node.id, connection=connect
                     )
@@ -100,7 +100,7 @@ async def notification(
     try:
         while True:
             try:
-                for current_node in node_connections:
+                for current_node in local_node_connections:
                     try:
                         result = await current_node.connection.recv()
                         await websocket.send_json(orjson.dumps(result))
@@ -117,10 +117,65 @@ async def notification(
                     ).model_dump_json()
                 )
     except WebSocketDisconnect:
-        active_connections_notification.remove(websocket)
-        logger.info(
-            f"WebSocket отключен. Осталось: {len(active_connections_notification)}"
-        )
+        logger.info("WebSocket отключен")
+    except Exception as err:
+        logger.error(f"Ошибка в WebSocket: {err}")
+        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
+                                                 code=ErrorMessage.internal_error.name,
+                                                 success=False,
+                                                 note=str(err)).model_dump())
+
+
+@router.websocket("/vnc/{cluster_id}/{node_id}/{vm_name}")
+async def vnc(
+    websocket: WebSocket,
+    cluster_id: int,
+    node_id: int,
+    vm_name: str,
+    clusters_db=Depends(get_clusters_db),
+    logger=Depends(get_logger),
+):
+    await websocket.accept()
+    logger.info("Новое WebSocket подключение")
+    uri_startswith = "ws://{}/ws/vnc/{}"
+    connect = None
+    for cluster in clusters_db.get_cluster_list():
+        for node in cluster.nodes:
+            try:
+                if node.id == node_id and cluster.id == cluster_id:
+                    connect = await websockets.connect(
+                        uri_startswith.format(node.ip_address, vm_name)
+                    )
+            except Exception as err:
+                logger.error(f"Ошибка в подключении к VNC: {err}")
+                await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
+                                                         code=ErrorMessage.internal_error.name,
+                                                         success=False,
+                                                         note=str(err)))
+
+    try:
+        while True:
+            try:
+                result = await connect.recv()
+                await websocket.send_json(orjson.dumps(result))
+
+            except orjson.JSONDecodeError as err:
+                await websocket.send_json(
+                    DefaultMessage(
+                        request_id=str(uuid.uuid4()),
+                        code=ErrorMessage.incorrect_json_format.value,
+                        success=False,
+                        note=str(err),
+                    ).model_dump_json()
+                )
+    except WebSocketDisconnect:
+        logger.info("WebSocket отключен")
+    except Exception as err:
+        logger.error(f"Ошибка в WebSocket: {err}")
+        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
+                                                 code=ErrorMessage.internal_error.name,
+                                                 success=False,
+                                                 note=str(err)).model_dump())
 
 
 @router.websocket(f"/system-stats")
@@ -130,18 +185,16 @@ async def system_stats(
     logger=Depends(get_logger),
 ):
     await websocket.accept()
-    active_connections_system_stats.append(websocket)
-    logger.info(
-        f"Новое WebSocket подключение. Всего: {len(active_connections_system_stats)}"
-    )
+    logger.info("Новое WebSocket подключение")
     uri_startswith = "ws://{}/ws/system-stats"
+    local_node_connections = []
     for cluster in clusters_db.get_cluster_list():
         for node in cluster.nodes:
             try:
                 connect = await websockets.connect(
                     uri_startswith.format(node.ip_address)
                 )
-                node_connections.append(
+                local_node_connections.append(
                     NodeWebsocketConnection(
                         cluster_id=cluster.id, node_id=node.id, connection=connect
                     )
@@ -155,7 +208,7 @@ async def system_stats(
             try:
                 message = SystemStatRequest(**orjson.loads(data))
 
-                for current_node in node_connections:
+                for current_node in local_node_connections:
                     if (
                         current_node.node_id == message.node_id
                         and current_node.cluster_id == message.cluster_id
@@ -174,7 +227,11 @@ async def system_stats(
                     ).model_dump_json()
                 )
     except WebSocketDisconnect:
-        active_connections_system_stats.remove(websocket)
-        logger.info(
-            f"WebSocket отключен. Осталось: {len(active_connections_system_stats)}"
-        )
+        logger.info("WebSocket отключен")
+    except Exception as err:
+        logger.error(f"Ошибка в WebSocket: {err}")
+        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
+                                                 code=ErrorMessage.internal_error.name,
+                                                 success=False,
+                                                 note=str(err)).model_dump())
+

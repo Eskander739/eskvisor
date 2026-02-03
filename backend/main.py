@@ -14,14 +14,13 @@ from src.logger_config import DefaultLogger
 from src.models.error import ErrorMessage, DefaultMessage
 from src.services.ssh_keygen import SSHKeyGenerator
 
-app = FastAPI(title="Eskvisor Backend", version="1.0.0")
+app = FastAPI(title="Eskvisor Backend", version="0.3")
 
 
 load_dotenv()
 load_dotenv(PROD_ENV)
 logger = DefaultLogger("Eskvisor Backend")
-ssh_key_generator = SSHKeyGenerator()
-ssh_key_generator.generate_and_save()
+SSHKeyGenerator().generate_and_save()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # В продакшене укажите конкретные домены

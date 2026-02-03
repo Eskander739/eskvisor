@@ -35,3 +35,4 @@ class ErrorMessage(Enum):
     token_expired = "Срок токена истек"
     token_invalid = "Некорректный токен"
     incorrect_json_format = "Incorrect JSON format"
+    internal_error = "Internal error"
