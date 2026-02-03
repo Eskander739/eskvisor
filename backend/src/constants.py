@@ -10,3 +10,11 @@ DEFAULT_AGENT_DIR = "/home/eska/eskvisor_agent.tar.gz"
 TMP_AGENT_DIR = "/tmp/eskvisor_agent_package.tar.gz"
 SCRIPT_INSTALL_DIR = "/opt/eskvisor/agent/install_agent.sh"
 PROD_ENV = "/etc/eskvisor/backend.env"
+
+# DB_POOL_SIZE = 15  # для прода
+# REDIS_POOL_SIZE = 10  # для прода
+# WS_POOL_SIZE = 15  # для прода
+
+DB_POOL_SIZE = 2  # для тестов
+REDIS_POOL_SIZE = 2  # для тестов
+WS_POOL_SIZE = 2  # для тестов

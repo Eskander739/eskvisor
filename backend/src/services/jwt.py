@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 class JWTService:
     def __init__(self, algorithm: str = "HS256"):
         self.secret_key = os.environ.get("SECRET_KEY")
-        print("os.environ.get('SECRET_KEY'): ", os.environ.get("SECRET_KEY"))
         self.algorithm = algorithm
 
     @staticmethod

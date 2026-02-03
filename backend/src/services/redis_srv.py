@@ -1,8 +1,7 @@
 import json
 import os
 from typing import List, Any
-import asyncio
-import redis.asyncio as redis
+from src.services.pool.redis_pool import RedisPoolManager
 
 
 class RedisJWTManager:
@@ -13,27 +12,19 @@ class RedisJWTManager:
 
     def __init__(
         self,
+        redis_pool: RedisPoolManager,
         jwt_prefix: str = "jwt_",
-        tech_works_key: str = "tech_works_status",
     ):
-        """
-        Инициализация подключения к Redis.
-
-        :param jwt_prefix: Префикс для ключей токенов в Redis
-        :param tech_works_key: Ключ для хранения статуса технических работ
-        """
         self.host = os.environ.get("REDIS_HOST")
         self.port = os.environ.get("REDIS_PORT")
         self.db = os.environ.get("REDIS_DB_NUMBER")
-        self.db_for_requests = os.environ.get("REDIS_CACHE_REQUESTS_DB_NUMBER")
         # self.password = os.environ.get("REDIS_DB_PASSWORD")
         self.jwt_prefix = jwt_prefix
-        self.tech_works_key = tech_works_key
-        self._connections = {}
+        self.redis_pool = redis_pool
 
-    async def check_connection(self, db: int | None = None) -> bool:
+    async def check_connection(self) -> bool:
         try:
-            redis_connect = self.get_redis_connection(db)
+            redis_connect = await self.get_redis_connection()
 
             # Простой ping
             pong = await redis_connect.ping()
@@ -45,27 +36,9 @@ class RedisJWTManager:
         except Exception:
             return False
 
-    def get_redis_connection(self, db: int | None = None):
-        """Создает или возвращает существующее подключение к Redis"""
-        if isinstance(db, str):
-            db = int(db)
-        db_key = db if db is not None else self.db
-
-        if db_key not in self._connections:
-            self._connections[db_key] = redis.Redis(
-                host=self.host,
-                port=int(self.port),
-                db=db_key,
-                # password=self.password,
-                decode_responses=True,  # Автоматическое декодирование в строки
-            )
-        return self._connections[db_key]
-
-    async def close_connections(self):
-        """Закрывает все соединения с Redis"""
-        for conn in self._connections.values():
-            await conn.aclose()
-        self._connections.clear()
+    async def get_redis_connection(self):
+        async with self.redis_pool.get_connection as conn:
+            return conn
 
     # _________________________________________[JWT METHODS]_________________________________________
 
@@ -78,7 +51,7 @@ class RedisJWTManager:
         :return: True, если токен успешно добавлен
         """
         key = f"{self.jwt_prefix}{token}"
-        redis_connect = self.get_redis_connection()
+        redis_connect = await self.get_redis_connection()
         result = await redis_connect.setex(
             key, expire_seconds, "valid"
         )  # 'valid' — метка валидности
@@ -92,7 +65,7 @@ class RedisJWTManager:
         :return: True, если токен был удален
         """
         key = f"{self.jwt_prefix}{token}"
-        redis_connect = self.get_redis_connection()
+        redis_connect = await self.get_redis_connection()
         result = await redis_connect.delete(
             key
         )  # 1, если удален; 0, если не существовал
@@ -104,7 +77,7 @@ class RedisJWTManager:
 
         :return: Список токенов
         """
-        redis_connect = self.get_redis_connection()
+        redis_connect = await self.get_redis_connection()
         keys = await redis_connect.keys(f"{self.jwt_prefix}*")
         # Убираем префикс из ключей
         print([key[len(self.jwt_prefix) :] for key in keys])
@@ -117,7 +90,7 @@ class RedisJWTManager:
         :param token: JWT-токен
         :return: True, если токен валиден
         """
-        redis_connect = self.get_redis_connection()
+        redis_connect = await self.get_redis_connection()
         key = f"{self.jwt_prefix}{token}"
         exists = await redis_connect.exists(key)
         print(exists == 1)
@@ -131,7 +104,7 @@ class RedisJWTManager:
 
         :return: Список токенов
         """
-        redis_connect = self.get_redis_connection(self.db_for_requests)
+        redis_connect = await self.get_redis_connection()
         keys = await redis_connect.keys()
         # Убираем префикс из ключей
         print([key for key in keys])
@@ -148,7 +121,7 @@ class RedisJWTManager:
         :param expire_seconds: Время жизни токена в секундах (по умолчанию 5 минут)
         """
         print("redis-request", cache_key, data)
-        redis_connect = self.get_redis_connection(self.db_for_requests)
+        redis_connect = await self.get_redis_connection()
         result = await redis_connect.set(cache_key, json.dumps(data), ex=expire_seconds)
         return bool(result)
 
@@ -158,7 +131,7 @@ class RedisJWTManager:
 
         :param cache_key: ключ
         """
-        redis_connect = self.get_redis_connection(self.db_for_requests)
+        redis_connect = await self.get_redis_connection()
         cached_data = await redis_connect.get(cache_key)
         print(
             "redis-request",
@@ -185,20 +158,6 @@ class RedisJWTManager:
         """
         Удаляет ключ
         """
-        redis_connect = self.get_redis_connection(self.db_for_requests)
+        redis_connect = await self.get_redis_connection()
         result = await redis_connect.delete(cache_key)
         return bool(result)  # 1, если удален; 0, если не существовал
-
-
-# Пример использования новых методов
-async def main():
-    jwt_manager = RedisJWTManager()
-    # Пример использования асинхронных методов
-    await jwt_manager.add_token("test_token_123", expire_seconds=3600)
-    is_valid = await jwt_manager.is_token_valid("test_token_123")
-    print(f"Token is valid: {is_valid}")
-    await jwt_manager.close_connections()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

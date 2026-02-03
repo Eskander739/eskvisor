@@ -2,7 +2,6 @@ from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel
-from websockets import ClientConnection
 
 
 class ObjectStatEnum(Enum):
@@ -19,6 +18,13 @@ class NodeWebsocketConnection(BaseModel):
     cluster_id: int
     node_id: int
     connection: Any  # Websocket соединение
+
+
+class NodeWebsocketConnections(BaseModel):
+    cluster_id: int
+    node_id: int
+    connections_queue: Any  # Websocket соединение
+    ip_address: str
 
 
 class SystemStatRequest(BaseModel):
