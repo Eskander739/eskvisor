@@ -3,11 +3,10 @@ from ipaddress import IPv4Address
 
 from pydantic import BaseModel, Field, model_validator
 
-from agent.client.hypervisor.libvirt.models.general import QemuNetdevType
 from src.models.controller import VMController
 from src.models.disk import DiskCreate, DiskAttach
 from src.models.enum_model import VideoModel, Architecture, OSType, GraphicsType
-from src.models.general import VMState, MachineType
+from src.models.general import VMState, MachineType, QemuNetdevType
 from src.models.network import VmNetAdapter
 
 

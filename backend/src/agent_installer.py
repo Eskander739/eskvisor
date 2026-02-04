@@ -1,11 +1,10 @@
-import subprocess
 from pathlib import Path
 import threading
 from typing import Callable, Optional
 
 from src.logger_config import DefaultLogger
 from src.tools.cli import CLIControl
-from src.constants import KEY_DIR, TMP_AGENT_DIR, SCRIPT_INSTALL_DIR
+from src.constants import KEY_DIR, TMP_AGENT_DIR, SCRIPT_INSTALL_DIR, SCRIPT_UPDATE_DIR
 from src.constants import KEY_NAME
 
 
@@ -21,13 +20,13 @@ class AgentInstaller:
         self._active_threads = []
 
     def install_agent_via_ssh(
-        self,
-        hostname: str,
-        username: str,
-        agent_package_path: str,
-        password: str | None = None,
-        install_key_if_missing: bool = True,
-        is_update: bool = False,
+            self,
+            hostname: str,
+            username: str,
+            agent_package_path: str,
+            password: str | None = None,
+            install_key_if_missing: bool = True,
+            is_update: bool = False
     ) -> bool:
         """
         Установка агента через SSH с использованием ключа или пароля
@@ -45,9 +44,9 @@ class AgentInstaller:
         """
 
         # Проверяем наличие SSH ключа
-        has_key_access = self._test_ssh_key_access(hostname, username)
-
-        if not has_key_access and install_key_if_missing:
+        has_key_access, info = self._test_ssh_key_access(hostname, username)
+        self.logger.warning(f"Результат проверки SSH ключа: {info}")
+        if not has_key_access and install_key_if_missing and not is_update:
             if not password:
                 self.logger.error(
                     f"Для хоста {hostname} требуется пароль для установки SSH ключа"
@@ -56,22 +55,26 @@ class AgentInstaller:
 
             # Устанавливаем SSH ключ с использованием пароля
             if not self.install_ssh_key_with_password(
-                hostname=hostname, username=username, password=password
+                    hostname=hostname, username=username, password=password
             ):
                 self.logger.error(f"Не удалось установить SSH ключ на {hostname}")
                 return False
 
-        return self._install_agent_with_key(hostname, username, agent_package_path)
+        # Выбираем метод установки в зависимости от типа операции
+        if is_update:
+            return self._update_agent_with_key(hostname, username, agent_package_path)
+        else:
+            return self._install_agent_with_key(hostname, username, agent_package_path)
 
     def install_agent_via_ssh_async(
-        self,
-        hostname: str,
-        username: str,
-        agent_package_path: str,
-        callback: Optional[Callable[[bool, str, Optional[str]], None]] = None,
-        password: str | None = None,
-        install_key_if_missing: bool = True,
-        is_update: bool = False,
+            self,
+            hostname: str,
+            username: str,
+            agent_package_path: str,
+            callback: Optional[Callable[[bool, str, Optional[str]], None]] = None,
+            password: str | None = None,
+            install_key_if_missing: bool = True,
+            is_update: bool = False,
     ) -> threading.Thread:
         """
         Асинхронная установка агента через SSH
@@ -98,12 +101,10 @@ class AgentInstaller:
                     agent_package_path=agent_package_path,
                     password=password,
                     install_key_if_missing=install_key_if_missing,
-                    is_update=is_update,
+                    is_update=is_update
                 )
 
-                error_msg = (
-                    None if success else f"Ошибка установки агента на {hostname}"
-                )
+                error_msg = None if success else f"Ошибка установки агента на {hostname}"
 
                 if callback:
                     callback(success, hostname, error_msg)
@@ -114,7 +115,9 @@ class AgentInstaller:
                     callback(False, hostname, str(e))
 
         thread = threading.Thread(
-            target=install_thread, name=f"AgentInstall-{hostname}", daemon=True
+            target=install_thread,
+            name=f"AgentInstall-{hostname}" if not is_update else f"AgentUpdate-{hostname}",
+            daemon=True
         )
 
         thread.start()
@@ -126,7 +129,7 @@ class AgentInstaller:
         return thread
 
     def install_ssh_key_with_password(
-        self, hostname: str, username: str, password: str, port: int = 22
+            self, hostname: str, username: str, password: str, port: int = 22
     ) -> bool:
         """
         Установка SSH ключа на удаленный хост с использованием пароля
@@ -173,7 +176,9 @@ class AgentInstaller:
             return False
 
         # 3. Проверяем что ключ установлен
-        if self._test_ssh_key_access(hostname, username, port):
+        has_key_access, info = self._test_ssh_key_access(hostname, username)
+        if has_key_access:
+            self.logger.warning(f"Результат проверки SSH ключа: {info}")
             self.logger.info(f"SSH ключ успешно установлен на {hostname}")
             return True
         else:
@@ -181,28 +186,24 @@ class AgentInstaller:
             return False
 
     def _test_ssh_key_access(
-        self, hostname: str, username: str, timeout: int = 5
-    ) -> bool:
+            self, hostname: str, username: str, timeout: int | None = 5
+    ) -> tuple[bool, str]:
         """Тестирование SSH доступа с использованием ключа"""
         try:
-            test_cmd = [
-                "ssh",
-                "-i",
-                str(self.ssh_key_path),
-                f"{username}@{hostname}",
-                'echo "SSH key access OK"',
-            ]
+            test_cmd = f'ssh -i {str(self.ssh_key_path)} -o StrictHostKeyChecking=no -o PasswordAuthentication=no {username}@{hostname} echo "SSH key access OK"'
 
-            result = self.cli.execute(test_cmd, timeout=timeout, return_proc=True)
+            result = self.cli.execute(test_cmd, timeout=timeout, return_proc=True, is_text=True, shell=True)
+            if result.returncode == 0:
+                return result.returncode == 0, result.stdout
+            else:
+                return result.returncode == 0, result.stderr
 
-            return result.returncode == 0
-
-        except (subprocess.TimeoutExpired, Exception) as e:
-            self.logger.debug(f"SSH key test failed for {hostname}: {str(e)}")
-            return False
+        except Exception as err:
+            self.logger.debug(f"SSH key test failed for {hostname}: {str(err)}")
+            return False, str(err)
 
     def _test_password_access(
-        self, hostname: str, username: str, password: str, port: int = 22
+            self, hostname: str, username: str, password: str, port: int = 22
     ) -> bool:
         """Тестирование SSH доступа с использованием пароля"""
         try:
@@ -227,12 +228,12 @@ class AgentInstaller:
 
             return result.returncode == 0
 
-        except (subprocess.TimeoutExpired, Exception) as e:
-            self.logger.debug(f"SSH password test failed for {hostname}: {str(e)}")
+        except Exception as err:
+            self.logger.debug(f"SSH password test failed for {hostname}: {str(err)}")
             return False
 
     def _install_agent_with_key(
-        self, hostname: str, username: str, agent_package_path: str
+            self, hostname: str, username: str, agent_package_path: str
     ) -> bool:
         """
         Установка агента с использованием SSH ключа
@@ -298,12 +299,82 @@ class AgentInstaller:
             self.logger.error(f"Ошибка установки: {result.stderr}")
             return False
 
+    def _update_agent_with_key(
+            self, hostname: str, username: str, agent_package_path: str
+    ) -> bool:
+        """
+        Обновление агента с использованием SSH ключа
+        """
+        if not self.ssh_key_path.exists():
+            self.logger.error(f"SSH ключ не найден: {self.ssh_key_path}")
+            return False
+
+        self.logger.info(f"🔄 Обновление агента на {hostname}...")
+
+        # 1. Копируем новый пакет агента
+        self.logger.info(f"📦 Копирование нового агента на {hostname}...")
+
+        scp_command = [
+            "scp",
+            "-i",
+            str(self.ssh_key_path),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            agent_package_path,
+            f"{username}@{hostname}:{TMP_AGENT_DIR}",
+        ]
+
+        result = self.cli.execute(scp_command, return_proc=True)
+
+        if result.returncode != 0:
+            self.logger.error(f"Ошибка копирования нового агента: {result.stderr}")
+            return False
+
+        self.logger.info("Новый агент скопирован")
+
+        # 2. Запускаем скрипт обновления на удаленном хосте
+        self.logger.info(f"Запуск скрипта обновления на {hostname}...")
+
+        update_commands = [
+            f"tar -xzf {TMP_AGENT_DIR} -C /tmp",
+            f"mv /tmp/eskvisor /tmp/eskvisor_new",
+            f"bash {SCRIPT_UPDATE_DIR}",
+            f"rm -f {TMP_AGENT_DIR}",
+            "rm -rf /tmp/eskvisor_new",
+        ]
+
+        ssh_command = [
+            "ssh",
+            "-i",
+            str(self.ssh_key_path),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            f"{username}@{hostname}",
+            " && ".join(update_commands),
+        ]
+
+        result = self.cli.execute(ssh_command, return_proc=True, timeout=None)
+
+        if result.returncode == 0:
+            self.logger.info(f"Агент успешно обновлен на {hostname}")
+
+            # Проверяем статус службы после обновления
+            self._check_agent_status(hostname, username)
+            return True
+        else:
+            self.logger.error(f"Ошибка обновления: {result.stderr}")
+            return False
+
     def _install_agent_with_key_async(
-        self,
-        hostname: str,
-        username: str,
-        agent_package_path: str,
-        callback: Optional[Callable[[bool, str], None]] = None,
+            self,
+            hostname: str,
+            username: str,
+            agent_package_path: str,
+            callback: Optional[Callable[[bool, str], None]] = None
     ) -> threading.Thread:
         """
         Асинхронная установка агента с использованием SSH ключа в отдельном потоке
@@ -321,20 +392,18 @@ class AgentInstaller:
         def install_in_thread():
             """Функция, выполняемая в отдельном потоке"""
             try:
-                success = self._install_agent_with_key(
-                    hostname, username, agent_package_path
-                )
+                success = self._install_agent_with_key(hostname, username, agent_package_path)
                 if callback:
                     callback(success, hostname)
             except Exception as e:
-                self.logger.error(
-                    f"Ошибка при асинхронной установке на {hostname}: {e}"
-                )
+                self.logger.error(f"Ошибка при асинхронной установке на {hostname}: {e}")
                 if callback:
                     callback(False, hostname)
 
         thread = threading.Thread(
-            target=install_in_thread, name=f"AgentInstall-{hostname}", daemon=True
+            target=install_in_thread,
+            name=f"AgentInstall-{hostname}",
+            daemon=True
         )
 
         thread.start()
@@ -371,7 +440,7 @@ class AgentInstaller:
             "sudo systemctl status libvirt-agent --no-pager",
         ]
 
-        result = subprocess.run(check_command, capture_output=True, text=True)
+        result = self.cli.execute(check_command, return_proc=True)
 
         if result.returncode == 0:
             self.logger.info("Статус агента:")

@@ -1,5 +1,7 @@
 import os
 import stat
+from pathlib import Path
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -71,8 +73,10 @@ class SSHKeyGenerator:
 
     def generate_and_save(self, passphrase=None):
         """Генерация и сохранение ключей"""
-        private_pem, public_openssh = self.generate_ed25519_key(passphrase)
-        return self.save_keys(private_pem, public_openssh)
+        if not Path(self.private_key_path).exists():
+            private_pem, public_openssh = self.generate_ed25519_key(passphrase)
+            return self.save_keys(private_pem, public_openssh)
+        return None
 
 
 # Пример использования

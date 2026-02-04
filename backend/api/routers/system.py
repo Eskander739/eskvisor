@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from api.dependencies import get_agent_installer, get_redis_service, get_users_db
 from src.constants import ApiVersion, DEFAULT_AGENT_DIR
-from src.models.agent import ConnectHostRequest
+from src.models.agent import ConnectHostRequest, UpdateAgentRequest
 from src.models.error import Message
 from src.models.general import HealthInfo, InstallAgentResponse
 
@@ -17,7 +17,7 @@ router = APIRouter(
 async def install_agent(
     connect_host: ConnectHostRequest, agent_installer=Depends(get_agent_installer)
 ):
-    agent_installer.install_agent_via_ssh(
+    agent_installer.install_agent_via_ssh_async(
         hostname=connect_host.ip,
         agent_package_path=(
             connect_host.agent_file
@@ -36,9 +36,9 @@ async def install_agent(
 
 @router.post(f"/update-agent")
 async def update_agent(
-    connect_host: ConnectHostRequest, agent_installer=Depends(get_agent_installer)
+    connect_host: UpdateAgentRequest, agent_installer=Depends(get_agent_installer)
 ):
-    agent_installer.install_agent_via_ssh(
+    agent_installer.install_agent_via_ssh_async(
         hostname=connect_host.ip,
         agent_package_path=(
             connect_host.agent_file
@@ -46,7 +46,7 @@ async def update_agent(
             else DEFAULT_AGENT_DIR
         ),
         username=connect_host.admin,
-        password=connect_host.password,
+        is_update=True,
     )
     return InstallAgentResponse(
         ip_address=connect_host.ip,

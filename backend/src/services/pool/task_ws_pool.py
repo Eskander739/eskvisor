@@ -49,7 +49,7 @@ class TaskWebsocketPool:
             connections_queue = node_conn.connections_queue
             for _ in range(self.connection_count):
                 connection = await connections_queue.get()
-                connection.close()
+                await connection.close()
 
     async def send_json(self, cluster_id: int, node_id: int, data: dict | str):
         for node_connection in self.__connections:

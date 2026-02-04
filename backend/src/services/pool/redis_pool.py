@@ -35,7 +35,7 @@ class RedisPoolManager:
     async def close_all(self):
         for _ in range(self.connection_count):
             connection = await self.__connections.get()
-            connection.close()
+            await connection.close()
 
     @asynccontextmanager
     async def get_connection(self):

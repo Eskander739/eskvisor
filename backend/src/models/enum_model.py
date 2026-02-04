@@ -1,4 +1,4 @@
-from enum_model import Enum
+from enum import Enum
 
 
 class Architecture(str, Enum):
@@ -59,19 +59,6 @@ class GraphicsType(str, Enum):
     SDL = "sdl"
     GTK = "gtk"
     NONE = "none"
-
-
-class ControllerType(str, Enum):
-    """Типы контроллеров"""
-
-    USB = "usb"
-    PCI = "pci"
-    SCSI = "scsi"
-    IDE = "ide"
-    SATA = "sata"
-    VIRTIO_SERIAL = "virtio-serial"
-    CCID = "ccid"
-    FDC = "fdc"
 
 
 class VideoModel(str, Enum):

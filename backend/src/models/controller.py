@@ -1,6 +1,19 @@
+from enum import Enum
+
 from pydantic import BaseModel, field_validator
 
-from agent.client.hypervisor.libvirt.models.enum import ControllerType
+
+class ControllerType(str, Enum):
+    """Типы контроллеров"""
+
+    USB = "usb"
+    PCI = "pci"
+    SCSI = "scsi"
+    IDE = "ide"
+    SATA = "sata"
+    VIRTIO_SERIAL = "virtio-serial"
+    CCID = "ccid"
+    FDC = "fdc"
 
 
 class VMController(BaseModel):

@@ -9,6 +9,7 @@ KEY_NAME = "eskvisor_master_ed25519"
 DEFAULT_AGENT_DIR = "/home/eska/eskvisor_agent.tar.gz"
 TMP_AGENT_DIR = "/tmp/eskvisor_agent_package.tar.gz"
 SCRIPT_INSTALL_DIR = "/opt/eskvisor/agent/install_agent.sh"
+SCRIPT_UPDATE_DIR = "/tmp/eskvisor_new/agent/update_agent.sh"
 PROD_ENV = "/etc/eskvisor/backend.env"
 
 # DB_POOL_SIZE = 15  # для прода

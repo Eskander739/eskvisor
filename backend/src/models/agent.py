@@ -9,3 +9,9 @@ class ConnectHostRequest(BaseModel):
     admin: str
     password: str | None = None
     agent_file: str | None = None
+
+
+class UpdateAgentRequest(BaseModel):
+    ip: str
+    admin: str
+    agent_file: str | None = None

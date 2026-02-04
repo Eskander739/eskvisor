@@ -1,4 +1,4 @@
-from enum_model import Enum
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel
@@ -45,6 +45,13 @@ class VMState(Enum):
     SHUTOFF = 5  # Выключена
     CRASHED = 6  # Аварийно завершена
     PMSUSPENDED = 7  # Приостановлена (PM)
+
+
+class QemuNetdevType(str, Enum):
+    USER = "user"
+    TAP = "tap"
+    BRIDGE = "bridge"
+    SOCKET = "socket"
 
 
 class MachineType(Enum):

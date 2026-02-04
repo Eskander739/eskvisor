@@ -1,7 +1,6 @@
 import random
 from datetime import datetime
 from enum import Enum
-from typing import Self
 
 from pydantic import (
     BaseModel,
@@ -118,12 +117,6 @@ class Disk(BaseModel):
 
         return self
 
-    @field_validator("target_dev")
-    def validate_target_dev_format(cls, v):
-        """Валидация формата целевого устройства"""
-
-        return v
-
     # Методы
     def is_attached(self) -> bool:
         """Проверка, подключен ли диск к ВМ"""
@@ -133,33 +126,12 @@ class Disk(BaseModel):
         """Проверка, находится ли диск в пуле"""
         return self.type == DiskType.POOL_DISK and self.pool is not None
 
-    def get_effective_size_gb(self) -> float:
-        """Получить размер в GB (вычисляет если не указан)"""
-        if self.capacity_gb is not None:
-            return self.capacity_gb
-        elif self.capacity_bytes is not None:
-            return round(self.capacity_bytes / (1024**3), 2)
-        return 0.0
-
-    def get_allocation_percentage(self) -> float:
-        """Получить процент использования диска"""
-        if self.capacity_bytes and self.allocation_bytes:
-            if self.capacity_bytes > 0:
-                return round((self.allocation_bytes / self.capacity_bytes) * 100, 1)
-        return 0.0
-
     def supports_snapshots(self) -> bool:
         """Проверка поддержки снапшотов"""
         return self.format in {
             DiskFormat.QCOW2,
             DiskFormat.RAW,
         }
-
-    def is_sparse(self) -> bool:
-        """Проверка, является ли диск разреженным"""
-        if self.allocation_bytes and self.capacity_bytes:
-            return self.allocation_bytes < self.capacity_bytes
-        return False
 
     @field_validator("format")
     def validate_format(cls, v):
@@ -236,7 +208,7 @@ class DiskQuery(BaseModel):
     model_config = ConfigDict(validate_default=True)
 
     @model_validator(mode="after")
-    def validate_query(self) -> Self:
+    def validate_query(self):
         """Валидация запроса"""
         if self.min_size_gb is not None and self.max_size_gb is not None:
             if self.min_size_gb > self.max_size_gb:

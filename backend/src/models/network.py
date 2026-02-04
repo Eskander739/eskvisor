@@ -10,7 +10,7 @@ from pydantic import (
     model_validator,
 )
 
-from agent.client.hypervisor.libvirt.models.enum import NetworkModelEnum, NetworkType
+from src.models.enum_model import NetworkModelEnum, NetworkType
 
 
 class DNSForwarder(BaseModel):

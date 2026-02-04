@@ -24,6 +24,9 @@ from src.services.ssh_keygen import SSHKeyGenerator
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global redis_pool_instance
+    global websocket_pool_instance
+    global db_pool_instance
 
     db_pool_instance = DBPool()
     await db_pool_instance.create_connections()
@@ -31,7 +34,6 @@ async def lifespan(app: FastAPI):
 
     websocket_pool_instance = TaskWebsocketPool(db_pool_instance)
     await websocket_pool_instance.create_connections()
-
     redis_pool_instance = RedisPoolManager()
     await redis_pool_instance.create_connections()
 
@@ -83,6 +85,8 @@ async def check_token(
     2. Что токен еще актуален
     3. Что токен имеется в Redis
     """
+    jwt_service = await jwt_service.dependency()
+    redis_service = await redis_service.dependency()
     if request.method == "OPTIONS":
         return await call_next(request)
     # Пропускаем проверку токена для эндпоинтов, которые не требуют аутентификации

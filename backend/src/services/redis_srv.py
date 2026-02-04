@@ -37,7 +37,7 @@ class RedisJWTManager:
             return False
 
     async def get_redis_connection(self):
-        async with self.redis_pool.get_connection as conn:
+        async with self.redis_pool.get_connection() as conn:
             return conn
 
     # _________________________________________[JWT METHODS]_________________________________________
