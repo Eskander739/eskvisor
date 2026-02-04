@@ -46,11 +46,13 @@ class LoadNFSStorages(BaseModel):
         default_factory=list, description="Список NFS хранилищ для монтирования"
     )
 
+
 class VNCConnectInfo(DefaultMessage):
     vm_name: str
     vnc_port: int
     ws_port: int
     ws_url: str
+
 
 class VNCStatusInfo(DefaultMessage):
     vm_name: str

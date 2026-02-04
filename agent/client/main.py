@@ -42,6 +42,7 @@ async def add_security_headers(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
+
 @app.get("/vnc-test", response_class=HTMLResponse)
 async def get_vnc_test_page(request: Request):
     """Страница для тестирования VNC WebSocket подключения"""
@@ -52,6 +53,7 @@ async def get_vnc_test_page(request: Request):
 async def get_dashboard(request: Request):
     """Для тестирования управления задачами"""
     return templates.TemplateResponse("dashboard.html", {"request": request})
+
 
 # Подключаем роутеры
 app.include_router(ws.router)

@@ -10,7 +10,7 @@ class DefaultMessage(BaseModel):
     note: str | None = None
 
 
-class ErrorMessage(Enum):
+class Message(Enum):
     user_not_found = "Пользователь не найден"
     user_is_not_registered = "Пользователя не зарегистрирован"
     user_is_not_updated = "Пользователь не был обновлен"
@@ -34,5 +34,7 @@ class ErrorMessage(Enum):
     token_not_found = "Токен не найден"
     token_expired = "Срок токена истек"
     token_invalid = "Некорректный токен"
-    incorrect_json_format = "Incorrect JSON format"
-    internal_error = "Internal error"
+    incorrect_json_format = "Некорректный формат JSON"
+    internal_error = "Внутренняя ошибка"
+    vm_not_found = "Виртуальная машина не найдена"
+    agent_installation_started = "Установка агента запущена"

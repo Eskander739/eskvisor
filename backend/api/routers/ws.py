@@ -7,7 +7,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from api.dependencies import get_clusters_db, get_logger
 from src.constants import ApiVersion
-from src.models.error import DefaultMessage, ErrorMessage
+from src.models.error import DefaultMessage, Message
 from src.models.general import NodeWebsocketConnection, SystemStatRequest
 
 router = APIRouter(
@@ -57,7 +57,7 @@ async def task(
                 await websocket.send_json(
                     DefaultMessage(
                         request_id=str(uuid.uuid4()),
-                        code=ErrorMessage.incorrect_json_format.value,
+                        code=Message.incorrect_json_format.value,
                         success=False,
                         note=str(err),
                     ).model_dump_json()
@@ -67,10 +67,14 @@ async def task(
 
     except Exception as err:
         logger.error(f"Ошибка в WebSocket: {err}")
-        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
-                                                 code=ErrorMessage.internal_error.name,
-                                                 success=False,
-                                                 note=str(err)).model_dump())
+        await websocket.send_json(
+            DefaultMessage(
+                request_id=str(uuid.uuid4()),
+                code=Message.internal_error.name,
+                success=False,
+                note=str(err),
+            ).model_dump()
+        )
 
 
 @router.websocket(f"/notification")
@@ -80,7 +84,7 @@ async def notification(
     logger=Depends(get_logger),
 ):
     await websocket.accept()
-    logger.info("Новое WebSocket подключение" )
+    logger.info("Новое WebSocket подключение")
     uri_startswith = "ws://{}/ws/notification"
     local_node_connections = []
     for cluster in clusters_db.get_cluster_list():
@@ -111,7 +115,7 @@ async def notification(
                 await websocket.send_json(
                     DefaultMessage(
                         request_id=str(uuid.uuid4()),
-                        code=ErrorMessage.incorrect_json_format.value,
+                        code=Message.incorrect_json_format.value,
                         success=False,
                         note=str(err),
                     ).model_dump_json()
@@ -120,10 +124,14 @@ async def notification(
         logger.info("WebSocket отключен")
     except Exception as err:
         logger.error(f"Ошибка в WebSocket: {err}")
-        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
-                                                 code=ErrorMessage.internal_error.name,
-                                                 success=False,
-                                                 note=str(err)).model_dump())
+        await websocket.send_json(
+            DefaultMessage(
+                request_id=str(uuid.uuid4()),
+                code=Message.internal_error.name,
+                success=False,
+                note=str(err),
+            ).model_dump()
+        )
 
 
 @router.websocket("/vnc/{cluster_id}/{node_id}/{vm_name}")
@@ -148,10 +156,14 @@ async def vnc(
                     )
             except Exception as err:
                 logger.error(f"Ошибка в подключении к VNC: {err}")
-                await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
-                                                         code=ErrorMessage.internal_error.name,
-                                                         success=False,
-                                                         note=str(err)))
+                await websocket.send_json(
+                    DefaultMessage(
+                        request_id=str(uuid.uuid4()),
+                        code=Message.internal_error.name,
+                        success=False,
+                        note=str(err),
+                    )
+                )
 
     try:
         while True:
@@ -163,7 +175,7 @@ async def vnc(
                 await websocket.send_json(
                     DefaultMessage(
                         request_id=str(uuid.uuid4()),
-                        code=ErrorMessage.incorrect_json_format.value,
+                        code=Message.incorrect_json_format.value,
                         success=False,
                         note=str(err),
                     ).model_dump_json()
@@ -172,10 +184,14 @@ async def vnc(
         logger.info("WebSocket отключен")
     except Exception as err:
         logger.error(f"Ошибка в WebSocket: {err}")
-        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
-                                                 code=ErrorMessage.internal_error.name,
-                                                 success=False,
-                                                 note=str(err)).model_dump())
+        await websocket.send_json(
+            DefaultMessage(
+                request_id=str(uuid.uuid4()),
+                code=Message.internal_error.name,
+                success=False,
+                note=str(err),
+            ).model_dump()
+        )
 
 
 @router.websocket(f"/system-stats")
@@ -221,7 +237,7 @@ async def system_stats(
                 await websocket.send_json(
                     DefaultMessage(
                         request_id=str(uuid.uuid4()),
-                        code=ErrorMessage.incorrect_json_format.value,
+                        code=Message.incorrect_json_format.value,
                         success=False,
                         note=str(err),
                     ).model_dump_json()
@@ -230,8 +246,11 @@ async def system_stats(
         logger.info("WebSocket отключен")
     except Exception as err:
         logger.error(f"Ошибка в WebSocket: {err}")
-        await websocket.send_json(DefaultMessage(request_id=str(uuid.uuid4()),
-                                                 code=ErrorMessage.internal_error.name,
-                                                 success=False,
-                                                 note=str(err)).model_dump())
-
+        await websocket.send_json(
+            DefaultMessage(
+                request_id=str(uuid.uuid4()),
+                code=Message.internal_error.name,
+                success=False,
+                note=str(err),
+            ).model_dump()
+        )

@@ -266,7 +266,6 @@ def get_quick_stats():
     }
 
 
-
 async def check_vnc_service(vm_name: str, vnc_port: int) -> tuple[bool, str]:
     """
     Проверка доступности VNC сервиса для VM
@@ -281,9 +280,12 @@ async def check_vnc_service(vm_name: str, vnc_port: int) -> tuple[bool, str]:
     try:
         # Используем netcat или telnet для проверки порта
         result = await asyncio.create_subprocess_exec(
-            'nc', '-z', 'localhost', str(vnc_port),
+            "nc",
+            "-z",
+            "localhost",
+            str(vnc_port),
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
         await result.communicate()
 

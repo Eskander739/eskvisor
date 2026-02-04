@@ -51,18 +51,23 @@ class TaskWebsocketPool:
                 connection = await connections_queue.get()
                 connection.close()
 
-
-    async def send_json(self, cluster_id: int, node_id: int, data: dict):
+    async def send_json(self, cluster_id: int, node_id: int, data: dict | str):
         for node_connection in self.__connections:
-            if node_connection.cluster_id == cluster_id and node_connection.node_id == node_id:
+            if (
+                node_connection.cluster_id == cluster_id
+                and node_connection.node_id == node_id
+            ):
                 connection = await node_connection.connections_queue.get()
 
                 if connection.state in (State.CLOSED, State.CLOSING):
                     connection = await websockets.connect(
-                            self.uri_startswith.format(node_connection.ip_address)
-                        )
+                        self.uri_startswith.format(node_connection.ip_address)
+                    )
                 try:
-                    await connection.send(orjson.dumps(data))
+                    if isinstance(data, str):
+                        await connection.send(data)
+                    else:
+                        await connection.send(orjson.dumps(data))
                     await node_connection.connections_queue.put(connection)
                 except ConnectionClosed:
                     if connection.state not in (State.CLOSED, State.CLOSING):
@@ -75,6 +80,7 @@ class TaskWebsocketPool:
 
                 return
 
+
 # async def main():
 #     pool = TaskWebsocketPool()
 #     await pool._create_connections()
@@ -82,5 +88,3 @@ class TaskWebsocketPool:
 #     # pool = TaskWebsocketPool()
 #     asyncio.run(main())
 #     # pool.get_connection(1, 2)
-
-

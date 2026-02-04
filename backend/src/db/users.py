@@ -216,6 +216,7 @@ class UsersDB:
         async with self.db_pool.get_connection() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+
 #
 # async def main():
 #     load_dotenv("/home/eska/eskvisor/backend/.env")

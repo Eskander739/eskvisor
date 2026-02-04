@@ -13,7 +13,7 @@ from api.dependencies import (
     get_jwt_service,
 )
 from src.constants import ApiVersion
-from src.models.error import ErrorMessage, DefaultMessage
+from src.models.error import Message, DefaultMessage
 from src.models.user import UserAuth
 
 
@@ -68,7 +68,7 @@ async def login(
     if user is None:
         error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
-            code=ErrorMessage.user_not_found.name,
+            code=Message.user_not_found.name,
             success=False,
         ).model_dump()
         logger.info(
@@ -82,7 +82,7 @@ async def login(
         error_model = (
             DefaultMessage(
                 request_id=str(uuid.uuid4()),
-                code=ErrorMessage.wrong_password.name,
+                code=Message.wrong_password.name,
                 success=False,
             ).model_dump(),
         )

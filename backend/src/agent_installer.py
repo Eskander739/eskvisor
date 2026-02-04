@@ -1,5 +1,7 @@
 import subprocess
 from pathlib import Path
+import threading
+from typing import Callable, Optional
 
 from src.logger_config import DefaultLogger
 from src.tools.cli import CLIControl
@@ -16,6 +18,7 @@ class AgentInstaller:
         self.ssh_key_path = Path(ssk_key).expanduser()
         self.public_key_path = Path(f"{ssk_key}.pub").expanduser()
         self.cli = CLIControl()
+        self._active_threads = []
 
     def install_agent_via_ssh(
         self,
@@ -24,6 +27,7 @@ class AgentInstaller:
         agent_package_path: str,
         password: str | None = None,
         install_key_if_missing: bool = True,
+        is_update: bool = False,
     ) -> bool:
         """
         Установка агента через SSH с использованием ключа или пароля
@@ -34,6 +38,7 @@ class AgentInstaller:
             agent_package_path: путь к пакету агента на локальной машине
             password: пароль для SSH (если ключ еще не установлен)
             install_key_if_missing: установить ключ если его нет
+            is_update: является ли запрос обновлением агента
 
         Returns:
             bool: True если установка успешна
@@ -57,6 +62,68 @@ class AgentInstaller:
                 return False
 
         return self._install_agent_with_key(hostname, username, agent_package_path)
+
+    def install_agent_via_ssh_async(
+        self,
+        hostname: str,
+        username: str,
+        agent_package_path: str,
+        callback: Optional[Callable[[bool, str, Optional[str]], None]] = None,
+        password: str | None = None,
+        install_key_if_missing: bool = True,
+        is_update: bool = False,
+    ) -> threading.Thread:
+        """
+        Асинхронная установка агента через SSH
+
+        Args:
+            hostname: хост для установки
+            username: пользователь на целевом хосте
+            agent_package_path: путь к пакету агента на локальной машине
+            callback: функция обратного вызова (success: bool, hostname: str, error: str | None)
+            password: пароль для SSH (если ключ еще не установлен)
+            install_key_if_missing: установить ключ если его нет
+            is_update: является ли запрос обновлением агента
+
+        Returns:
+            threading.Thread: поток выполнения установки
+        """
+
+        def install_thread():
+            """Внутренняя функция для запуска в потоке"""
+            try:
+                success = self.install_agent_via_ssh(
+                    hostname=hostname,
+                    username=username,
+                    agent_package_path=agent_package_path,
+                    password=password,
+                    install_key_if_missing=install_key_if_missing,
+                    is_update=is_update,
+                )
+
+                error_msg = (
+                    None if success else f"Ошибка установки агента на {hostname}"
+                )
+
+                if callback:
+                    callback(success, hostname, error_msg)
+
+            except Exception as e:
+                self.logger.error(f"Ошибка в потоке установки для {hostname}: {str(e)}")
+                if callback:
+                    callback(False, hostname, str(e))
+
+        thread = threading.Thread(
+            target=install_thread, name=f"AgentInstall-{hostname}", daemon=True
+        )
+
+        thread.start()
+        self._active_threads.append(thread)
+
+        # Очистка завершенных потоков
+        self._cleanup_finished_threads()
+
+        return thread
 
     def install_ssh_key_with_password(
         self, hostname: str, username: str, password: str, port: int = 22
@@ -230,6 +297,67 @@ class AgentInstaller:
         else:
             self.logger.error(f"Ошибка установки: {result.stderr}")
             return False
+
+    def _install_agent_with_key_async(
+        self,
+        hostname: str,
+        username: str,
+        agent_package_path: str,
+        callback: Optional[Callable[[bool, str], None]] = None,
+    ) -> threading.Thread:
+        """
+        Асинхронная установка агента с использованием SSH ключа в отдельном потоке
+
+        Args:
+            hostname: целевой хост
+            username: пользователь на целевом хосте
+            agent_package_path: путь к пакету агента
+            callback: функция обратного вызова (success: bool, hostname: str)
+
+        Returns:
+            threading.Thread: поток выполнения установки
+        """
+
+        def install_in_thread():
+            """Функция, выполняемая в отдельном потоке"""
+            try:
+                success = self._install_agent_with_key(
+                    hostname, username, agent_package_path
+                )
+                if callback:
+                    callback(success, hostname)
+            except Exception as e:
+                self.logger.error(
+                    f"Ошибка при асинхронной установке на {hostname}: {e}"
+                )
+                if callback:
+                    callback(False, hostname)
+
+        thread = threading.Thread(
+            target=install_in_thread, name=f"AgentInstall-{hostname}", daemon=True
+        )
+
+        thread.start()
+        self._active_threads.append(thread)
+
+        # Очистка завершенных потоков
+        self._cleanup_finished_threads()
+
+        return thread
+
+    def _cleanup_finished_threads(self):
+        """Очистка списка завершенных потоков"""
+        self._active_threads = [t for t in self._active_threads if t.is_alive()]
+
+    def wait_for_all_installations(self, timeout: Optional[float] = None):
+        """
+        Ожидание завершения всех запущенных установок
+
+        Args:
+            timeout: максимальное время ожидания в секундах
+        """
+        for thread in self._active_threads:
+            thread.join(timeout)
 
     def _check_agent_status(self, hostname, username):
         """Проверка статуса установленного агента"""

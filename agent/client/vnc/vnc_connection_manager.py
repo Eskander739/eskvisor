@@ -24,7 +24,9 @@ class VNCWebSocketProxy:
         self.running = False
         self.ws_port = None
 
-    def start_proxy(self, ws_port: int = 6080, target_host: str = None, target_port: int = None):
+    def start_proxy(
+        self, ws_port: int = 6080, target_host: str = None, target_port: int = None
+    ):
         """
         Запуск WebSocket прокси для VNC
 
@@ -51,10 +53,12 @@ class VNCWebSocketProxy:
 
         # Формируем команду для websockify
         cmd = [
-            sys.executable, '-m', 'websockify',
-            '--verbose',
+            sys.executable,
+            "-m",
+            "websockify",
+            "--verbose",
             str(ws_port),
-            f'{target_host}:{target_port}'
+            f"{target_host}:{target_port}",
         ]
 
         logger.info(f"Запуск websockify: {' '.join(cmd)}")
@@ -69,7 +73,7 @@ class VNCWebSocketProxy:
                     stderr=subprocess.PIPE,
                     text=True,
                     bufsize=1,
-                    universal_newlines=True
+                    universal_newlines=True,
                 )
 
                 fcntl.fcntl(self.process.stdout, fcntl.F_SETFL, os.O_NONBLOCK)
@@ -78,7 +82,9 @@ class VNCWebSocketProxy:
                 while self.running and self.process.poll() is None:
                     try:
                         # Читаем stdout
-                        ready = select.select([self.process.stdout, self.process.stderr], [], [], 0.1)[0]
+                        ready = select.select(
+                            [self.process.stdout, self.process.stderr], [], [], 0.1
+                        )[0]
                         for stream in ready:
                             line = stream.readline()
                             if line:
@@ -95,7 +101,9 @@ class VNCWebSocketProxy:
                 if stderr:
                     logger.warning(f"websockify stderr: {stderr}")
 
-                logger.info(f"Websockify процесс завершился с кодом: {self.process.returncode}")
+                logger.info(
+                    f"Websockify процесс завершился с кодом: {self.process.returncode}"
+                )
 
             except Exception as e:
                 logger.error(f"Ошибка в WebSocket прокси: {e}")
@@ -110,7 +118,8 @@ class VNCWebSocketProxy:
         # Проверяем, запустился ли процесс
         if self.process and self.process.poll() is None:
             logger.info(
-                f"Запущен VNC WebSocket прокси на порту {ws_port}, перенаправление на {target_host}:{target_port}")
+                f"Запущен VNC WebSocket прокси на порту {ws_port}, перенаправление на {target_host}:{target_port}"
+            )
             return True
         else:
             logger.error("Не удалось запустить WebSocket прокси")
@@ -122,7 +131,7 @@ class VNCWebSocketProxy:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
-            result = sock.connect_ex(('localhost', port))
+            result = sock.connect_ex(("localhost", port))
             sock.close()
             return result != 0
         except Exception:
@@ -141,6 +150,7 @@ class VNCWebSocketProxy:
         if self.process:
             try:
                 import signal
+
                 self.process.send_signal(signal.SIGTERM)
                 self.process.wait(timeout=5)
                 logger.info("VNC WebSocket прокси остановлен")
@@ -157,8 +167,14 @@ class VNCWebSocketProxy:
             "running": self.running and self.process and self.process.poll() is None,
             "vnc_target": f"{self.vnc_host}:{self.vnc_port}",
             "ws_port": self.ws_port,
-            "thread_alive": self.server_thread and self.server_thread.is_alive() if self.server_thread else False,
-            "process_alive": self.process and self.process.poll() is None if self.process else False
+            "thread_alive": (
+                self.server_thread and self.server_thread.is_alive()
+                if self.server_thread
+                else False
+            ),
+            "process_alive": (
+                self.process and self.process.poll() is None if self.process else False
+            ),
         }
 
 
@@ -188,7 +204,9 @@ class VNCConnectionManager:
             else:
                 # Если не нашли доступный порт, используем 5900
                 self.vm_vnc_ports[vm_name] = 5900
-                logger.warning(f"Не удалось найти доступный VNC порт для {vm_name}, используем 5900")
+                logger.warning(
+                    f"Не удалось найти доступный VNC порт для {vm_name}, используем 5900"
+                )
 
         return self.vm_vnc_ports[vm_name]
 
@@ -197,7 +215,7 @@ class VNCConnectionManager:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
-            result = sock.connect_ex(('localhost', port))
+            result = sock.connect_ex(("localhost", port))
             sock.close()
             return result == 0  # Если порт доступен (VNC сервер слушает)
         except Exception:

@@ -11,7 +11,7 @@ from api.routers import users, system, vm
 from src.constants import ApiVersion, PROD_ENV
 from src.globals import redis_pool_instance, websocket_pool_instance, db_pool_instance
 from src.logger_config import DefaultLogger
-from src.models.error import ErrorMessage, DefaultMessage
+from src.models.error import Message, DefaultMessage
 from src.services.jwt import JWTService
 from src.services.pool.db_pool import DBPool
 from src.services.pool.redis_pool import RedisPoolManager
@@ -64,6 +64,7 @@ app.add_middleware(
 async def get_main_redis_service() -> RedisJWTManager:
     return RedisJWTManager(redis_pool_instance)
 
+
 async def get_main_jwt_service() -> JWTService:
     return JWTService()
 
@@ -97,7 +98,7 @@ async def check_token(
     if not access_token:
         error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
-            code=ErrorMessage.token_not_found.name,
+            code=Message.token_not_found.name,
             success=False,
         ).model_dump()
         logger.info(
@@ -109,7 +110,7 @@ async def check_token(
     if not jwt_service.validate_token(access_token):
         error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
-            code=ErrorMessage.token_expired.name,
+            code=Message.token_expired.name,
             success=False,
         ).model_dump()
         logger.info(
@@ -125,7 +126,7 @@ async def check_token(
     if not await redis_service.is_token_valid(access_token):
         error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
-            code=ErrorMessage.token_invalid.name,
+            code=Message.token_invalid.name,
             success=False,
         ).model_dump()
         logger.info(

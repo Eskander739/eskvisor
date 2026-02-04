@@ -29,7 +29,6 @@ class DBPool:
         self.connection_count = connection_count
         self.__connections = asyncio.Queue()
 
-
     async def create_connections(self):
         for _ in range(self.connection_count):
             session = self.async_session()
@@ -52,4 +51,3 @@ class DBPool:
         connection = await self.__connections.get()
         yield connection
         await self.__connections.put(connection)
-

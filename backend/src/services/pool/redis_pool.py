@@ -20,16 +20,17 @@ class RedisPoolManager:
         self.connection_count = connection_count
         self.__connections = asyncio.Queue()
 
-
     async def create_connections(self):
         for _ in range(self.connection_count):
-            await self.__connections.put(await redis.Redis(
-                host=self.host,
-                port=int(self.port),
-                db=self.db,
-                # password=self.password,
-                decode_responses=True,  # Автоматическое декодирование в строки
-            ))
+            await self.__connections.put(
+                await redis.Redis(
+                    host=self.host,
+                    port=int(self.port),
+                    db=self.db,
+                    # password=self.password,
+                    decode_responses=True,  # Автоматическое декодирование в строки
+                )
+            )
 
     async def close_all(self):
         for _ in range(self.connection_count):
@@ -41,4 +42,3 @@ class RedisPoolManager:
         connection = await self.__connections.get()
         yield connection
         await self.__connections.put(connection)
-

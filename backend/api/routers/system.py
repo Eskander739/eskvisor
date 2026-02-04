@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
 from api.dependencies import get_agent_installer, get_redis_service, get_users_db
 from src.constants import ApiVersion, DEFAULT_AGENT_DIR
 from src.models.agent import ConnectHostRequest
-from src.models.general import HealthInfo
+from src.models.error import Message
+from src.models.general import HealthInfo, InstallAgentResponse
 
 router = APIRouter(
     prefix=f"{ApiVersion.V0}/system",
@@ -12,7 +13,7 @@ router = APIRouter(
 )
 
 
-@router.post(f"/install-agent")
+@router.post(f"/install-agent", status_code=status.HTTP_200_OK)
 async def install_agent(
     connect_host: ConnectHostRequest, agent_installer=Depends(get_agent_installer)
 ):
@@ -26,13 +27,32 @@ async def install_agent(
         username=connect_host.admin,
         password=connect_host.password,
     )
+    return InstallAgentResponse(
+        ip_address=connect_host.ip,
+        username=connect_host.admin,
+        code=Message.agent_installation_started.name,
+    )
 
 
 @router.post(f"/update-agent")
 async def update_agent(
     connect_host: ConnectHostRequest, agent_installer=Depends(get_agent_installer)
 ):
-    raise NotImplementedError
+    agent_installer.install_agent_via_ssh(
+        hostname=connect_host.ip,
+        agent_package_path=(
+            connect_host.agent_file
+            if connect_host.agent_file is not None
+            else DEFAULT_AGENT_DIR
+        ),
+        username=connect_host.admin,
+        password=connect_host.password,
+    )
+    return InstallAgentResponse(
+        ip_address=connect_host.ip,
+        username=connect_host.admin,
+        code=Message.agent_installation_started.name,
+    )
 
 
 @router.get(f"/health")

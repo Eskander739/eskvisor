@@ -10,7 +10,7 @@ router = APIRouter(
 
 
 @router.get("/health")
-async def health_check(queue_manager = Depends(get_queue_manager_service)):
+async def health_check(queue_manager=Depends(get_queue_manager_service)):
     """Проверка здоровья сервера"""
     return JSONResponse(
         {
