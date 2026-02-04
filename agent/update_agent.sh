@@ -401,8 +401,8 @@ verify_agent_update() {
     local services_to_check=(
         "eskvisor.service"
         "eskvisor-task-manager.service"
-#        "cgroup-state.service"
-#        "cgroup-state-timer.timer"
+        "cgroup-state.service"
+        "cgroup-state-timer.timer"
         "nginx"
         "redis"
     )

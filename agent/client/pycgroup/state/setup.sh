@@ -49,8 +49,8 @@ chmod 755 /usr/local/bin/*.sh
 
 # 4. Копируем systemd сервисы
 echo "Настройка systemd сервисов..."
-cp cgroup-state.service /etc/systemd/system/
-cp cgroup-state-timer.timer /etc/systemd/system/
+cp /opt/eskvisor/agent/client/pycgroup/state/cgroup-state.service /etc/systemd/system/
+cp /opt/eskvisor/agent/client/pycgroup/state/cgroup-state-timer.timer /etc/systemd/system/
 
 echo "Состояние systemd cgroup-state сервисов: $(ls -d /etc/systemd/system/cgroup-state*)"
 # 5. Включаем автозагрузку
