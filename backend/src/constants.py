@@ -16,6 +16,6 @@ PROD_ENV = "/etc/eskvisor/backend.env"
 # REDIS_POOL_SIZE = 10  # для прода
 # WS_POOL_SIZE = 15  # для прода
 
-DB_POOL_SIZE = 5  # для тестов
+DB_POOL_SIZE = 2  # для тестов
 REDIS_POOL_SIZE = 2  # для тестов
 WS_POOL_SIZE = 2  # для тестов

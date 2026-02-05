@@ -2,7 +2,7 @@ from sqlalchemy import select, update, delete
 from datetime import datetime
 
 from src.db.models.nodes import NodeModel
-from src.models.node import NodeCreateRequest, NodeSyncStateFromAgent
+from src.models.node import NodeCreateRequest, NodeSyncState
 from src.services.pool.db_pool import DBPool
 
 
@@ -67,12 +67,12 @@ class NodesDB:
             )
             await session.commit()
 
-    async def update_node(self, update_data: NodeSyncStateFromAgent):
+    async def update_node(self, update_data: NodeSyncState):
         async with self.db_pool.get_connection() as session:
-
             await session.execute(
                 update(NodeModel)
                 .where(NodeModel.ip_address == update_data.ip_address)
                 .values(**update_data.model_dump())
             )
+
             await session.commit()

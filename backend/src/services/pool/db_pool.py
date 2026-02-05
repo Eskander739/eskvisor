@@ -1,4 +1,3 @@
-import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -21,18 +20,16 @@ class DBPool:
         # Используем асинхронный драйвер asyncpg
         self.engine = create_async_engine(
             f"postgresql+asyncpg://{self.user}:{self.password}@{self.db_host}:{self.db_port}/postgres",
+            pool_size=connection_count,  # <-- РАЗМЕР ПУЛА
+            max_overflow=5,  # <-- ДОПОЛНИТЕЛЬНЫЕ СОЕДИНЕНИЯ
+            pool_timeout=30,  # <-- ТАЙМАУТ
+            pool_recycle=3600,  # <-- ПЕРЕСОЗДАНИЕ КАЖДЫЙ ЧАС
+            pool_pre_ping=True,  # <-- ПРОВЕРКА СОЕДИНЕНИЯ
             echo=True,
         )
         self.async_session = async_sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
         )
-        self.connection_count = connection_count
-        self.__connections = asyncio.Queue()
-
-    async def create_connections(self):
-        for _ in range(self.connection_count):
-            session = self.async_session()
-            await self.__connections.put(session)
 
     async def create_tables(self):
         async with self.get_connection() as session:
@@ -41,13 +38,17 @@ class DBPool:
             await connection.run_sync(Base.metadata.create_all)
             await connection.commit()  # Явный коммит
 
-    async def close_all(self):
-        for _ in range(self.connection_count):
-            connection = await self.__connections.get()
-            await connection.close()
+    async def close_pool(self):
+        await self.async_session().close_all()
+        await self.engine.dispose()
 
     @asynccontextmanager
     async def get_connection(self):
-        connection = await self.__connections.get()
-        yield connection
-        await self.__connections.put(connection)
+        session = self.async_session()
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()

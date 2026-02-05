@@ -35,7 +35,6 @@ logger = DefaultLogger("Eskvisor Backend")
 async def lifespan(app: FastAPI):
     # Инициализация
     db_pool = DBPool()
-    await db_pool.create_connections()
     await db_pool.create_tables()
 
     websocket_pool = TaskWebsocketPool(db_pool)
@@ -64,7 +63,7 @@ async def lifespan(app: FastAPI):
     if hasattr(app.state, "websocket_pool"):
         await app.state.websocket_pool.close_all()
     if hasattr(app.state, "db_pool"):
-        await app.state.db_pool.close_all()
+        await app.state.db_pool.close_pool()
     if hasattr(app.state, "redis_pool"):
         await app.state.redis_pool.close_all()
 

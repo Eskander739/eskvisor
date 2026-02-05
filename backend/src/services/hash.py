@@ -29,7 +29,23 @@ class HashService:
         """
         return bcrypt.verify(current_password, password_hash_for_check)
 
+    @staticmethod
+    def generate_agent_credentials() -> tuple[str, str]:
+        """
+        Генерирует пару: agent_id и секретный ключ
+        Возвращает: (agent_id, agent_secret)
+        """
+        # Уникальный ID агента (не секретный)
+        agent_id = str(uuid.uuid4())
+
+        # Секретный ключ - высокоэнтропийная случайная строка
+        # Минимум 32 байта (256 бит) для безопасности
+        agent_secret_bytes = secrets.token_bytes(256)
+        agent_secret = base64.urlsafe_b64encode(agent_secret_bytes).decode("utf-8")
+
+        return agent_id, agent_secret
+
 
 if __name__ == "__main__":
     hh = HashService()
-    print(hh.hash_password("12345"))
+    print(hh.generate_agent_credentials())

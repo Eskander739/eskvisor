@@ -7,13 +7,13 @@ from src.constants import ApiVersion
 from src.models.node import NodeSyncStateFromAgent, NodeSyncState
 
 router = APIRouter(
-    prefix=f"{ApiVersion.V0}/sync/node",
+    prefix=f"{ApiVersion.V0}/sync/vm",
     tags=["nodes"],
 )
 
 
 @router.post("/sync-state")
-async def sync_node(
+async def sync_vm(
     request: Request,
     node_data: NodeSyncStateFromAgent,
     logger=Depends(get_logger),
