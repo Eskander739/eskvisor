@@ -6,6 +6,17 @@
 LOG_FILE="/var/log/eskvisor_update.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
+if [ -z "$1" ]; then
+    echo "ERROR: Требуется указание ip agent"
+    echo "USAGE: $0 <agent> <backend_url>"
+    exit 1
+fi
+
+AGENT_URL="$1"
+BACKEND_URL="$2"
+echo "Backend: $BACKEND_URL"
+echo "Agent: $AGENT_URL"
+
 # Цвета для логгирования
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -113,6 +124,7 @@ stop_services_for_backup() {
 
     local services_to_stop=(
         "eskvisor.service"
+        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -279,11 +291,43 @@ update_environment_config() {
             sudo mv "$temp_config" "$current_env_file"
 
             log_success "Конфигурация окружения обновлена"
+
+            if [ -n "$AGENT_URL" ]; then
+                mkdir -p /etc/eskvisor
+                echo "AGENT_URL=$AGENT_URL" >> current_env_file
+                echo "Agent URL saved: $AGENT_URL"
+            else
+                echo "WARNING: AGENT_URL is empty, not saving to config"
+            fi
+
+            if [ -n "$BACKEND_URL" ]; then
+                mkdir -p /etc/eskvisor
+                echo "BACKEND_URL=$BACKEND_URL" >> current_env_file
+                echo "Backend URL saved: $BACKEND_URL"
+            else
+                echo "WARNING: BACKEND_URL is empty, not saving to config"
+            fi
         else
             # Если конфигурации не было, просто копируем новую
             sudo mkdir -p /etc/eskvisor
             sudo cp "$new_env_file" "$current_env_file"
             log_success "Конфигурация окружения создана"
+
+            if [ -n "$AGENT_URL" ]; then
+                mkdir -p /etc/eskvisor
+                echo "AGENT_URL=$AGENT_URL" >> current_env_file
+                echo "Agent URL saved: $AGENT_URL"
+            else
+                echo "WARNING: AGENT_URL is empty, not saving to config"
+            fi
+
+            if [ -n "$BACKEND_URL" ]; then
+                mkdir -p /etc/eskvisor
+                echo "BACKEND_URL=$BACKEND_URL" >> current_env_file
+                echo "Backend URL saved: $BACKEND_URL"
+            else
+                echo "WARNING: BACKEND_URL is empty, not saving to config"
+            fi
         fi
     else
         log_skip "Файл конфигурации окружения не найден в новой версии"
@@ -299,6 +343,7 @@ stop_all_agent_services() {
     local services_to_stop=(
         "nginx"
         "eskvisor.service"
+        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -345,6 +390,7 @@ start_all_agent_services() {
         "redis"
         "nginx"
         "eskvisor.service"
+        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -400,6 +446,7 @@ verify_agent_update() {
     echo "2. Проверка работы сервисов..."
     local services_to_check=(
         "eskvisor.service"
+        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -606,6 +653,7 @@ main() {
         echo ""
         echo "Статус сервисов:"
         sudo systemctl is-active eskvisor.service &>/dev/null && echo -e "  Eskvisor: ${GREEN}активен${NC}" || echo -e "  Eskvisor: ${RED}не активен${NC}"
+        sudo systemctl is-active eskvisor-state.service &>/dev/null && echo -e "  Eskvisor: ${GREEN}активен${NC}" || echo -e "  Eskvisor: ${RED}не активен${NC}"
         sudo systemctl is-active eskvisor-task-manager.service &>/dev/null && echo -e "  Eskvisor Task Manager: ${GREEN}активен${NC}" || echo -e "  Eskvisor Task Manager: ${RED}не активен${NC}"
         sudo systemctl is-active nginx &>/dev/null && echo -e "  Nginx: ${GREEN}активен${NC}" || echo -e "  Nginx: ${RED}не активен${NC}"
         sudo systemctl is-active redis &>/dev/null && echo -e "  Redis: ${GREEN}активен${NC}" || echo -e "  Redis: ${RED}не активен${NC}"

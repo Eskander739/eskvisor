@@ -33,14 +33,17 @@ class WebSocketNotificationHandler:
 
     def disconnect(self, websocket: WebSocket):
         """Отключение клиента WebSocket"""
-        self.active_connections.remove(websocket)
-        self.logger.info(
-            f"WebSocket отключен. Осталось: {len(self.active_connections)}"
-        )
+        try:
+            self.active_connections.remove(websocket)
+            self.logger.info(
+                f"WebSocket отключен. Осталось: {len(self.active_connections)}"
+            )
 
-        # Если нет активных подключений, останавливаем прослушивание
-        if not self.active_connections and self.running:
-            self.stop_listening()
+            # Если нет активных подключений, останавливаем прослушивание
+            if not self.active_connections and self.running:
+                self.stop_listening()
+        except Exception as err:
+            self.logger.info(f"Ошибка отключения WebSocket соединения: {err}")
 
     async def start_listening(self):
         """Запуск прослушивания уведомлений из Redis"""

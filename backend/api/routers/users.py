@@ -7,8 +7,6 @@ from fastapi import status, Response
 
 from api.dependencies import (
     get_logger,
-    get_redis_service,
-    get_users_db,
     get_hash_service,
     get_jwt_service,
 )
@@ -27,7 +25,6 @@ router = APIRouter(
 async def logout(
     request: Request,
     logger=Depends(get_logger),
-    redis_service=Depends(get_redis_service),
 ):
     """
     Выход из аккаунта
@@ -36,7 +33,7 @@ async def logout(
     logger.info(f"{request.method} {request.url} - Headers: {dict(request.headers)}")
 
     access_token = request.cookies.get("access_token")
-    await redis_service.invalidate_token(access_token)
+    await request.app.state.redis_service.invalidate_token(access_token)
     response = Response(
         status_code=status.HTTP_200_OK,
         content=orjson.dumps({"message": "Выход успешно произведен"}),
@@ -57,14 +54,12 @@ async def login(
     response: Response,
     user_login: UserAuth,
     logger=Depends(get_logger),
-    redis_service=Depends(get_redis_service),
-    users_db=Depends(get_users_db),
     hash_service=Depends(get_hash_service),
     jwt_service=Depends(get_jwt_service),
 ):
     logger.info(f"{request.method} {request.url} - Headers: {dict(request.headers)}")
 
-    user = await users_db.get_user_by_email(user_login.email)
+    user = await request.app.state.users_db.get_user_by_email(user_login.email)
     if user is None:
         error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
@@ -97,21 +92,21 @@ async def login(
     data_for_token = {"email": user_login.email, "role": user.role.value}
 
     tokens = []
-    for token in await redis_service.get_all_tokens():
+    for token in await request.app.state.redis_service.get_all_tokens():
         try:
             current_data_for_token = jwt_service.decode(token)
             if current_data_for_token.get("email") == data_for_token.get("email"):
                 tokens.append(token)
         except ValueError as err:
             if err == "Token expired":
-                await redis_service.invalidate_token(token)
+                await request.app.state.redis_service.invalidate_token(token)
 
     for token in tokens:
-        await redis_service.invalidate_token(token)
+        await request.app.state.redis_service.invalidate_token(token)
 
     data_for_token["role"] = user.role.value
     token = jwt_service.encode(data_for_token)
-    await redis_service.add_token(token)
+    await request.app.state.redis_service.add_token(token)
     msg = {"message": "Авторизация успешно произведена"}
     response_result = Response(
         status_code=status.HTTP_200_OK,

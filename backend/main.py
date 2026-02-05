@@ -7,9 +7,16 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi import status
 from starlette.middleware.cors import CORSMiddleware
-from api.routers import users, system, vm
+from api.routers import users, system, vm, ws, nodes, clusters
+from api.routers.sync_state import nodes as sync_nodes
 from src.constants import ApiVersion, PROD_ENV
-from src.globals import redis_pool_instance, websocket_pool_instance, db_pool_instance
+from src.db.balansir import ResourcePoolsDB
+from src.db.clusters import ClustersDB
+from src.db.disks import DisksDB
+from src.db.nodes import NodesDB
+from src.db.users import UsersDB
+from src.db.virtual_machines import VirtualMachinesDB
+from src.db.virtual_networks import VirtualNetworksDB
 from src.logger_config import DefaultLogger
 from src.models.error import Message, DefaultMessage
 from src.services.jwt import JWTService
@@ -21,30 +28,45 @@ from src.services.ssh_keygen import SSHKeyGenerator
 
 # Глобальные экземпляры
 
+logger = DefaultLogger("Eskvisor Backend")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_pool_instance
-    global websocket_pool_instance
-    global db_pool_instance
+    # Инициализация
+    db_pool = DBPool()
+    await db_pool.create_connections()
+    await db_pool.create_tables()
 
-    db_pool_instance = DBPool()
-    await db_pool_instance.create_connections()
-    await db_pool_instance.create_tables()
+    websocket_pool = TaskWebsocketPool(db_pool)
+    await websocket_pool.create_connections()
 
-    websocket_pool_instance = TaskWebsocketPool(db_pool_instance)
-    await websocket_pool_instance.create_connections()
-    redis_pool_instance = RedisPoolManager()
-    await redis_pool_instance.create_connections()
+    redis_pool = RedisPoolManager()
+    await redis_pool.create_connections()
 
+    # Сохраняем в состояние приложения
+    app.state.db_pool = db_pool
+    app.state.websocket_pool = websocket_pool
+    app.state.redis_pool = redis_pool
+    app.state.clusters_db = ClustersDB(app.state.db_pool)
+    app.state.nodes_db = NodesDB(app.state.db_pool)
+    app.state.users_db = UsersDB(app.state.db_pool)
+    app.state.resource_pools_db = ResourcePoolsDB(app.state.db_pool)
+    app.state.virtual_machines_db = VirtualMachinesDB(app.state.db_pool)
+    app.state.disks_db = DisksDB(app.state.db_pool)
+    app.state.virtual_networks_db = VirtualNetworksDB(app.state.db_pool)
+    app.state.redis_service = RedisJWTManager(app.state.redis_pool)
+
+    logger.info("Инициализация всех соединений")
     yield
 
-    if websocket_pool_instance:
-        await websocket_pool_instance.close_all()
-    if db_pool_instance:
-        await db_pool_instance.close_all()
-    if redis_pool_instance:
-        await redis_pool_instance.close_all()
+    # Очистка
+    if hasattr(app.state, "websocket_pool"):
+        await app.state.websocket_pool.close_all()
+    if hasattr(app.state, "db_pool"):
+        await app.state.db_pool.close_all()
+    if hasattr(app.state, "redis_pool"):
+        await app.state.redis_pool.close_all()
 
 
 app = FastAPI(title="Eskvisor Backend", version="0.3", lifespan=lifespan)
@@ -52,7 +74,6 @@ app = FastAPI(title="Eskvisor Backend", version="0.3", lifespan=lifespan)
 
 load_dotenv()
 load_dotenv(PROD_ENV)
-logger = DefaultLogger("Eskvisor Backend")
 SSHKeyGenerator().generate_and_save()
 app.add_middleware(
     CORSMiddleware,
@@ -63,20 +84,10 @@ app.add_middleware(
 )
 
 
-async def get_main_redis_service() -> RedisJWTManager:
-    return RedisJWTManager(redis_pool_instance)
-
-
-async def get_main_jwt_service() -> JWTService:
-    return JWTService()
-
-
 @app.middleware("http")
 async def check_token(
     request: Request,
     call_next,
-    jwt_service=Depends(get_main_jwt_service),
-    redis_service=Depends(get_main_redis_service),
 ):
     """
     Проверяет токен на:
@@ -85,8 +96,7 @@ async def check_token(
     2. Что токен еще актуален
     3. Что токен имеется в Redis
     """
-    jwt_service = await jwt_service.dependency()
-    redis_service = await redis_service.dependency()
+
     if request.method == "OPTIONS":
         return await call_next(request)
     # Пропускаем проверку токена для эндпоинтов, которые не требуют аутентификации
@@ -95,10 +105,14 @@ async def check_token(
         "/openapi.json",
         f"{ApiVersion.V0}/user/login",
         f"{ApiVersion.V0}/user/logout",
+        f"{ApiVersion.V0}/sync/node/sync-state",
+        f"{ApiVersion.V0}/system/health",
     ]:
         return await call_next(request)
 
     access_token = request.cookies.get("access_token")
+    jwt_service = JWTService()
+    redis_service = RedisJWTManager(request.app.state.redis_pool)
     if not access_token:
         error_model = DefaultMessage(
             request_id=str(uuid.uuid4()),
@@ -156,6 +170,10 @@ async def check_token(
 app.include_router(users.router)
 app.include_router(system.router)
 app.include_router(vm.router)
+app.include_router(ws.router)
+app.include_router(clusters.router)
+app.include_router(nodes.router)
+app.include_router(sync_nodes.router)
 
 
 if __name__ == "__main__":

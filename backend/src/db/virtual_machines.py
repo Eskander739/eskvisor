@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from src.db.models.virtual_machines import VirtualMachineModel, VMStateDB
+from src.models.general import VMState
 from src.services.pool.db_pool import DBPool
 from src.models.vm import VmUpdateRequest, VMListRequest
 
@@ -56,8 +57,6 @@ class VirtualMachinesDB:
                 conditions.append(VirtualMachineModel.name.ilike(f"%{vm_info.name}%"))
             if vm_info.state is not None:
                 conditions.append(VirtualMachineModel.state == vm_info.state)
-            if vm_info.enabled is not None:
-                conditions.append(VirtualMachineModel.enabled == vm_info.enabled)
             if vm_info.infrastructure is not None:
                 conditions.append(
                     VirtualMachineModel.infrastructure == vm_info.infrastructure
@@ -88,6 +87,17 @@ class VirtualMachinesDB:
 
     async def update_virtual_machine(self, vm_id: int, data: dict):
         async with self.db_pool.get_connection() as session:
+            data["modified"] = datetime.now()
+            await session.execute(
+                update(VirtualMachineModel)
+                .where(VirtualMachineModel.id == vm_id)
+                .values(**data)
+            )
+            await session.commit()
+
+    async def update_state_virtual_machine(self, vm_id: int, state: VMState):
+        async with self.db_pool.get_connection() as session:
+            data = {"state": state.value}
             data["modified"] = datetime.now()
             await session.execute(
                 update(VirtualMachineModel)

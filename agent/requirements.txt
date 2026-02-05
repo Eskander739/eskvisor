@@ -19,3 +19,4 @@ requests==2.32.4
 uvicorn==0.38.0
 websockets==16.0
 websockify==0.13.0
+aiohttp==3.13.3

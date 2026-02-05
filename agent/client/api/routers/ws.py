@@ -16,7 +16,7 @@ from agent.client.hypervisor.libvirt.models.msg import (
 )
 from agent.client.hypervisor.libvirt.models.vm_stats.stats import CpuAndRamUsage
 from agent.client.models.general import VNCConnectInfo, VNCStatusInfo, VNCRestartProxy
-from agent.client.task_manager.models import TaskAdd, TaskType
+from agent.client.task_manager.models import Task, TaskType
 from agent.client.tools import get_quick_stats, check_vnc_service
 from agent.client.api.dependencies import get_logger
 
@@ -100,7 +100,8 @@ async def task(
                     )
 
                 else:
-                    task = TaskAdd(
+                    task = Task(
+                        request_id=message.get("request_id"),
                         task_type=TaskType(message.get("task_type", "vm")),
                         action=message.get("action"),
                         params=message.get("params", {}),
@@ -218,7 +219,6 @@ async def notification(
 
     try:
         while True:
-            # Просто держим соединение открытым
             await websocket.receive_text()
     except WebSocketDisconnect:
         active_connections.remove(websocket)

@@ -12,7 +12,7 @@ from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.models import (
     Task,
     TaskType,
-    TaskAdd,
+    Task,
     WorkerModel,
     WorkerStats,
 )
@@ -119,12 +119,12 @@ class TaskDispatcher:
 
         return stats
 
-    def submit_task(self, task: TaskAdd, queue_name: str | None = None) -> str:
+    def submit_task(self, task: Task, queue_name: str | None = None) -> str:
         """
         Отправка задачи в очередь
         """
         task = Task(
-            request_id=str(uuid.uuid4()),
+            request_id=task.request_id,
             task_type=task.task_type,
             action=task.action,
             params=task.params,

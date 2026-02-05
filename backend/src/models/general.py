@@ -1,7 +1,8 @@
+import uuid
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ObjectStatEnum(Enum):
@@ -37,14 +38,19 @@ class SystemStatRequest(BaseModel):
 class VMState(Enum):
     """Состояния виртуальной машины"""
 
-    NOSTATE = 0  # Нет состояния
-    RUNNING = 1  # Работает
-    BLOCKED = 2  # Заблокирована
-    PAUSED = 3  # Приостановлена
-    SHUTDOWN = 4  # Завершается
-    SHUTOFF = 5  # Выключена
-    CRASHED = 6  # Аварийно завершена
-    PMSUSPENDED = 7  # Приостановлена (PM)
+    STARTING = "STARTING"  # Запуск
+    RUNNING = "RUNNING"  # Работает
+    BLOCKED = "BLOCKED"  # Заблокирована
+    PAUSING = "PAUSING"  # Приостановка
+    PAUSED = "PAUSED"  # Приостановлена
+    REBOOT = "REBOOT"  # Перезагрузка
+    SHUTDOWN = "SHUTDOWN"  # Завершается
+    SHUTOFF = "SHUTOFF"  # Выключена
+    CRASHED = "CRASHED"  # Аварийно завершена
+    PMSUSPENDED = "PMSUSPENDED"  # Приостановлена (PM)
+    CLONING = "CLONING"  # Клонируется
+    DELETING = "DELETING"  # Удаление
+    DELETED = "DELETED"  # Удален
 
 
 class QemuNetdevType(str, Enum):
@@ -65,3 +71,21 @@ class InstallAgentResponse(BaseModel):
     ip_address: str
     username: str
     code: str
+
+
+class TaskType(Enum):
+    """Типы задач для диспетчеризации"""
+
+    STORAGE = "storage"
+    VM = "vm"
+    NETWORK = "network"
+    SNAPSHOT = "snapshot"
+    RESOURCE_POOL = "resource_pool"
+    STATS = "stats"
+
+
+class CreateTask(BaseModel):
+    request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    task_type: TaskType = Field(..., description="Тип задачи для диспетчеризации")
+    action: str = Field(..., description="Действие (create, delete, update, etc.)")
+    params: dict[str, Any] = Field(default_factory=dict, description="Данные задачи")

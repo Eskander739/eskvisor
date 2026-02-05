@@ -2,6 +2,7 @@ from sqlalchemy import select, update, delete
 from datetime import datetime
 
 from src.db.models.nodes import NodeModel
+from src.models.node import NodeCreateRequest, NodeSyncStateFromAgent
 from src.services.pool.db_pool import DBPool
 
 
@@ -9,9 +10,9 @@ class NodesDB:
     def __init__(self, db_pool: DBPool):
         self.db_pool = db_pool
 
-    async def add_node(self, data: dict):
+    async def add_node(self, data: NodeCreateRequest):
         async with self.db_pool.get_connection() as session:
-            node = NodeModel(**data)
+            node = NodeModel(**data.model_dump())
             session.add(node)
             await session.commit()
             return node.id
@@ -20,6 +21,20 @@ class NodesDB:
         async with self.db_pool.get_connection() as session:
             result = await session.execute(
                 select(NodeModel).where(NodeModel.id == node_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def get_node_by_name(self, name: str):
+        async with self.db_pool.get_connection() as session:
+            result = await session.execute(
+                select(NodeModel).where(NodeModel.name == name)
+            )
+            return result.scalar_one_or_none()
+
+    async def get_node_by_ip_address(self, ip_address: str):
+        async with self.db_pool.get_connection() as session:
+            result = await session.execute(
+                select(NodeModel).where(NodeModel.ip_address == ip_address)
             )
             return result.scalar_one_or_none()
 
@@ -49,5 +64,15 @@ class NodesDB:
 
             await session.execute(
                 update(NodeModel).where(NodeModel.id == node_id).values(**update_data)
+            )
+            await session.commit()
+
+    async def update_node(self, update_data: NodeSyncStateFromAgent):
+        async with self.db_pool.get_connection() as session:
+
+            await session.execute(
+                update(NodeModel)
+                .where(NodeModel.ip_address == update_data.ip_address)
+                .values(**update_data.model_dump())
             )
             await session.commit()

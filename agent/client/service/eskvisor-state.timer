@@ -1,0 +1,13 @@
+# /etc/systemd/system/eskvisor-state.timer
+[Unit]
+Description=Eskvisor Node State Sync Timer
+Requires=eskvisor-state.service
+
+[Timer]
+# Запускать каждые 15 секунд
+OnUnitActiveSec=15
+OnBootSec=30
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target

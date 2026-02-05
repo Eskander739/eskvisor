@@ -11,7 +11,7 @@ class NodeModel(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), unique=True, nullable=False)
-    hostname = Column(String(255), nullable=False)
+    hostname = Column(String(255), nullable=True)
     ip_address = Column(String(45), nullable=False)
     hypervisor_type = Column(String(50), nullable=False)  # KVM, ESXi, Hyper-V
     port = Column(Integer, default=22)
@@ -34,8 +34,9 @@ class NodeModel(Base):
 
     # Метаданные
     version = Column(String(100))
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created = Column(DateTime, default=datetime.now)
+    updated = Column(DateTime)
+    deleted = Column(DateTime)
 
     # Связи
-    cluster = relationship("ClusterModel", backref="clusters", lazy="select")
+    cluster = relationship("ClusterModel", back_populates="nodes")

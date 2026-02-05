@@ -6,6 +6,23 @@
 LOG_FILE="/var/log/eskvisor_install.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
+if [ -z "$1" ]; then
+    echo "ERROR: Требуется указание ip agent"
+    echo "USAGE: $0 <agent> <backend_url>"
+    exit 1
+fi
+
+if [ -z "$2" ]; then
+    echo "ERROR: Требуется указание ip backend"
+    echo "USAGE: $0 <agent> <backend_url>"
+    exit 1
+fi
+
+AGENT_URL="$1"
+BACKEND_URL="$2"
+echo "Backend: $BACKEND_URL"
+echo "Agent: $AGENT_URL"
+
 # Цвета для логгирования
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -310,6 +327,54 @@ EOF
     echo "  Данные: /var/lib/redis"
     echo "  Логи: /var/log/redis"
     echo "  Systemd сервис: redis.service"
+
+    return 0
+}
+
+# Функция настройки основного сервиса eskvisor
+setup_eskvisor_service_state() {
+    local service_state_file="/opt/eskvisor/agent/client/service/eskvisor-state.service"
+    local target_dir="/etc/systemd/system"
+
+    echo "Настройка основного сервиса Eskvisor..."
+
+    # Проверка существования файла сервиса
+    if [[ ! -f "$service_state_file" ]]; then
+        log_error "Файл сервиса состояния не найден: $service_state_file"
+        return 1
+    fi
+
+    # Копирование файла сервиса состояния
+    if sudo cp "$service_state_file" "$target_dir/"; then
+        log_success "Файл сервиса состояния скопирован в $target_dir/"
+    else
+        log_error "Ошибка копирования файла сервиса состояния"
+        return 1
+    fi
+
+    # Перезагрузка демона systemd
+    if sudo systemctl daemon-reload; then
+        log_success "Демон systemd перезагружен"
+    else
+        log_error "Ошибка перезагрузки демона systemd"
+        return 1
+    fi
+
+    # Включение автозапуска сервиса
+    if sudo systemctl enable eskvisor-state.service; then
+        log_success "Сервис eskvisor-state добавлен в автозапуск"
+    else
+        log_error "Ошибка добавления сервиса состояния в автозапуск"
+        return 1
+    fi
+
+    # Запуск сервиса
+    if sudo systemctl start eskvisor-state.service; then
+        log_success "Сервис eskvisor-state запущен"
+    else
+        log_error "Ошибка запуска сервиса состояния eskvisor"
+        return 1
+    fi
 
     return 0
 }
@@ -622,6 +687,22 @@ sudo systemctl start sshd
 echo "Установка файла конфигурации"
 sudo mkdir -p /etc/eskvisor
 sudo mv /opt/eskvisor/agent/.env /etc/eskvisor/agent.env
+
+if [ -n "$BACKEND_URL" ]; then
+    mkdir -p /etc/eskvisor
+    echo "BACKEND_URL=$BACKEND_URL" >> /etc/eskvisor/agent.env
+    echo "Backend URL saved: $BACKEND_URL"
+else
+    echo "WARNING: BACKEND_URL is empty, not saving to config"
+fi
+if [ -n "$AGENT_URL" ]; then
+    mkdir -p /etc/eskvisor
+    echo "AGENT_URL=$AGENT_URL" >> /etc/eskvisor/agent.env
+    echo "Agent URL saved: $AGENT_URL"
+else
+    echo "WARNING: AGENT_URL is empty, not saving to config"
+fi
+
 sudo systemctl start sshd
 
 if sudo systemctl is-active --quiet sshd; then
@@ -654,6 +735,13 @@ if setup_eskvisor_service; then
     log_success "Основной сервис eskvisor настроен"
 else
     log_error "Ошибка настройки основного сервиса eskvisor"
+fi
+
+# Настройка сервиса состояния eskvisor
+if setup_eskvisor_service_state; then
+    log_success "Сервис состояния eskvisor настроен"
+else
+    log_error "Ошибка настройки сервиса состояния eskvisor"
 fi
 
 # Настройка сервиса диспетчера задач eskvisor-task-manager
@@ -900,6 +988,7 @@ echo ""
 echo "Расположение Eskvisor: /opt/eskvisor"
 echo "Расположение конфигурации: /etc/eskvisor/agent.env"
 echo "Расположение основного сервиса: /etc/systemd/system/eskvisor.service"
+echo "Расположение сервиса состояния: /etc/systemd/system/eskvisor-state.service"
 echo "Расположение сервиса диспетчера задач: /etc/systemd/system/eskvisor-task-manager.service"
 echo "Расположение Redis: /etc/redis.conf"
 echo "Расположение конфигурации nginx: /etc/nginx/nginx.conf"

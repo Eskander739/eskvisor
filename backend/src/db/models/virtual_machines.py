@@ -18,14 +18,16 @@ from src.db.base import Base
 
 
 class VMStateDB(Enum):
-    NOSTATE = 0
-    RUNNING = 1
-    BLOCKED = 2
-    PAUSED = 3
-    SHUTDOWN = 4
-    SHUTOFF = 5
-    CRASHED = 6
-    PMSUSPENDED = 7
+    STARTING = "STARTING"  # Запуск
+    RUNNING = "RUNNING"  # Работает
+    BLOCKED = "BLOCKED"  # Заблокирована
+    PAUSED = "PAUSED"  # Приостановлена
+    SHUTDOWN = "SHUTDOWN"  # Завершается
+    SHUTOFF = "SHUTOFF"  # Выключена
+    CRASHED = "CRASHED"  # Аварийно завершена
+    PMSUSPENDED = "PMSUSPENDED"  # Приостановлена (PM)
+    CLONING = "CLONING"  # Клонируется
+    DELETED = "DELETED"  # Удален
 
 
 class VirtualMachineModel(Base):

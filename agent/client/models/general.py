@@ -63,3 +63,20 @@ class VNCRestartProxy(DefaultMessage):
     vm_name: str
     new_ws_port: int
     new_ws_url: str
+
+
+class HealthState(BaseModel):
+    status: str
+    redis: bool
+    task_manager: bool
+
+
+class NodeSyncStateFromAgent(BaseModel):
+    ip_address: str = Field(..., max_length=45, min_length=7)
+    hostname: str | None = Field(default=None, max_length=255, min_length=1)
+    cpu_cores: int = Field(default=0)
+    cpu_model: str | None = Field(default=None, max_length=255)
+    total_memory_gb: int = Field(default=0)
+    free_memory_gb: int = Field(default=0)
+    total_storage_gb: int = Field(default=0)
+    free_storage_gb: int = Field(default=0)

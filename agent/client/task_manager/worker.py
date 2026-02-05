@@ -166,7 +166,7 @@ class TaskHandler:
             vm_name = params.get("vm_name")
             return self.vm_manager.resume_vm(vm_name)
 
-        elif action == "stop":
+        elif action == "shutoff":
             # Остановка ВМ
             vm_name = params.get("vm_name")
             force = params.get("force", False)

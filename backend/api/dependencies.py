@@ -1,20 +1,12 @@
 from dotenv import load_dotenv
+from fastapi import Request
 
-from src.db.balansir import ResourcePoolsDB
-from src.db.clusters import ClustersDB
-from src.db.disks import DisksDB
-from src.db.node import NodesDB
-from src.db.virtual_machines import VirtualMachinesDB
-from src.db.virtual_networks import VirtualNetworksDB
-from src.globals import redis_pool_instance, db_pool_instance, websocket_pool_instance
 from src.services.hash import HashService
 from src.agent_installer import AgentInstaller
 from src.constants import PROD_ENV
-from src.db.users import UsersDB
 from src.services.jwt import JWTService
 from src.logger_config import DefaultLogger
 from src.services.pool.task_ws_pool import TaskWebsocketPool
-from src.services.redis_srv import RedisJWTManager
 from src.services.ssh_keygen import SSHKeyGenerator
 
 load_dotenv()
@@ -22,57 +14,31 @@ load_dotenv(PROD_ENV)
 logger = DefaultLogger("Eskvisor Backend")
 
 
-async def get_redis_service() -> RedisJWTManager:
-    return RedisJWTManager(redis_pool_instance)
-
-
 async def get_jwt_service() -> JWTService:
+    logger.info("Вызов зависимости get_jwt_service")
     return JWTService()
 
 
 async def get_hash_service() -> HashService:
+    logger.info("Вызов зависимости get_hash_service")
     return HashService()
 
 
-async def get_users_db() -> UsersDB:
-    return UsersDB(db_pool_instance)
-
-
-async def get_nodes_db() -> NodesDB:
-    return NodesDB(db_pool_instance)
-
-
-async def get_clusters_db() -> ClustersDB:
-    return ClustersDB(db_pool_instance)
-
-
-async def get_resource_pools_db() -> ResourcePoolsDB:
-    return ResourcePoolsDB(db_pool_instance)
-
-
-async def get_virtual_machines_db() -> VirtualMachinesDB:
-    return VirtualMachinesDB(db_pool_instance)
-
-
-async def get_disks_db() -> DisksDB:
-    return DisksDB(db_pool_instance)
-
-
-async def get_virtual_networks_db() -> VirtualNetworksDB:
-    return VirtualNetworksDB(db_pool_instance)
-
-
 async def get_agent_installer() -> AgentInstaller:
+    logger.info("Вызов зависимости get_agent_installer")
     return AgentInstaller()
 
 
 async def get_logger() -> DefaultLogger:
+    logger.info("Вызов зависимости get_logger")
     return logger
 
 
-async def get_ws_task() -> TaskWebsocketPool:
-    return websocket_pool_instance
+async def get_ws_task(request: Request) -> TaskWebsocketPool:
+    logger.info("Вызов зависимости get_ws_task")
+    return request.app.state.websocket_pool
 
 
 async def get_ssh_key_generator() -> SSHKeyGenerator:
+    logger.info("Вызов зависимости get_ssh_key_generator")
     return SSHKeyGenerator()

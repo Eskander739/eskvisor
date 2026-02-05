@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 from src.models.controller import VMController
 from src.models.disk import DiskCreate, DiskAttach
 from src.models.enum_model import VideoModel, Architecture, OSType, GraphicsType
-from src.models.general import VMState, MachineType, QemuNetdevType
+from src.models.general import VMState, MachineType, QemuNetdevType, CreateTask
 from src.models.network import VmNetAdapter
 
 
@@ -198,17 +198,16 @@ class VmUpdateRequest(BaseModel):
 
 
 class VMListRequest(BaseModel):
-    cluster_id: int | None = (None,)
-    node_id: int | None = (None,)
-    resource_pool_id: int | None = (None,)
-    name: str | None = (None,)
-    state: int | None = (None,)
-    enabled: bool | None = (True,)
-    infrastructure: bool | None = (None,)
-    limit: int = (100,)
-    offset: int = (0,)
-    sort_by: str = ("created",)
-    sort_desc: bool = (True,)
+    cluster_id: int | None = None
+    node_id: int | None = None
+    resource_pool_id: int | None = None
+    name: str | None = None
+    state: int | None = None
+    infrastructure: bool | None = None
+    limit: int = 100
+    offset: int = 0
+    sort_by: str = "created"
+    sort_desc: bool = True
 
 
 class VirtualMachine(BaseModel):
@@ -217,7 +216,7 @@ class VirtualMachine(BaseModel):
     name: str
     description: str | None = None
     state: VMState
-    id: int | None = None
+    id: int
     node_id: int
     cluster_id: int
     template: str | None = None
@@ -251,3 +250,8 @@ class VirtualMachine(BaseModel):
 class VMList(BaseModel):
     items: list[VirtualMachine]
     total: int
+
+
+class VMChangeStateResponse(BaseModel):
+    vm: VirtualMachine
+    task: CreateTask

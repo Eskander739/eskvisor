@@ -5,7 +5,7 @@ import websockets
 from fastapi import APIRouter, Depends, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from api.dependencies import get_clusters_db, get_logger
+from api.dependencies import get_logger
 from src.constants import ApiVersion
 from src.models.error import DefaultMessage, Message
 from src.models.general import NodeWebsocketConnection, SystemStatRequest
@@ -19,14 +19,13 @@ router = APIRouter(
 @router.websocket(f"/task")
 async def task(
     websocket: WebSocket,
-    clusters_db=Depends(get_clusters_db),
     logger=Depends(get_logger),
 ):
     await websocket.accept()
     logger.info(f"Новое WebSocket подключение")
     uri_startswith = "ws://{}/ws/task"
     local_node_connections = []
-    for cluster in clusters_db.get_cluster_list():
+    for cluster in await websocket.app.state.clusters_db.get_cluster_list():
         for node in cluster.nodes:
             try:
                 connect = await websockets.connect(
@@ -80,14 +79,13 @@ async def task(
 @router.websocket(f"/notification")
 async def notification(
     websocket: WebSocket,
-    clusters_db=Depends(get_clusters_db),
     logger=Depends(get_logger),
 ):
     await websocket.accept()
     logger.info("Новое WebSocket подключение")
     uri_startswith = "ws://{}/ws/notification"
     local_node_connections = []
-    for cluster in clusters_db.get_cluster_list():
+    for cluster in await websocket.app.state.clusters_db.get_cluster_list():
         for node in cluster.nodes:
             try:
                 connect = await websockets.connect(
@@ -134,25 +132,24 @@ async def notification(
         )
 
 
-@router.websocket("/vnc/{cluster_id}/{node_id}/{vm_name}")
+@router.websocket("/vnc/{cluster_id}/{node_id}/{vm_uuid}")
 async def vnc(
     websocket: WebSocket,
     cluster_id: int,
     node_id: int,
-    vm_name: str,
-    clusters_db=Depends(get_clusters_db),
+    vm_uuid: str,
     logger=Depends(get_logger),
 ):
     await websocket.accept()
     logger.info("Новое WebSocket подключение")
     uri_startswith = "ws://{}/ws/vnc/{}"
     connect = None
-    for cluster in clusters_db.get_cluster_list():
+    for cluster in await websocket.app.state.clusters_db.get_cluster_list():
         for node in cluster.nodes:
             try:
                 if node.id == node_id and cluster.id == cluster_id:
                     connect = await websockets.connect(
-                        uri_startswith.format(node.ip_address, vm_name)
+                        uri_startswith.format(node.ip_address, vm_uuid)
                     )
             except Exception as err:
                 logger.error(f"Ошибка в подключении к VNC: {err}")
@@ -197,14 +194,13 @@ async def vnc(
 @router.websocket(f"/system-stats")
 async def system_stats(
     websocket: WebSocket,
-    clusters_db=Depends(get_clusters_db),
     logger=Depends(get_logger),
 ):
     await websocket.accept()
     logger.info("Новое WebSocket подключение")
     uri_startswith = "ws://{}/ws/system-stats"
     local_node_connections = []
-    for cluster in clusters_db.get_cluster_list():
+    for cluster in await websocket.app.state.clusters_db.get_cluster_list():
         for node in cluster.nodes:
             try:
                 connect = await websockets.connect(

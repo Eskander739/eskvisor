@@ -1,0 +1,22 @@
+# /etc/systemd/system/eskvisor-state.service
+[Unit]
+Description=Eskvisor Node State Synchronization Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment="PYTHONPATH=/opt/eskvisor/"
+Environment="VIRTUAL_ENV=/eskvisor/eskvisor_venv/"
+Environment="PATH=/eskvisor/eskvisor_venv/bin:/opt/eskvisor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/eskvisor/eskvisor_venv/bin/python /opt/eskvisor/agent/client/sync/node.py
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=eskvisor-state
+
+CPUQuota=50%
+MemoryMax=100M
+
+[Install]
+WantedBy=multi-user.target

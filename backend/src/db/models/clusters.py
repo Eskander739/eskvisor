@@ -30,13 +30,10 @@ class ClusterModel(Base):
     total_memory_gb = Column(Integer, default=0)
     total_storage_gb = Column(Integer, default=0)
 
-    # Статусы
-    status = Column(String(20), default="active")  # active, maintenance, degraded
-    enabled = Column(Boolean, default=True)
-
     # Метаданные
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created = Column(DateTime, default=datetime.now)
+    updated = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Связи
-    nodes = relationship("NodeModel", backref="clusters", lazy="select")
+    nodes = relationship("NodeModel", back_populates="cluster", lazy="selectin")

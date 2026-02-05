@@ -1,4 +1,5 @@
 import asyncio
+import json
 import subprocess
 
 import psutil
@@ -300,17 +301,17 @@ async def check_vnc_service(vm_name: str, vnc_port: int) -> tuple[bool, str]:
 
 if __name__ == "__main__":
     # Пример использования
-    print("Быстрая проверка:")
-    quick = get_quick_stats()
-    print(f"CPU: {quick['cpu']}%")
-    print(f"Память: {quick['memory']}%")
-    print(f"Диск /: {quick['disk']}%")
+    # print("Быстрая проверка:")
+    # quick = get_quick_stats()
+    # print(f"CPU: {quick['cpu']}%")
+    # print(f"Память: {quick['memory']}%")
+    # print(f"Диск /: {quick['disk']}%")
 
     # # Полная статистика
-    # print("\nПолная статистика:")
-    # full_stats = get_system_stats()
-    #
-    # print(json.dumps(full_stats, indent=2, default=str))
+    print("\nПолная статистика:")
+    full_stats = get_system_stats()
+
+    print(json.dumps(full_stats, indent=2, default=str))
 
     # Живой мониторинг (раскомментировать при необходимости)
     # get_live_monitoring(interval=1, duration=10)

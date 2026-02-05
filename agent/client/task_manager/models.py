@@ -28,19 +28,14 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"  # отменено
 
 
-class TaskAdd(BaseModel):
+class Task(BaseModel):
     """Модель задачи"""
 
+    request_id: str = Field(..., description="Идентификатор задачи")
     task_type: TaskType = Field(..., description="Тип задачи для диспетчеризации")
     action: str = Field(..., description="Действие (create, delete, update, etc.)")
     params: dict[str, Any] = Field(default_factory=dict, description="Данные задачи")
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
-
-
-class Task(TaskAdd):
-    """Модель задачи"""
-
-    request_id: str = Field(..., description="Идентификатор задачи")
 
 
 class TaskInfo(BaseModel):

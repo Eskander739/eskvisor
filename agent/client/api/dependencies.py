@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 
+from agent.client.cli import CLIControl
 from agent.client.constants import PROD_ENV
 from agent.client.hypervisor.libvirt.managers.vm_stats import VMLiveMonitor
 from agent.client.logger_config import DefaultLogger
@@ -21,6 +22,10 @@ async def get_logger() -> DefaultLogger:
 
 async def get_queue_manager_service() -> RedisTaskManager:
     return RedisTaskManager()
+
+
+async def get_cli_service() -> CLIControl:
+    return CLIControl()
 
 
 async def get_task_dispatcher_service() -> TaskDispatcher:

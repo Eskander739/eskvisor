@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
 from fastapi.responses import JSONResponse
 
-from api.dependencies import get_agent_installer, get_redis_service, get_users_db
+from api.dependencies import get_agent_installer
 from src.constants import ApiVersion, DEFAULT_AGENT_DIR
 from src.models.agent import ConnectHostRequest, UpdateAgentRequest
 from src.models.error import Message
@@ -26,6 +26,7 @@ async def install_agent(
         ),
         username=connect_host.admin,
         password=connect_host.password,
+        backend_ip=connect_host.backend_ip,
     )
     return InstallAgentResponse(
         ip_address=connect_host.ip,
@@ -47,6 +48,7 @@ async def update_agent(
         ),
         username=connect_host.admin,
         is_update=True,
+        backend_ip=connect_host.backend_ip,
     )
     return InstallAgentResponse(
         ip_address=connect_host.ip,
@@ -56,15 +58,13 @@ async def update_agent(
 
 
 @router.get(f"/health")
-async def health(
-    redis_service=Depends(get_redis_service), users_db=Depends(get_users_db)
-):
+async def health(request: Request):
     """Проверка здоровья сервера"""
     health_info = HealthInfo(
-        postgres_db=await users_db.check_connection(),
-        redis=await redis_service.check_connection(),
+        postgres_db=await request.app.state.users_db.check_connection(),
+        redis=await request.app.state.redis_service.check_connection(),
     )
 
     if health_info.postgres_db and health_info.redis:
         return JSONResponse({"status": "healthy", "services": health_info.model_dump()})
-    return JSONResponse({"status": "errors", "services": health_info.model_dump()})
+    return JSONResponse({"status": "unhealthy", "services": health_info.model_dump()})
