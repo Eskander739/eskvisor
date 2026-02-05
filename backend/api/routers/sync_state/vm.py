@@ -18,25 +18,26 @@ async def sync_vm(
     node_data: NodeSyncStateFromAgent,
     logger=Depends(get_logger),
 ):
-    try:
-        logger.info(f"Синхронизация хоста {node_data.ip_address}")
-        node = await request.app.state.nodes_db.get_node_by_ip_address(
-            node_data.ip_address
-        )
-        if node is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Хост не найден"
-            )
-        node_data = NodeSyncState(**node_data.model_dump())
-        await request.app.state.nodes_db.update_node(node_data)
-
-        return JSONResponse(
-            content={"node_id": node.id, "code": "Node successfully updated"},
-            status_code=status.HTTP_200_OK,
-        )
-    except Exception as err:
-        logger.error(f"Ошибка: {err}")
-        return JSONResponse(
-            content={"error": str(err), "code": "Internal server error"},
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+    raise NotImplementedError
+    # try:
+    #     logger.info(f"Синхронизация хоста {node_data.ip_address}")
+    #     node = await request.app.state.nodes_db.get_node_by_ip_address(
+    #         node_data.ip_address
+    #     )
+    #     if node is None:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_404_NOT_FOUND, detail="Хост не найден"
+    #         )
+    #     node_data = NodeSyncState(**node_data.model_dump())
+    #     await request.app.state.nodes_db.update_node(node_data)
+    #
+    #     return JSONResponse(
+    #         content={"node_id": node.id, "code": "Node successfully updated"},
+    #         status_code=status.HTTP_200_OK,
+    #     )
+    # except Exception as err:
+    #     logger.error(f"Ошибка: {err}")
+    #     return JSONResponse(
+    #         content={"error": str(err), "code": "Internal server error"},
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #     )

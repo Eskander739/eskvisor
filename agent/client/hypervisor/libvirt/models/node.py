@@ -4,7 +4,7 @@ from pydantic import BaseModel, computed_field
 class NodeInfo(BaseModel):
     model: str  # архитектура системы
     memory: int  # объем оперативной памяти
-    cpus: int  # максимальное количество vCPUs, которые можно назначить ВМ
+    cpus: int  # максимальное количество vCPUs
     mhz: int  # текущая частота процессора
     nodes: int  # NUMA узлы
     sockets: int  # количество мест для установки процессора
