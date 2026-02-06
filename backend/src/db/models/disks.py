@@ -1,5 +1,4 @@
 from datetime import datetime
-from enum import Enum as PyEnum
 
 from sqlalchemy import (
     Column,
@@ -11,38 +10,12 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     Enum as SQLEnum,
+    UUID,
 )
 from sqlalchemy.orm import relationship
 
 from src.db.base import Base
-
-
-class DiskFormatDB(PyEnum):
-    QCOW2 = "qcow2"
-    RAW = "raw"
-    UNKNOWN = "unknown"
-
-
-class DiskStatusDB(PyEnum):
-    ATTACHED = "attached"
-    DETACHED = "detached"
-    ERROR = "error"
-    PENDING = "pending"
-
-
-class DiskTypeDB(PyEnum):
-    POOL_DISK = "pool_disk"
-    ORPHANED = "orphaned"
-    SNAPSHOT = "snapshot"
-    TEMPLATE = "template"
-    BACKUP = "backup"
-    CACHE = "cache"
-    SWAP = "swap"
-    CDROM = "cdrom"
-    NETWORK = "network"
-    EPHEMERAL = "ephemeral"
-    PERSISTENT = "persistent"
-    EXTERNAL_DISK = "external_disk"
+from src.models.disk import DiskFormat, DiskStatus, DiskType
 
 
 class DiskModel(Base):
@@ -50,16 +23,17 @@ class DiskModel(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
+    uuid: UUID = Column(String(36), nullable=False, unique=True)
 
     # References
     pool = Column(String(255), nullable=True)
-    vm_name = Column(String(255), ForeignKey("virtual_machines.name"), nullable=True)
+    vm_id = Column(Integer, ForeignKey("virtual_machines.id"), nullable=True)
     resource_pool = Column(String(255), nullable=True)
 
     # Type and format
-    type = Column(SQLEnum(DiskTypeDB), default=DiskTypeDB.PERSISTENT)
-    format = Column(SQLEnum(DiskFormatDB), default=DiskFormatDB.QCOW2)
-    status = Column(SQLEnum(DiskStatusDB), default=DiskStatusDB.DETACHED)
+    type = Column(SQLEnum(DiskType), default=DiskType.EXTERNAL_DISK)
+    format = Column(SQLEnum(DiskFormat), default=DiskFormat.QCOW2)
+    status = Column(SQLEnum(DiskStatus), default=DiskStatus.DETACHED)
 
     # Size information
     capacity_bytes = Column(Integer, nullable=True)
@@ -86,6 +60,6 @@ class DiskModel(Base):
         "VirtualMachineModel",
         backref="attached_disks",
         lazy="select",
-        foreign_keys=[vm_name],
-        primaryjoin="DiskModel.vm_name == VirtualMachineModel.name",
+        foreign_keys=[vm_id],
+        primaryjoin="DiskModel.vm_id == VirtualMachineModel.id",
     )

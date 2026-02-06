@@ -504,3 +504,36 @@ class NetworkBackup(BaseModel):
     was_active: bool
     bridge_name: str | None = Field(default=None)
     created_at: datetime
+
+
+class NetworkAdapterBase(BaseModel):
+    network_type: str
+    model: str | None = None
+    mac_address: str | None = None
+    source: str
+    vm_id: int | None = None
+
+
+class NetworkAdapterCreate(NetworkAdapterBase):
+    pass
+
+
+class NetworkAdapterUpdate(BaseModel):
+    network_type: str | None = None
+    model: str | None = None
+    mac_address: str | None = None
+    source: str | None = None
+    vm_id: int | None = None
+
+
+class NetworkAdapterFilter(BaseModel):
+    network_type: str | None = None
+    model: str | None = None
+    mac_address: str | None = None
+    source: str | None = None
+    vm_id: int | None = None
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    search_mac: str | None = None
+    limit: int = 100
+    offset: int = 0

@@ -150,6 +150,8 @@ class DiskCreate(BaseModel):
         min_length=1,
         max_length=255,
     )
+    cluster_id: int = Field(...)
+    node_id: int = Field(...)
     size_gb: float = Field(default=1, gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(
@@ -170,8 +172,10 @@ class DiskCreate(BaseModel):
 class DiskUpdate(BaseModel):
     """Модель для обновления диска"""
 
+    new_name: str | None = Field(default=None, description="Новыое имя диска")
+
     new_size_gb: float | None = Field(
-        None, gt=0, le=65536, description="Новый размер (только увеличение)"
+        default=None, gt=0, le=65536, description="Новый размер (только увеличение)"
     )
 
 

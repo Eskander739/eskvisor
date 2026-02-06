@@ -10,7 +10,7 @@ from src.tools.my_ip import MyIp
 
 
 class AgentInstaller:
-    """Класс для удаленной установки агента и настройки SSH доступа"""
+    """Класс для удаленной установки, обновления и удаления агента"""
 
     def __init__(self, ssh_key_path=KEY_DIR):
         ssk_key = str(Path(ssh_key_path) / KEY_NAME)
@@ -140,6 +140,183 @@ class AgentInstaller:
             ),
             daemon=True,
             args={"local_backend_ip": backend_ip},
+        )
+
+        thread.start()
+        self._active_threads.append(thread)
+
+        # Очистка завершенных потоков
+        self._cleanup_finished_threads()
+
+        return thread
+
+    def uninstall_agent_via_ssh(
+        self,
+        hostname: str,
+        username: str,
+        force: bool = False,
+        remove_dependencies: bool = False,
+        password: str | None = None,
+    ) -> bool:
+        """
+        Удаление агента с удаленного хоста через SSH
+
+        Args:
+            hostname: хост с установленным агентом
+            username: пользователь на целевом хосте
+            force: пропустить подтверждение удаления
+            remove_dependencies: удалить все зависимости (nginx, redis, libvirt и др.)
+            password: пароль для SSH (если требуется аутентификация)
+
+        Returns:
+            bool: True если удаление успешно
+        """
+        self.logger.info(f"🧹 Удаление агента с {hostname}...")
+
+        # Проверяем доступность хоста
+        has_key_access, info = self._test_ssh_key_access(hostname, username)
+
+        # Если ключ не работает, пробуем пароль если он предоставлен
+        if not has_key_access and password:
+            self.logger.warning(f"SSH ключ не работает, пробуем пароль для {hostname}")
+            if not self._test_password_access(hostname, username, password):
+                self.logger.error(
+                    f"Не удалось подключиться к {hostname} ни по ключу, ни по паролю"
+                )
+                return False
+        elif not has_key_access and not password:
+            self.logger.error(
+                f"Нет доступа к {hostname} по SSH ключу и пароль не предоставлен"
+            )
+            return False
+
+        # Подготовка параметров для скрипта удаления
+        uninstall_params = []
+        if force:
+            uninstall_params.append("--force")
+        if remove_dependencies:
+            uninstall_params.append("--remove-deps")
+
+        # Команды для удаления
+        uninstall_commands = [
+            # Скачиваем скрипт удаления если его нет
+            (
+                "if [ ! -f /tmp/uninstall_agent.sh ]; then "
+                "curl -s -o /tmp/uninstall_agent.sh https://raw.githubusercontent.com/eskvisor/agent/main/scripts/uninstall_agent.sh || "
+                "wget -q -O /tmp/uninstall_agent.sh https://raw.githubusercontent.com/eskvisor/agent/main/scripts/uninstall_agent.sh || "
+                "echo 'Не удалось скачать скрипт удаления'; "
+                "fi"
+            ),
+            # Делаем скрипт исполняемым
+            "chmod +x /tmp/uninstall_agent.sh 2>/dev/null || true",
+            # Проверяем существование агента перед удалением
+            (
+                "if [ -d /opt/eskvisor ] || "
+                "[ -f /etc/systemd/system/eskvisor.service ] || "
+                "[ -f /etc/systemd/system/eskvisor-state.service ] || "
+                "[ -f /etc/systemd/system/eskvisor-task-manager.service ]; then "
+                f"sudo /tmp/uninstall_agent.sh {' '.join(uninstall_params)}; "
+                "else "
+                "echo 'Агент не найден на системе'; "
+                "fi"
+            ),
+            # Очистка временных файлов
+            "rm -f /tmp/uninstall_agent.sh",
+            # Дополнительная проверка удаления
+            (
+                "echo '=== ПРОВЕРКА УДАЛЕНИЯ ==='; "
+                "echo 'Директории:'; "
+                "ls -la /opt/ 2>/dev/null | grep -i eskvisor || echo '  /opt/eskvisor не найден'; "
+                "echo 'Сервисы:'; "
+                "systemctl list-units --all 2>/dev/null | grep -i eskvisor || echo '  Сервисы eskvisor не найдены'; "
+                "echo 'Процессы:'; "
+                "ps aux 2>/dev/null | grep -i '[e]skvisor' || echo '  Процессы eskvisor не найдены'"
+            ),
+        ]
+
+        # Определяем команду SSH в зависимости от доступности ключа
+        if has_key_access:
+            ssh_command = [
+                "ssh",
+                "-i",
+                str(self.ssh_key_path),
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                f"{username}@{hostname}",
+                " && ".join(uninstall_commands),
+            ]
+        else:
+            # Используем sshpass для аутентификации по паролю
+            ssh_command = [
+                "sshpass",
+                "-p",
+                password,
+                "ssh",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                f"{username}@{hostname}",
+                " && ".join(uninstall_commands),
+            ]
+
+        self.logger.info(f"Выполнение удаления на {hostname}...")
+        result = self.cli.execute(
+            ssh_command, return_proc=True, timeout=300
+        )  # 5 минут таймаут
+
+        if result.returncode == 0:
+            self.logger.info(f"✅ Агент успешно удален с {hostname}")
+            self.logger.debug(f"Вывод удаления: {result.stdout[:1000]}...")
+            return True
+        else:
+            self.logger.error(
+                f"❌ Ошибка удаления агента с {hostname}: {result.stderr}"
+            )
+            return False
+
+    def uninstall_agent_via_ssh_async(
+        self,
+        hostname: str,
+        username: str,
+        force: bool = False,
+        remove_dependencies: bool = False,
+        password: str | None = None,
+    ) -> threading.Thread:
+        """
+        Асинхронное удаление агента с удаленного хоста
+
+        Args:
+            hostname: хост с установленным агентом
+            username: пользователь на целевом хосте
+            force: пропустить подтверждение удаления
+            remove_dependencies: удалить все зависимости
+            password: пароль для SSH (если требуется)
+
+        Returns:
+            threading.Thread: поток выполнения удаления
+        """
+
+        def uninstall_thread():
+            """Внутренняя функция для запуска в потоке"""
+            try:
+                success = self.uninstall_agent_via_ssh(
+                    hostname=hostname,
+                    username=username,
+                    force=force,
+                    remove_dependencies=remove_dependencies,
+                    password=password,
+                )
+
+            except Exception as e:
+                self.logger.error(f"Ошибка в потоке удаления для {hostname}: {str(e)}")
+
+        thread = threading.Thread(
+            target=uninstall_thread,
+            name=f"AgentUninstall-{hostname}",
+            daemon=True,
         )
 
         thread.start()

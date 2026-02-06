@@ -73,6 +73,7 @@ class VMCreateRequest(BaseModel):
     cluster_id: int
     node_id: int
     name: str
+    uuid: str | None = None
     template: str | None = Field(
         default=None, description="Является ли сущность шаблоном для создания ВМ"
     )
@@ -111,18 +112,17 @@ class VMCreateRequest(BaseModel):
 
     # Устройства
     disks: list[DiskCreate | DiskAttach] = Field(
-        default_factory=list,
-        description="Список дисковых устройств (создаваемых или подключаемых)",
+        ..., description="Список дисковых устройств (создаваемых или подключаемых)"
     )
-    networks: list[VmNetAdapter] = Field(
-        default_factory=list, description="Список сетевых адаптеров для подключения ВМ"
+    net_adapters: list[VmNetAdapter] = Field(
+        ..., description="Список сетевых адаптеров для подключения ВМ"
     )
     controllers: list[VMController] = Field(
         default_factory=list, description="Список контроллеров (SCSI, IDE, USB и т.д.)"
     )
 
     # Графика и консоль
-    graphics: GraphicsType = Field(
+    graphics_type: GraphicsType = Field(
         default=GraphicsType.VNC,
         description="Тип графического интерфейса: VNC, SPICE, none и т.д.",
     )
@@ -181,7 +181,7 @@ class VmUpdateRequest(BaseModel):
     autostart: bool | None = None
     description: str | None = None
     name: str | None = None
-    graphics: dict | None = None
+    graphics_type: GraphicsType | None = None
     video_model: VideoModel = Field(
         default=None, description="Модель видеокарты: qxl, cirrus, vga, virtio и т.д."
     )
@@ -233,6 +233,7 @@ class VirtualMachine(BaseModel):
     os_type: OSType
     os_variant: str
     noautoconsole: bool
+    graphics_type: GraphicsType
     graphics_port: bool
     graphics_listen: bool
     console_type: str
@@ -255,3 +256,14 @@ class VMList(BaseModel):
 class VMChangeStateResponse(BaseModel):
     vm: VirtualMachine
     task: CreateTask
+
+
+print(
+    VMCreateRequest(
+        cluster_id=2,
+        node_id=2,
+        name="test-create-from-backend",
+        disks=[DiskCreate()],
+        net_adapters=[VmNetAdapter()],
+    ).model_dump_json()
+)

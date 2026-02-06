@@ -73,6 +73,13 @@ class TaskHandler:
         self.balansir.vm_manager = self.vm_manager
         self.balansir.storage_manager = self.storage_manager
 
+        self.vm_manager.snapshot = self.snapshot_manager
+        self.vm_manager.storage_manager = self.storage_manager
+        self.vm_manager.network_manager = self.net_manager
+
+        self.balansir.storage_manager = self.storage_manager
+        self.balansir.vm_manager = self.vm_manager
+
     def handle_task(
         self, task_type: TaskType, action: str, params: dict[str, Any]
     ) -> dict[str, Any]:
@@ -349,31 +356,34 @@ class TaskHandler:
     ) -> Disk | bool | None | list[Disk] | StorageMessage:
         """Обработка задач хранилища"""
         self.storage_manager.logger.info(f"Параметры: {params}")
-        if action == "create_disk":
+        if action == "create":
             # Создание диска
             disk_create = DiskCreate(**params)
             result = self.storage_manager.create_disk(disk_create)
             return result
 
-        elif action == "delete_disk":
+        elif action == "delete":
             # Удаление диска
-            disk_path = params.get("disk_path")
-            success = self.storage_manager.delete_disk_with_msg(disk_path)
+            disk_name = params.get("disk_name")
+            disk_format = params.get("format")
+            success = self.storage_manager.delete_disk_with_msg_by_name(
+                disk_name, disk_format
+            )
             return success
 
-        elif action == "attach_disk":
+        elif action == "attach":
             # Подключение диска к ВМ
             disk_attach = DiskAttach(**params)
             result = self.storage_manager.attach_disk(disk_attach)
             return result.model_dump()
 
-        elif action == "detach_disk":
+        elif action == "detach":
             # Отключение диска от ВМ
             disk_detach = DiskDetach(**params)
             success = self.storage_manager.detach_disk(disk_detach)
             return success
 
-        elif action == "list_disks":
+        elif action == "list":
             # Список дисков
             query = DiskQuery(**params)
             disks = self.storage_manager.list_disks(query)

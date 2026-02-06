@@ -3,9 +3,12 @@ from datetime import datetime
 from typing import Any
 
 from src.db.models.virtual_machines import VirtualMachineModel, VMStateDB
+from src.models.disk import DiskFormat, DiskType
 from src.models.general import VMState
 from src.services.pool.db_pool import DBPool
 from src.models.vm import VmUpdateRequest, VMListRequest
+from src.db.models.disks import DiskModel
+from src.db.models.network_adapters import NetAdapterModel
 
 
 class VirtualMachinesDB:
@@ -14,9 +17,85 @@ class VirtualMachinesDB:
 
     async def create_virtual_machine(self, data: dict):
         async with self.db_pool.get_connection() as session:
-            vm = VirtualMachineModel(**data)
+            # Извлекаем связанные данные
+            disks_data = data.pop("disks", [])
+            net_adapters_data = data.pop("net_adapters", [])
+
+            # Определяем список допустимых полей для VM
+            vm_fields = {
+                "name",
+                "uuid",
+                "cluster_id",
+                "node_id",
+                "resource_pool_id",
+                "description",
+                "state",
+                "template",
+                "vcpus",
+                "max_vcpus",
+                "memory_mb",
+                "video_memory_mb",
+                "architecture",
+                "os_type",
+                "os_variant",
+                "machine_type",
+                "cpu_model",
+                "graphics_type",
+                "graphics_port",
+                "graphics_listen",
+                "console_type",
+                "video_model",
+                "boot_uefi",
+                "secure_boot",
+                "boot_devices",
+                "autostart_vm",
+                "autostart",
+                "noautoconsole",
+                "infrastructure",
+                "controllers",
+                "extra_args",
+                "net_qemu_commandline",
+            }
+
+            # Фильтруем данные для VM
+            vm_data = {k: v for k, v in data.items() if k in vm_fields}
+
+            # Создаем VM
+            vm = VirtualMachineModel(**vm_data)
             session.add(vm)
+            await session.flush()  # Получаем ID VM
+
+            # Создаем диски
+            for disk_item in disks_data:
+                # Определяем допустимые поля для диска
+                disk = DiskModel(
+                    name=disk_item.get("name"),
+                    description=disk_item.get("description"),
+                    format=DiskFormat(disk_item.get("format")),
+                    capacity_gb=disk_item.get("size_gb"),
+                    capacity_bytes=disk_item.get("size_bytes"),
+                    sparse=disk_item.get("sparse"),
+                    cache_mode=disk_item.get("cache"),
+                    readonly=disk_item.get("readonly"),
+                    resource_pool=disk_item.get("resource_pool"),
+                    vm_id=vm.id,
+                )
+                session.add(disk)
+
+            # Создаем сетевые адаптеры
+            for adapter_item in net_adapters_data:
+                adapter = NetAdapterModel(
+                    network_type=adapter_item.get("network_type"),
+                    model=adapter_item.get("model"),
+                    mac_address=adapter_item.get("mac_address"),
+                    source=adapter_item.get("source"),
+                    vm_id=vm.id,
+                )
+                session.add(adapter)
+
             await session.commit()
+            await session.refresh(vm)
+
             return vm.id
 
     async def get_virtual_machine(self, vm_id: int):

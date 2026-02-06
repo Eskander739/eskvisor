@@ -7,12 +7,13 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi import status
 from starlette.middleware.cors import CORSMiddleware
-from api.routers import users, system, vm, ws, nodes, clusters
+from api.routers import users, system, vm, ws, nodes, clusters, disks
 from api.routers.sync_state import nodes as sync_nodes
 from src.constants import ApiVersion, PROD_ENV
 from src.db.balansir import ResourcePoolsDB
 from src.db.clusters import ClustersDB
 from src.db.disks import DisksDB
+from src.db.net_adapters import NetworkAdaptersDB
 from src.db.nodes import NodesDB
 from src.db.users import UsersDB
 from src.db.virtual_machines import VirtualMachinesDB
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     app.state.users_db = UsersDB(app.state.db_pool)
     app.state.resource_pools_db = ResourcePoolsDB(app.state.db_pool)
     app.state.virtual_machines_db = VirtualMachinesDB(app.state.db_pool)
+    app.state.net_adapters_db = NetworkAdaptersDB(app.state.db_pool)
     app.state.disks_db = DisksDB(app.state.db_pool)
     app.state.virtual_networks_db = VirtualNetworksDB(app.state.db_pool)
     app.state.redis_service = RedisJWTManager(app.state.redis_pool)
@@ -170,6 +172,7 @@ app.include_router(users.router)
 app.include_router(system.router)
 app.include_router(vm.router)
 app.include_router(ws.router)
+app.include_router(disks.router)
 app.include_router(clusters.router)
 app.include_router(nodes.router)
 app.include_router(sync_nodes.router)

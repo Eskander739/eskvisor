@@ -6,6 +6,7 @@ from websockets import State, ConnectionClosed
 
 from src.constants import WS_POOL_SIZE
 from src.db.clusters import ClustersDB
+from src.logger_config import DefaultLogger
 from src.models.general import NodeWebsocketConnections, CreateTask
 from src.services.pool.db_pool import DBPool
 
@@ -16,6 +17,7 @@ class TaskWebsocketPool:
         self.connection_count = connection_count
         self.__connections = []
         self.clusters_db = ClustersDB(db_pool_instance)
+        self.logger = DefaultLogger("TaskWebsocketPool")
 
     async def create_connections(self):
         cluster_list = await self.clusters_db.get_cluster_list()
@@ -65,7 +67,8 @@ class TaskWebsocketPool:
                         self.uri_startswith.format(node_connection.ip_address)
                     )
                 try:
-                    await connection.send(orjson.dumps(data.model_dump()))
+                    await connection.send(orjson.dumps(data.model_dump()), text=True)
+                    self.logger.info("Отправка задачи в пул")
                     await node_connection.connections_queue.put(connection)
                 except ConnectionClosed:
                     if connection.state not in (State.CLOSED, State.CLOSING):

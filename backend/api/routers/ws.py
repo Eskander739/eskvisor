@@ -91,6 +91,7 @@ async def notification(
                 connect = await websockets.connect(
                     uri_startswith.format(node.ip_address)
                 )
+                logger.info(f"Прослушивание хоста {node.id} на кластере {cluster.id}")
                 local_node_connections.append(
                     NodeWebsocketConnection(
                         cluster_id=cluster.id, node_id=node.id, connection=connect
@@ -105,7 +106,7 @@ async def notification(
                 for current_node in local_node_connections:
                     try:
                         result = await current_node.connection.recv()
-                        await websocket.send_json(orjson.dumps(result))
+                        await websocket.send_json(orjson.loads(result))
                     except Exception:
                         pass
 
@@ -128,7 +129,7 @@ async def notification(
                 code=Message.internal_error.name,
                 success=False,
                 note=str(err),
-            ).model_dump()
+            ).model_dump_json()
         )
 
 
@@ -159,14 +160,14 @@ async def vnc(
                         code=Message.internal_error.name,
                         success=False,
                         note=str(err),
-                    )
+                    ).model_dump_json()
                 )
 
     try:
         while True:
             try:
                 result = await connect.recv()
-                await websocket.send_json(orjson.dumps(result))
+                await websocket.send_json(orjson.loads(result))
 
             except orjson.JSONDecodeError as err:
                 await websocket.send_json(
@@ -187,7 +188,7 @@ async def vnc(
                 code=Message.internal_error.name,
                 success=False,
                 note=str(err),
-            ).model_dump()
+            ).model_dump_json()
         )
 
 
@@ -227,7 +228,7 @@ async def system_stats(
                     ):
                         await current_node.connection.send(message.model_dump_json())
                         result = await current_node.connection.recv()
-                        await websocket.send_json(orjson.dumps(result))
+                        await websocket.send_json(orjson.loads(result))
 
             except orjson.JSONDecodeError as err:
                 await websocket.send_json(
@@ -248,5 +249,5 @@ async def system_stats(
                 code=Message.internal_error.name,
                 success=False,
                 note=str(err),
-            ).model_dump()
+            ).model_dump_json()
         )

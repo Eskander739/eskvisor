@@ -1,7 +1,8 @@
-from sqlalchemy import select, update, delete, and_, or_, func
+from sqlalchemy import select, update, delete, and_, func
 from datetime import datetime
 
-from src.db.models.disks import DiskModel, DiskStatusDB, DiskTypeDB, DiskFormatDB
+from src.db.models.disks import DiskModel
+from src.models.disk import DiskFormat, DiskStatus, DiskType, DiskUpdate
 from src.services.pool.db_pool import DBPool
 
 
@@ -30,14 +31,21 @@ class DisksDB:
             )
             return result.scalar_one_or_none()
 
+    async def get_disk_by_id(self, disk_id: int):
+        async with self.db_pool.get_connection() as session:
+            result = await session.execute(
+                select(DiskModel).where(DiskModel.id == disk_id)
+            )
+            return result.scalar_one_or_none()
+
     async def get_disks_list(
         self,
         vm_name: str | None = None,
         pool: str | None = None,
         resource_pool: str | None = None,
-        disk_type: DiskTypeDB | None = None,
-        disk_format: DiskFormatDB | None = None,
-        status: DiskStatusDB | None = None,
+        disk_type: DiskType | None = None,
+        disk_format: DiskFormat | None = None,
+        status: DiskStatus | None = None,
         search_path: str | None = None,
         min_size_gb: float | None = None,
         max_size_gb: float | None = None,
@@ -69,9 +77,9 @@ class DisksDB:
                 conditions.append(DiskModel.capacity_gb <= max_size_gb)
             if attached_only is not None:
                 if attached_only:
-                    conditions.append(DiskModel.status == DiskStatusDB.ATTACHED)
+                    conditions.append(DiskModel.status == DiskStatus.ATTACHED)
                 else:
-                    conditions.append(DiskModel.status != DiskStatusDB.ATTACHED)
+                    conditions.append(DiskModel.status != DiskStatus.ATTACHED)
 
             if conditions:
                 query = query.where(and_(*conditions))
@@ -81,9 +89,17 @@ class DisksDB:
             result = await session.execute(query)
             return result.scalars().all()
 
-    async def update_disk(self, disk_id: int, data: dict):
+    async def update_disk(self, disk_id: int, data: DiskUpdate):
         async with self.db_pool.get_connection() as session:
+            data = data.model_dump()
             data["modified"] = datetime.now()
+
+            if data.get("new_name") is None:
+                data.pop("new_name")
+
+            if data.get("new_size_gb") is None:
+                data.pop("new_size_gb")
+
             await session.execute(
                 update(DiskModel).where(DiskModel.id == disk_id).values(**data)
             )
@@ -96,7 +112,7 @@ class DisksDB:
                 .where(DiskModel.id == disk_id)
                 .values(
                     vm_name=vm_name,
-                    status=DiskStatusDB.ATTACHED.value,
+                    status=DiskStatus.ATTACHED.value,
                     modified=datetime.now(),
                 )
             )
@@ -109,7 +125,7 @@ class DisksDB:
                 .where(DiskModel.id == disk_id)
                 .values(
                     vm_name=None,
-                    status=DiskStatusDB.DETACHED.value,
+                    status=DiskStatus.DETACHED.value,
                     modified=datetime.now(),
                 )
             )
@@ -127,7 +143,7 @@ class DisksDB:
                 func.count(DiskModel.id),
                 func.sum(DiskModel.capacity_bytes),
                 func.sum(DiskModel.allocation_gb * 1024**3),
-                func.count().filter(DiskModel.status == DiskStatusDB.ATTACHED.value),
+                func.count().filter(DiskModel.status == DiskStatus.ATTACHED.value),
             )
 
             conditions = []
@@ -146,7 +162,7 @@ class DisksDB:
         async with self.db_pool.get_connection() as session:
             result = await session.execute(
                 select(DiskModel).where(
-                    DiskModel.type == DiskTypeDB.ORPHANED.value,
+                    DiskModel.type == DiskType.ORPHANED.value,
                     DiskModel.vm_name.is_(None),
                 )
             )

@@ -3,9 +3,9 @@ from fastapi.responses import JSONResponse
 
 from api.dependencies import get_agent_installer
 from src.constants import ApiVersion, DEFAULT_AGENT_DIR
-from src.models.agent import ConnectHostRequest, UpdateAgentRequest
+from src.models.agent import ConnectHostRequest, UpdateAgentRequest, DeleteAgentRequest
 from src.models.error import Message
-from src.models.general import HealthInfo, InstallAgentResponse
+from src.models.general import HealthInfo, AgentResponse
 
 router = APIRouter(
     prefix=f"{ApiVersion.V0}/system",
@@ -13,7 +13,7 @@ router = APIRouter(
 )
 
 
-@router.post(f"/install-agent", status_code=status.HTTP_200_OK)
+@router.post("/install-agent", status_code=status.HTTP_200_OK)
 async def install_agent(
     connect_host: ConnectHostRequest, agent_installer=Depends(get_agent_installer)
 ):
@@ -28,36 +28,54 @@ async def install_agent(
         password=connect_host.password,
         backend_ip=connect_host.backend_ip,
     )
-    return InstallAgentResponse(
+    return AgentResponse(
         ip_address=connect_host.ip,
         username=connect_host.admin,
         code=Message.agent_installation_started.name,
     )
 
 
-@router.post(f"/update-agent")
+@router.post("/update-agent")
 async def update_agent(
-    connect_host: UpdateAgentRequest, agent_installer=Depends(get_agent_installer)
+    update_host: UpdateAgentRequest, agent_installer=Depends(get_agent_installer)
 ):
     agent_installer.install_agent_via_ssh_async(
-        hostname=connect_host.ip,
+        hostname=update_host.ip,
         agent_package_path=(
-            connect_host.agent_file
-            if connect_host.agent_file is not None
+            update_host.agent_file
+            if update_host.agent_file is not None
             else DEFAULT_AGENT_DIR
         ),
-        username=connect_host.admin,
+        username=update_host.admin,
         is_update=True,
-        backend_ip=connect_host.backend_ip,
+        backend_ip=update_host.backend_ip,
     )
-    return InstallAgentResponse(
-        ip_address=connect_host.ip,
-        username=connect_host.admin,
+    return AgentResponse(
+        ip_address=update_host.ip,
+        username=update_host.admin,
         code=Message.agent_installation_started.name,
     )
 
 
-@router.get(f"/health")
+@router.delete("/delete-agent")
+async def delete_agent(
+    delete_host: DeleteAgentRequest, agent_installer=Depends(get_agent_installer)
+):
+    agent_installer.uninstall_agent_via_ssh_async(
+        hostname=delete_host.ip,
+        force=True,
+        remove_dependencies=True,
+        username=delete_host.admin,
+        password=delete_host.password,
+    )
+    return AgentResponse(
+        ip_address=delete_host.ip,
+        username=delete_host.admin,
+        code=Message.agent_deleting_started.name,
+    )
+
+
+@router.get("/health")
 async def health(request: Request):
     """Проверка здоровья сервера"""
     health_info = HealthInfo(

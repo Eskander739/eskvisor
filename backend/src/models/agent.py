@@ -33,3 +33,11 @@ class UpdateAgentRequest(BaseModel):
             IPv4Address(self.backend_ip)
 
         return self
+
+
+class DeleteAgentRequest(BaseModel):
+    ip: str
+    admin: str
+    password: str | None = None
+    force: bool = False
+    remove_dependencies: bool = False

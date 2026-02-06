@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     JSON,
     Enum,
+    UUID,
 )
 from sqlalchemy.orm import relationship
 
@@ -35,7 +36,7 @@ class VirtualMachineModel(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False, unique=True)
-    uuid = Column(String(36), nullable=False, unique=True)
+    uuid: UUID = Column(String(36), nullable=False, unique=True)
 
     # References
     cluster_id = Column(Integer, ForeignKey("clusters.id"), nullable=False)
@@ -44,7 +45,7 @@ class VirtualMachineModel(Base):
 
     # Basic information
     description = Column(Text, nullable=True)
-    state = Column(Integer, default=VMStateDB.SHUTOFF)
+    state = Column(String(50), default=VMStateDB.SHUTOFF)
     template = Column(String(255), nullable=True)
 
     # Resources
@@ -82,8 +83,6 @@ class VirtualMachineModel(Base):
 
     # Additional configurations
     controllers = Column(JSON, default=list)
-    networks = Column(JSON, default=list)
-    disks = Column(JSON, default=list)
     extra_args = Column(Text, nullable=True)
     net_qemu_commandline = Column(JSON, nullable=True)
 
@@ -98,3 +97,20 @@ class VirtualMachineModel(Base):
     resource_pool = relationship(
         "ResourcePoolModel", backref="virtual_machines", lazy="select"
     )
+    disks = relationship(
+        "DiskModel",
+        backref="attached_disks",
+        lazy="select",
+        primaryjoin="DiskModel.vm_id == VirtualMachineModel.id",
+    )
+    net_adapters = relationship(
+        "NetAdapterModel",  # Имя класса в виде строки
+        backref="net_adapters",  # Измененное имя обратной ссылки
+        lazy="select",
+        primaryjoin="NetAdapterModel.vm_id == VirtualMachineModel.id",
+    )
+
+
+from src.db.models.network_adapters import (
+    NetAdapterModel,
+)  # не удалять! влияет на работу БД

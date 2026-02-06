@@ -470,7 +470,7 @@ class StorageManager(LibvirtClient):
 
         return True
 
-    def delete_disk_with_msg(self, disk_path: str | None = None) -> StorageMessage:
+    def delete_disk_with_msg(self, disk_path: str) -> StorageMessage:
         delete_disk_result = self.delete_disk(disk_path)
 
         if delete_disk_result:
@@ -479,12 +479,33 @@ class StorageManager(LibvirtClient):
             )
         else:
             return StorageMessage(
-                code=CommandMessagesEnum.disk_delete_error.name, success=True
+                code=CommandMessagesEnum.disk_delete_error.name, success=False
+            )
+
+    def delete_disk_with_msg_by_name(
+        self, disk_name: str, disk_format: DiskFormat
+    ) -> StorageMessage:
+        """
+        В контексте всего проекта подразумеваем что все диски хранятся в системной папке для дисков eskvisor
+        """
+
+        disk_path = str(
+            Path(self.system_disk_path) / f"{disk_name}.{disk_format.value}"
+        )
+        delete_disk_result = self.delete_disk(disk_path)
+
+        if delete_disk_result:
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_successfully_deleted.name, success=True
+            )
+        else:
+            return StorageMessage(
+                code=CommandMessagesEnum.disk_delete_error.name, success=False
             )
 
     def delete_disk(
         self,
-        disk_path: str | None = None,
+        disk_path: str,
     ) -> bool:
         try:
             if self.system_disk_path == disk_path:

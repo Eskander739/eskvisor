@@ -1,3 +1,6 @@
+import uuid
+
+import orjson
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette import status
@@ -23,13 +26,23 @@ async def create_vm(
     ws_task: TaskWebsocketPool = Depends(get_ws_task),
 ):
     logger.info(f"Создание виртуальной машины{vm_info.name}")
-    request.app.state.virtual_machines_db.create_virtual_machine(vm_info.model_dump())
+    vm_info.uuid = str(uuid.uuid4())
+    vm_info.name = str(uuid.uuid4())
+    vm_info_model_string = vm_info.model_dump_json()
+    vm_info_model = orjson.loads(vm_info_model_string)
+    vm = await request.app.state.virtual_machines_db.get_virtual_machine_by_name(
+        vm_info.name
+    )
+    # if vm:
+    #     logger.info(f"Виртуальная машина {vm_info.name} уже создана")
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST, detail=Message.vm_already_created.name
+    #     )
+    await request.app.state.virtual_machines_db.create_virtual_machine(vm_info_model)
     await ws_task.send_json(
         vm_info.cluster_id,
         vm_info.node_id,
-        CreateTask(
-            task_type=TaskType.VM, action="create", params=vm_info.model_dump_json()
-        ),
+        CreateTask(task_type=TaskType.VM, action="create", params=vm_info_model_string),
     )
     return JSONResponse({"code": "VM successfully created"})
 
@@ -47,7 +60,7 @@ async def edit_vm(
     if vm is None:
         logger.info(f"Виртуальная машина {vm_id} не найдена")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found
+            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found.name
         )
     logger.info(f"Редактирование виртуальной машины {vm_info.name}")
     request.app.state.virtual_machines_db.update_virtual_machine_with_request(vm_info)
@@ -83,7 +96,7 @@ async def vm_by_id(
     if vm is None:
         logger.info(f"Виртуальная машина {vm_id} не найдена")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found
+            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found.name
         )
     logger.info(f"Получение виртуальной машины{vm_id}")
     return vm
@@ -100,7 +113,7 @@ async def start_vm(
     if vm is None:
         logger.info(f"Виртуальная машина {vm_id} не найдена")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found
+            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found.name
         )
     await request.app.state.virtual_machines_db.update_state_virtual_machine(
         vm_id, VMState.STARTING
@@ -126,7 +139,7 @@ async def pause_vm(
     if vm is None:
         logger.info(f"Виртуальная машина {vm_id} не найдена")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found
+            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found.name
         )
     await request.app.state.virtual_machines_db.update_state_virtual_machine(
         vm_id, VMState.PAUSING
@@ -153,7 +166,7 @@ async def shutoff_vm(
     if vm is None:
         logger.info(f"Виртуальная машина {vm_id} не найдена")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found
+            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found.name
         )
     await request.app.state.virtual_machines_db.update_state_virtual_machine(
         vm_id, VMState.SHUTDOWN
@@ -181,7 +194,7 @@ async def reboot_vm(
     if vm is None:
         logger.info(f"Виртуальная машина {vm_id} не найдена")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found
+            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found.name
         )
     await request.app.state.virtual_machines_db.update_state_virtual_machine(
         vm_id, VMState.REBOOT
@@ -205,7 +218,7 @@ async def delete_vm(
     if vm is None:
         logger.info(f"Виртуальная машина {vm_id} не найдена")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found
+            status_code=status.HTTP_404_NOT_FOUND, detail=Message.vm_not_found.name
         )
     await request.app.state.virtual_machines_db.update_state_virtual_machine(
         vm_id, VMState.DELETING

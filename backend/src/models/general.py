@@ -67,7 +67,7 @@ class MachineType(Enum):
     PC_I440FX = "pc-i440fx"  # PC с i440FX чипсетом
 
 
-class InstallAgentResponse(BaseModel):
+class AgentResponse(BaseModel):
     ip_address: str
     username: str
     code: str
@@ -88,4 +88,4 @@ class CreateTask(BaseModel):
     request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     task_type: TaskType = Field(..., description="Тип задачи для диспетчеризации")
     action: str = Field(..., description="Действие (create, delete, update, etc.)")
-    params: dict[str, Any] = Field(default_factory=dict, description="Данные задачи")
+    params: str | None = Field(..., description="Данные задачи")

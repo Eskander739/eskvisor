@@ -44,7 +44,7 @@ async def task(
     try:
         while True:
             data = await websocket.receive_text()
-
+            logger.info(f"Новый запрос: {logger}")
             try:
                 message = orjson.loads(data)
                 action = message.get("action")
@@ -100,11 +100,15 @@ async def task(
                     )
 
                 else:
+                    if isinstance(message.get("params"), str):
+                        params = orjson.loads(message.get("params"))
+                    else:
+                        params = message.get("params")
                     task = Task(
                         request_id=message.get("request_id"),
                         task_type=TaskType(message.get("task_type", "vm")),
                         action=message.get("action"),
-                        params=message.get("params", {}),
+                        params=params,
                         created_at=datetime.now(),
                     )
 
