@@ -34,7 +34,7 @@ async def create_cluster(
     )
 
 
-@router.post("/{cluster_id}/edit")
+@router.put("/{cluster_id}/edit")
 async def edit_cluster(
     cluster_id: int,
     cluster_data: ClusterUpdateRequest,

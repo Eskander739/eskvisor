@@ -8,7 +8,7 @@ from src.models.node import NodeSyncStateFromAgent, NodeSyncState
 
 router = APIRouter(
     prefix=f"{ApiVersion.V0}/sync/node",
-    tags=["nodes"],
+    tags=["nodes-sync"],
 )
 
 

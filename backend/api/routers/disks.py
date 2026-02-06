@@ -14,8 +14,8 @@ from src.models.vm import VMListRequest
 from src.services.pool.task_ws_pool import TaskWebsocketPool
 
 router = APIRouter(
-    prefix=f"{ApiVersion.V0}/vm",
-    tags=["vm"],
+    prefix=f"{ApiVersion.V0}/disks",
+    tags=["disks"],
 )
 
 
@@ -47,7 +47,7 @@ async def create_disk(
     return JSONResponse({"code": "Disk successfully created"})
 
 
-@router.post("/{disk_id}/edit")
+@router.put("/{disk_id}/edit")
 async def edit_disk(
     request: Request,
     disk_id: int,

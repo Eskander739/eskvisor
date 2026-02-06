@@ -35,7 +35,7 @@ async def install_agent(
     )
 
 
-@router.post("/update-agent")
+@router.put("/update-agent")
 async def update_agent(
     update_host: UpdateAgentRequest, agent_installer=Depends(get_agent_installer)
 ):

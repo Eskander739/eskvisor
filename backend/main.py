@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi import status
 from starlette.middleware.cors import CORSMiddleware
-from api.routers import users, system, vm, ws, nodes, clusters, disks
+from api.routers import users, system, vm, ws, nodes, clusters, disks, net_adapters
 from api.routers.sync_state import nodes as sync_nodes
 from src.constants import ApiVersion, PROD_ENV
 from src.db.balansir import ResourcePoolsDB
@@ -173,6 +173,7 @@ app.include_router(system.router)
 app.include_router(vm.router)
 app.include_router(ws.router)
 app.include_router(disks.router)
+app.include_router(net_adapters.router)
 app.include_router(clusters.router)
 app.include_router(nodes.router)
 app.include_router(sync_nodes.router)

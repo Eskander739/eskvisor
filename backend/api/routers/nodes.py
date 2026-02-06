@@ -36,7 +36,7 @@ async def create_node(
     )
 
 
-@router.post("/{node_id}/edit")
+@router.put("/{node_id}/edit")
 async def edit_node(
     node_id: int,
     node_data: dict,

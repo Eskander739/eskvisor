@@ -256,14 +256,3 @@ class VMList(BaseModel):
 class VMChangeStateResponse(BaseModel):
     vm: VirtualMachine
     task: CreateTask
-
-
-print(
-    VMCreateRequest(
-        cluster_id=2,
-        node_id=2,
-        name="test-create-from-backend",
-        disks=[DiskCreate()],
-        net_adapters=[VmNetAdapter()],
-    ).model_dump_json()
-)

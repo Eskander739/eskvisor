@@ -18,7 +18,7 @@ from src.services.pool.task_ws_pool import TaskWebsocketPool
 
 router = APIRouter(
     prefix=f"{ApiVersion.V0}/net-adapters",
-    tags=["vm"],
+    tags=["net-adapters"],
 )
 
 
@@ -60,7 +60,7 @@ async def create_net_adapter(
     return JSONResponse({"code": "Net adapter successfully created"})
 
 
-@router.post("/{net_adapter_id}/edit")
+@router.put("/{net_adapter_id}/edit")
 async def edit_net_adapter(
     request: Request,
     net_adapter_id: int,

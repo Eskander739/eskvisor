@@ -47,7 +47,7 @@ async def create_vm(
     return JSONResponse({"code": "VM successfully created"})
 
 
-@router.post("/{vm_id}/edit")
+@router.put("/{vm_id}/edit")
 async def edit_vm(
     request: Request,
     vm_id: int,
