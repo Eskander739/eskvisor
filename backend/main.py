@@ -1,5 +1,6 @@
 import uuid
 from contextlib import asynccontextmanager
+from typing import Any
 
 import uvicorn
 from dotenv import load_dotenv
@@ -17,6 +18,7 @@ from api.routers import (
     disks,
     net_adapters,
     network,
+    balansir,
 )
 from api.routers.sync_state import sync_nodes, sync_network
 from api.routers.sync_state import sync_vm
@@ -45,7 +47,7 @@ logger = DefaultLogger("Eskvisor Backend")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: Any):
     # Инициализация
     db_pool = DBPool()
     await db_pool.create_tables()
@@ -55,7 +57,6 @@ async def lifespan(app: FastAPI):
 
     redis_pool = RedisPoolManager()
     await redis_pool.create_connections()
-
     # Сохраняем в состояние приложения
     app.state.db_pool = db_pool
     app.state.websocket_pool = websocket_pool
@@ -189,6 +190,7 @@ app.include_router(net_adapters.router)
 app.include_router(clusters.router)
 app.include_router(nodes.router)
 app.include_router(network.router)
+app.include_router(balansir.router)
 app.include_router(sync_nodes.router)
 app.include_router(sync_vm.router)
 app.include_router(sync_disk.router)

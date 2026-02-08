@@ -50,3 +50,5 @@ class Message(Enum):
     disk_founded = "Диск найден"
     virtual_network_found = "Виртуальная сеть найдена"
     virtual_network_not_found = "Виртуальная сеть не найдена"
+    resource_pool_not_found = "Ресурс пул не найден"
+    resource_pool_already_exists = "Ресурс пул уже создан"

@@ -51,6 +51,7 @@ class DiskModel(Base):
     description = Column(Text, nullable=True)
     created = Column(DateTime, default=datetime.now)
     modified = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Search and filtering
     search_path = Column(String(500), nullable=True)

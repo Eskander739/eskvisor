@@ -13,9 +13,10 @@ from sqlalchemy import (
     Enum,
     UUID,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from src.db.base import Base
+from src.db.models.balansir import ResourceReservationVM, ResourcePoolModel
 
 
 class VMStateDB(Enum):
@@ -94,8 +95,11 @@ class VirtualMachineModel(Base):
     # Relationships
     cluster = relationship("ClusterModel", backref="virtual_machines", lazy="select")
     node = relationship("NodeModel", backref="virtual_machines", lazy="select")
-    resource_pool = relationship(
-        "ResourcePoolModel", backref="virtual_machines", lazy="select"
+    resource_pool: Mapped[ResourcePoolModel | None] = relationship(
+        "ResourcePoolModel",
+        backref="virtual_machines",
+        lazy="select",
+        foreign_keys=[resource_pool_id],
     )
     disks = relationship(
         "DiskModel",
@@ -109,8 +113,22 @@ class VirtualMachineModel(Base):
         lazy="select",
         primaryjoin="NetAdapterModel.vm_id == VirtualMachineModel.id",
     )
+    # Связь с резервацией ресурсов (может быть NULL, не список)
+    resource_reservation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("resource_reservation_vm.id"), nullable=True
+    )
+
+    resource_reservation: Mapped[ResourceReservationVM | None] = relationship(
+        "ResourceReservationVM",
+        back_populates="virtual_machine",
+        foreign_keys=[resource_reservation_id],
+        lazy="select",
+        uselist=False,  # Не список!
+    )
 
 
 from src.db.models.network_adapters import (
     NetAdapterModel,
-)  # не удалять! влияет на работу БД
+)
+
+# TODO: не удалять! влияет на работу БД

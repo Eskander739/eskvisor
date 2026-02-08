@@ -9,25 +9,45 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
-    JSON,
+    ARRAY,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped
 
 from src.db.base import Base
 
 
 class StoragePoolTypeDB(PyEnum):
     LOGICAL = "logical"
-    DIRECTORY = "directory"
-    NETFS = "netfs"
-    ISCSI = "iscsi"
-    SCSI = "scsi"
-    MPATH = "mpath"
-    RBD = "rbd"
-    SHEEPDOG = "sheepdog"
-    GLUSTER = "gluster"
-    ZFS = "zfs"
-    VSTORAGE = "vstorage"
+
+
+class ResourceReservationVM(Base):
+    """Модель для хранения резервации ресурсов для конкретной ВМ в пуле"""
+
+    __tablename__ = "resource_reservation_vm"
+
+    id = Column(Integer, primary_key=True)
+    resource_pool_id = Column(Integer, ForeignKey("resource_pools.id"), nullable=False)
+    virtual_machine_id = Column(
+        Integer, ForeignKey("virtual_machines.id"), nullable=False
+    )
+
+    # Ресурсы, зарезервированные для ВМ
+    cpu_core_count = Column(Integer, default=0, nullable=False)
+    ram_bytes = Column(Integer, default=0, nullable=False)
+    storage_bytes = Column(Integer, default=0, nullable=False)
+
+    # Дополнительная информация
+    vm_pid = Column(Integer, nullable=True)  # PID процесса ВМ (если доступен)
+    vm_name = Column(String(255), nullable=False)  # Имя ВМ для удобства
+
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # Связи
+    resource_pool = relationship("ResourcePoolModel", back_populates="vm_reservations")
+    virtual_machine = relationship(
+        "VirtualMachineModel", back_populates="resource_reservations"
+    )
 
 
 class ResourcePoolModel(Base):
@@ -56,14 +76,22 @@ class ResourcePoolModel(Base):
     storage_available = Column(Integer, default=0)
     storage_type = Column(String(50), default=StoragePoolTypeDB.LOGICAL.value)
 
-    # VM list (stored as JSON for simplicity, could be normalized)
-    vms = Column(JSON, default=list)
-    vm_reservation_list = Column(JSON, default=list)
+    # Список ID виртуальных машин, связанных с пулом
+    vms = Column(ARRAY(Integer), default=[], nullable=False)
+
+    # Резервации ресурсов для ВМ (связь один-ко-многим)
+    vm_reservations: Mapped[list[ResourceReservationVM]] = relationship(
+        "ResourceReservationVM",
+        back_populates="resource_pool",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
 
     # Status and metadata
     enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created = Column(DateTime, default=datetime.now)
+    updated = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
     cluster = relationship("ClusterModel", backref="resource_pools", lazy="select")
