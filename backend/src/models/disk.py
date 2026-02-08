@@ -44,6 +44,7 @@ class DiskStatus(Enum):
     DETACHED = "detached"
     ERROR = "error"
     PENDING = "pending"
+    DELETED = "deleted"
 
 
 class DiskType(Enum):
@@ -150,8 +151,6 @@ class DiskCreate(BaseModel):
         min_length=1,
         max_length=255,
     )
-    cluster_id: int = Field(...)
-    node_id: int = Field(...)
     size_gb: float = Field(default=1, gt=0, le=65536, description="Размер в GB")
     format: DiskFormat = Field(default=DiskFormat.QCOW2)
     description: str | None = Field(
@@ -199,12 +198,15 @@ class DiskDetach(BaseModel):
 class DiskQuery(BaseModel):
     """Модель для запроса списка дисков"""
 
-    pool: str | None = Field(None, description="Фильтр по пулу")
-    vm_name: str | None = Field(None, description="Фильтр по виртуальной машине")
+    pool: str | None = Field(None, description="Фильтр по пулу(в контексте LVM)")
+    resource_pool: str | None = Field(
+        None, description="Фильтр по пулу(в контексте ресурс пулов)"
+    )
     search_path: list[str] | str | None = Field(
         None, description="Фильтр по директориям"
     )
-    format: DiskFormat | None = Field(None, description="Фильтр по формату")
+    disk_type: DiskType | None = Field(None, description="Фильтр по типу")
+    disk_format: DiskFormat | None = Field(None, description="Фильтр по формату")
     min_size_gb: float | None = Field(None, ge=0, description="Минимальный размер")
     max_size_gb: float | None = Field(None, ge=0, description="Максимальный размер")
     attached_only: bool | None = Field(None, description="Только подключенные диски")

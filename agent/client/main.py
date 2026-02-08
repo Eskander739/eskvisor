@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 
 from agent.client.constants import PROD_ENV
-from agent.client.api.routers import ws, system
+from agent.client.api.routers import ws, system, vm, vn, snapshot, disk
 
 load_dotenv()
 load_dotenv(PROD_ENV)
@@ -58,6 +58,10 @@ async def get_dashboard(request: Request):
 # Подключаем роутеры
 app.include_router(ws.router)
 app.include_router(system.router)
+app.include_router(vm.router)
+app.include_router(disk.router)
+app.include_router(vn.router)
+app.include_router(snapshot.router)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True, log_level="info")

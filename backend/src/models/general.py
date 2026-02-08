@@ -5,6 +5,50 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class TaskAction:
+    # Общие манипуляции
+    CREATE = "create"
+    EDIT = "edit"
+    DELETE = "delete"
+    DELETE_ALL = "delete_all"
+    LIST = "list"
+    INFO = "info"
+    CLONE = "CLONE"
+    DETACH = "detach"
+    ATTACH = "attach"
+    START = "start"
+    SHUTOFF = "shutoff"
+    RESTART = "restart"
+
+    # Манипуляции для ВМ
+    STATE = "state"
+    SUSPEND = "suspend"
+    RESUME = "resume"
+    MIGRATE = "migrate"
+
+    # Манипуляции для хранилищ
+    VM_DISKS_INFO = "vm_disks_info"
+    VM_DISKS_USED_INFO = "vm_disks_used_info"
+    EXTEND = "EXTEND"
+
+    # Манипуляции для снапшотов
+    REVERT = "revert"
+
+    # Манипуляции для виртуальных сетей
+    BACKUP = "backup"
+    VM_NETWORK_INFO = "vm_network_info"
+    AUTOSTART = "autostart"
+
+    # Манипуляции для ресурс пулов(Балансиръ)
+
+    DELETE_VMS = "delete_vms"
+    SYNC = "sync"
+
+    # Манипуляции для задач
+    VM_STATS = "vm_stats"
+    MONITOR = "monitor"
+
+
 class ObjectStatEnum(Enum):
     system = "system"
     vm = "vm"
@@ -43,6 +87,7 @@ class VMState(Enum):
     BLOCKED = "BLOCKED"  # Заблокирована
     PAUSING = "PAUSING"  # Приостановка
     PAUSED = "PAUSED"  # Приостановлена
+    RESUMING = "RESUMING"  # Возобновление
     REBOOT = "REBOOT"  # Перезагрузка
     SHUTDOWN = "SHUTDOWN"  # Завершается
     SHUTOFF = "SHUTOFF"  # Выключена
@@ -51,6 +96,9 @@ class VMState(Enum):
     CLONING = "CLONING"  # Клонируется
     DELETING = "DELETING"  # Удаление
     DELETED = "DELETED"  # Удален
+    NOT_AVAILABLE = (
+        "NOT_AVAILABLE"  # Не доступен(когда не найдена ВМ со стороны агента)
+    )
 
 
 class QemuNetdevType(str, Enum):

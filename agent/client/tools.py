@@ -1,11 +1,14 @@
 import asyncio
 import json
+import platform
 import subprocess
 
 import psutil
 import time
 from datetime import datetime
 from pydantic import ValidationError
+
+from agent.client.models.general import NodeSyncStateFromAgent
 
 
 def wait_while_not(func, timeout=60, interval=2):
@@ -297,6 +300,45 @@ async def check_vnc_service(vm_name: str, vnc_port: int) -> tuple[bool, str]:
 
     except Exception as e:
         return False, f"Ошибка проверки VNC сервиса: {str(e)}"
+
+
+def get_system_info() -> NodeSyncStateFromAgent:
+    mem = psutil.virtual_memory()
+
+    total_disk_gb = 0
+    free_disk_gb = 0
+
+    for partition in psutil.disk_partitions(all=False):
+        try:
+            usage = psutil.disk_usage(partition.mountpoint)
+            total_disk_gb += usage.total
+            free_disk_gb += usage.free
+        except (PermissionError, FileNotFoundError):
+            continue
+
+    total_disk_gb = total_disk_gb // (1024**3)
+    free_disk_gb = free_disk_gb // (1024**3)
+
+    cpu_model = None
+    if platform.system() == "Linux":
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        cpu_model = line.split(":")[1].strip()
+                        break
+        except FileNotFoundError:
+            pass
+
+    return NodeSyncStateFromAgent(
+        hostname=platform.node(),
+        cpu_cores=psutil.cpu_count(logical=True),
+        cpu_model=cpu_model,
+        total_memory_gb=mem.total // (1024**3),
+        free_memory_gb=mem.available // (1024**3),
+        total_storage_gb=total_disk_gb,
+        free_storage_gb=free_disk_gb,
+    )
 
 
 if __name__ == "__main__":

@@ -210,6 +210,20 @@ class VMListRequest(BaseModel):
     sort_desc: bool = True
 
 
+class VirtualMachineFromAgent(BaseModel):
+    name: str
+    description: str | None = None
+    state: int
+    id: int | None = None
+    net_id: str | None = None
+    hostfwd: HostForward | None = None
+    uuid: str
+    vcpus: int
+    memory: int  # в килобайтах
+    max_memory: int  # в килобайтах
+    cpu_time: int | None = None  # в наносекундах
+
+
 class VirtualMachine(BaseModel):
     """Информация о виртуальной машине"""
 

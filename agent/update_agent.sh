@@ -124,7 +124,6 @@ stop_services_for_backup() {
 
     local services_to_stop=(
         "eskvisor.service"
-        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -343,7 +342,6 @@ stop_all_agent_services() {
     local services_to_stop=(
         "nginx"
         "eskvisor.service"
-        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -390,7 +388,6 @@ start_all_agent_services() {
         "redis"
         "nginx"
         "eskvisor.service"
-        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -446,7 +443,6 @@ verify_agent_update() {
     echo "2. Проверка работы сервисов..."
     local services_to_check=(
         "eskvisor.service"
-        "eskvisor-state.service"
         "eskvisor-task-manager.service"
         "cgroup-state.service"
         "cgroup-state-timer.timer"
@@ -653,7 +649,6 @@ main() {
         echo ""
         echo "Статус сервисов:"
         sudo systemctl is-active eskvisor.service &>/dev/null && echo -e "  Eskvisor: ${GREEN}активен${NC}" || echo -e "  Eskvisor: ${RED}не активен${NC}"
-        sudo systemctl is-active eskvisor-state.service &>/dev/null && echo -e "  Eskvisor: ${GREEN}активен${NC}" || echo -e "  Eskvisor: ${RED}не активен${NC}"
         sudo systemctl is-active eskvisor-task-manager.service &>/dev/null && echo -e "  Eskvisor Task Manager: ${GREEN}активен${NC}" || echo -e "  Eskvisor Task Manager: ${RED}не активен${NC}"
         sudo systemctl is-active nginx &>/dev/null && echo -e "  Nginx: ${GREEN}активен${NC}" || echo -e "  Nginx: ${RED}не активен${NC}"
         sudo systemctl is-active redis &>/dev/null && echo -e "  Redis: ${GREEN}активен${NC}" || echo -e "  Redis: ${RED}не активен${NC}"

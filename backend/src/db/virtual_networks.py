@@ -2,6 +2,7 @@ from sqlalchemy import select, update, delete, and_, or_, func
 from datetime import datetime
 
 from src.db.models.virtual_networks import VirtualNetworkModel
+from src.models.network import NetworkParameters
 from src.services.pool.db_pool import DBPool
 
 
@@ -9,9 +10,9 @@ class VirtualNetworksDB:
     def __init__(self, db_pool: DBPool):
         self.db_pool = db_pool
 
-    async def create_virtual_network(self, data: dict):
+    async def create_virtual_network(self, data: NetworkParameters):
         async with self.db_pool.get_connection() as session:
-            network = VirtualNetworkModel(**data)
+            network = VirtualNetworkModel(**data.model_dump())
             session.add(network)
             await session.commit()
             return network.id
@@ -84,6 +85,17 @@ class VirtualNetworksDB:
 
     async def update_virtual_network(self, network_id: int, data: dict):
         async with self.db_pool.get_connection() as session:
+            data["updated_at"] = datetime.now()
+            await session.execute(
+                update(VirtualNetworkModel)
+                .where(VirtualNetworkModel.id == network_id)
+                .values(**data)
+            )
+            await session.commit()
+
+    async def update_virtual_network_state(self, network_id: int, active: bool):
+        async with self.db_pool.get_connection() as session:
+            data = {"active": active}
             data["updated_at"] = datetime.now()
             await session.execute(
                 update(VirtualNetworkModel)

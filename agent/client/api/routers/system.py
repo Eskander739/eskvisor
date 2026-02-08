@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends
 
-from agent.client.api.dependencies import get_queue_manager_service, get_cli_service
+from agent.client.api.dependencies import (
+    get_queue_manager_service,
+    get_cli_service,
+    get_logger,
+)
 from agent.client.models.general import HealthState
+from agent.client.tools import get_system_info
 
 router = APIRouter(
-    prefix="/system",
+    prefix="/api/system",
     tags=["system"],
 )
 
@@ -27,3 +32,11 @@ async def health_check(
         health_state.status = "unhealthy"
 
     return health_state
+
+
+@router.get("/state")
+async def state(
+    logger=Depends(get_logger),
+):
+    logger.info("Получение системной информации об агенте")
+    return get_system_info()

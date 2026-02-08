@@ -3,12 +3,24 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi import status
 from starlette.middleware.cors import CORSMiddleware
-from api.routers import users, system, vm, ws, nodes, clusters, disks, net_adapters
-from api.routers.sync_state import nodes as sync_nodes
+from api.routers import (
+    users,
+    system,
+    vm,
+    ws,
+    nodes,
+    clusters,
+    disks,
+    net_adapters,
+    network,
+)
+from api.routers.sync_state import sync_nodes, sync_network
+from api.routers.sync_state import sync_vm
+from api.routers.sync_state import sync_disk
 from src.constants import ApiVersion, PROD_ENV
 from src.db.balansir import ResourcePoolsDB
 from src.db.clusters import ClustersDB
@@ -176,7 +188,11 @@ app.include_router(disks.router)
 app.include_router(net_adapters.router)
 app.include_router(clusters.router)
 app.include_router(nodes.router)
+app.include_router(network.router)
 app.include_router(sync_nodes.router)
+app.include_router(sync_vm.router)
+app.include_router(sync_disk.router)
+app.include_router(sync_network.router)
 
 
 if __name__ == "__main__":

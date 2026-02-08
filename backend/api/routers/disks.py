@@ -7,15 +7,14 @@ from starlette import status
 
 from api.dependencies import get_logger, get_ws_task
 from src.constants import ApiVersion
-from src.models.disk import DiskCreate, DiskUpdate
+from src.models.disk import DiskCreate, DiskUpdate, DiskQuery
 from src.models.error import Message
-from src.models.general import CreateTask, TaskType
-from src.models.vm import VMListRequest
+from src.models.general import CreateTask, TaskType, TaskAction
 from src.services.pool.task_ws_pool import TaskWebsocketPool
 
 router = APIRouter(
-    prefix=f"{ApiVersion.V0}/disks",
-    tags=["disks"],
+    prefix=f"{ApiVersion.V0}/disk",
+    tags=["disk"],
 )
 
 
@@ -41,7 +40,9 @@ async def create_disk(
         disk_info.cluster_id,
         disk_info.node_id,
         CreateTask(
-            task_type=TaskType.STORAGE, action="create", params=disk_info_model_string
+            task_type=TaskType.STORAGE,
+            action=TaskAction.CREATE,
+            params=disk_info_model_string,
         ),
     )
     return JSONResponse({"code": "Disk successfully created"})
@@ -69,7 +70,9 @@ async def edit_disk(
         disk.cluster_id,
         disk.node_id,
         CreateTask(
-            task_type=TaskType.VM, action="edit", params=disk_info.model_dump_json()
+            task_type=TaskType.STORAGE,
+            action=TaskAction.EDIT,
+            params=disk_info.model_dump_json(),
         ),
     )
     return JSONResponse({"code": "Disk successfully edited"})
@@ -78,10 +81,12 @@ async def edit_disk(
 @router.get("/list")
 async def list_disks(
     request: Request,
-    vm_info: VMListRequest = VMListRequest(),
+    disk_info: DiskQuery = DiskQuery(),
     logger=Depends(get_logger),
 ):
-    disk_list = await request.app.state.disks_db.get_disks_list(vm_info)
+    disk_list = await request.app.state.disks_db.get_disks_list(
+        **disk_info.model_dump()
+    )
     logger.info(f"Получение списка виртуальных дисков {disk_list}")
     disk_list = {"disk_list": disk_list}
     return disk_list
@@ -124,7 +129,7 @@ async def delete_disk(
         disk.node_id,
         CreateTask(
             task_type=TaskType.STORAGE,
-            action="delete",
+            action=TaskAction.DELETE,
             params=json.dumps({"disk_name": disk.name, "format": disk.format}),
         ),
     )

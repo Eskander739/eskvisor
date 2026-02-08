@@ -82,6 +82,15 @@ class VmManager(LibvirtClient):
 
         return self
 
+    def connect_all(self):
+        self.conn = self.connect_classic()
+        self.snapshot = SnapshotManager()
+        self.storage_manager = StorageManager()
+        self.network_manager = NetworkManager()
+        self.snapshot.conn = self.conn
+        self.storage_manager.conn = self.conn
+        self.network_manager.conn = self.conn
+
     def restart_vms_in_live_host(self):
         """
         Что будет с виртуальными машинами и их дисками в ресурс пулах ?

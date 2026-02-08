@@ -23,10 +23,10 @@ class DiskModel(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
-    uuid: UUID = Column(String(36), nullable=False, unique=True)
 
     # References
-    pool = Column(String(255), nullable=True)
+    pool = Column(String(255), nullable=True)  # TODO: В будущем поменять на boolean
+    node_id = Column(Integer, ForeignKey("nodes.id"), nullable=False)
     vm_id = Column(Integer, ForeignKey("virtual_machines.id"), nullable=True)
     resource_pool = Column(String(255), nullable=True)
 

@@ -67,11 +67,11 @@ class NodesDB:
             )
             await session.commit()
 
-    async def update_node(self, update_data: NodeSyncState):
+    async def update_node(self, node_id: int, update_data: NodeSyncState):
         async with self.db_pool.get_connection() as session:
             await session.execute(
                 update(NodeModel)
-                .where(NodeModel.ip_address == update_data.ip_address)
+                .where(NodeModel.id == node_id)
                 .values(**update_data.model_dump())
             )
 

@@ -8,7 +8,7 @@ from starlette import status
 from api.dependencies import get_logger, get_ws_task
 from src.constants import ApiVersion
 from src.models.error import Message
-from src.models.general import CreateTask, TaskType
+from src.models.general import CreateTask, TaskType, TaskAction
 from src.models.network import (
     NetworkAdapterUpdate,
     NetworkAdapterFilter,
@@ -54,7 +54,9 @@ async def create_net_adapter(
         vm.cluster_id,
         vm.node_id,
         CreateTask(
-            task_type=TaskType.STORAGE, action="create", params=net_adapter_model_string
+            task_type=TaskType.NETWORK,
+            action=TaskAction.CREATE,
+            params=net_adapter_model_string,
         ),
     )
     return JSONResponse({"code": "Net adapter successfully created"})
@@ -82,7 +84,9 @@ async def edit_net_adapter(
         disk.cluster_id,
         disk.node_id,
         CreateTask(
-            task_type=TaskType.VM, action="edit", params=adapter_info.model_dump_json()
+            task_type=TaskType.NETWORK,
+            action=TaskAction.EDIT,
+            params=adapter_info.model_dump_json(),
         ),
     )
     return JSONResponse({"code": "Net adapter successfully edited"})
@@ -138,8 +142,8 @@ async def delete_net_adapter(
         disk.cluster_id,
         disk.node_id,
         CreateTask(
-            task_type=TaskType.STORAGE,
-            action="delete",
+            task_type=TaskType.NETWORK,
+            action=TaskAction.DELETE,
             params=json.dumps({"disk_name": disk.name, "format": disk.format}),
         ),
     )

@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from src.db.models.virtual_machines import VirtualMachineModel, VMStateDB
-from src.models.disk import DiskFormat, DiskType
+from src.models.disk import DiskFormat
 from src.models.general import VMState
 from src.services.pool.db_pool import DBPool
 from src.models.vm import VmUpdateRequest, VMListRequest
@@ -79,6 +79,7 @@ class VirtualMachinesDB:
                     readonly=disk_item.get("readonly"),
                     resource_pool=disk_item.get("resource_pool"),
                     vm_id=vm.id,
+                    node_id=vm.node_id,
                 )
                 session.add(disk)
 
@@ -176,7 +177,7 @@ class VirtualMachinesDB:
 
     async def update_state_virtual_machine(self, vm_id: int, state: VMState):
         async with self.db_pool.get_connection() as session:
-            data = {"state": state.value}
+            data = {"state": state.value if isinstance(state, VMState) else state}
             data["modified"] = datetime.now()
             await session.execute(
                 update(VirtualMachineModel)

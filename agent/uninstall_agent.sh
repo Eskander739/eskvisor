@@ -389,7 +389,6 @@ main_uninstall() {
     echo "=== ОСТАНОВКА СЛУЖБ ESKVISOR ==="
 
     stop_disable_service "eskvisor.service" "Основной сервис eskvisor"
-    stop_disable_service "eskvisor-state.service" "Сервис состояния eskvisor"
     stop_disable_service "eskvisor-task-manager.service" "Диспетчер задач eskvisor"
 
     echo ""
@@ -423,7 +422,6 @@ main_uninstall() {
 
     # Удаление отдельных файлов конфигурации
     remove_file "/etc/systemd/system/eskvisor.service" "Сервис eskvisor"
-    remove_file "/etc/systemd/system/eskvisor-state.service" "Сервис состояния eskvisor"
     remove_file "/etc/systemd/system/eskvisor-task-manager.service" "Сервис диспетчера задач"
 
     # Удаление логов агента

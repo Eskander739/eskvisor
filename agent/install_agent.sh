@@ -332,54 +332,6 @@ EOF
 }
 
 # Функция настройки основного сервиса eskvisor
-setup_eskvisor_service_state() {
-    local service_state_file="/opt/eskvisor/agent/client/service/eskvisor-state.service"
-    local target_dir="/etc/systemd/system"
-
-    echo "Настройка основного сервиса Eskvisor..."
-
-    # Проверка существования файла сервиса
-    if [[ ! -f "$service_state_file" ]]; then
-        log_error "Файл сервиса состояния не найден: $service_state_file"
-        return 1
-    fi
-
-    # Копирование файла сервиса состояния
-    if sudo cp "$service_state_file" "$target_dir/"; then
-        log_success "Файл сервиса состояния скопирован в $target_dir/"
-    else
-        log_error "Ошибка копирования файла сервиса состояния"
-        return 1
-    fi
-
-    # Перезагрузка демона systemd
-    if sudo systemctl daemon-reload; then
-        log_success "Демон systemd перезагружен"
-    else
-        log_error "Ошибка перезагрузки демона systemd"
-        return 1
-    fi
-
-    # Включение автозапуска сервиса
-    if sudo systemctl enable eskvisor-state.service; then
-        log_success "Сервис eskvisor-state добавлен в автозапуск"
-    else
-        log_error "Ошибка добавления сервиса состояния в автозапуск"
-        return 1
-    fi
-
-    # Запуск сервиса
-    if sudo systemctl start eskvisor-state.service; then
-        log_success "Сервис eskvisor-state запущен"
-    else
-        log_error "Ошибка запуска сервиса состояния eskvisor"
-        return 1
-    fi
-
-    return 0
-}
-
-# Функция настройки основного сервиса eskvisor
 setup_eskvisor_service() {
     local service_file="/opt/eskvisor/agent/client/service/eskvisor.service"
     local target_dir="/etc/systemd/system"
@@ -737,12 +689,6 @@ else
     log_error "Ошибка настройки основного сервиса eskvisor"
 fi
 
-# Настройка сервиса состояния eskvisor
-if setup_eskvisor_service_state; then
-    log_success "Сервис состояния eskvisor настроен"
-else
-    log_error "Ошибка настройки сервиса состояния eskvisor"
-fi
 
 # Настройка сервиса диспетчера задач eskvisor-task-manager
 if setup_eskvisor_task_manager_service; then
@@ -966,7 +912,7 @@ if [[ $ERROR_COUNT -eq 0 ]]; then
     echo "6. Проверьте статус сервиса eskvisor: sudo systemctl status eskvisor"
     echo "7. Проверьте статус сервиса диспетчера задач: sudo systemctl status eskvisor-task-manager"
     echo "8. Проверьте работу Redis: redis-cli ping"
-    echo "9. Проверьте работу nginx: curl http://localhost/health"
+    echo "9. Проверьте работу nginx: curl http://localhost/api/system/health"
     echo "10. Проверьте конфигурацию nginx: sudo nginx -t"
     echo "11. Проверьте логи nginx: sudo tail -f /var/log/nginx/eskvisor-access.log"
     echo "12. Проверьте логи Redis: sudo tail -f /var/log/redis/redis.log"
@@ -988,7 +934,6 @@ echo ""
 echo "Расположение Eskvisor: /opt/eskvisor"
 echo "Расположение конфигурации: /etc/eskvisor/agent.env"
 echo "Расположение основного сервиса: /etc/systemd/system/eskvisor.service"
-echo "Расположение сервиса состояния: /etc/systemd/system/eskvisor-state.service"
 echo "Расположение сервиса диспетчера задач: /etc/systemd/system/eskvisor-task-manager.service"
 echo "Расположение Redis: /etc/redis.conf"
 echo "Расположение конфигурации nginx: /etc/nginx/nginx.conf"
@@ -1000,7 +945,7 @@ echo "Лог установки сохранен в: $LOG_FILE"
 echo ""
 echo "Для проверки работы:"
 echo "  - Redis: redis-cli ping"
-echo "  - Eskvisor: curl http://ваш_сервер/health"
+echo "  - Eskvisor: curl http://ваш_сервер/api/system/health"
 echo "  - Nginx: curl http://localhost:8080/nginx-health"
 echo "  - Диспетчер задач: sudo journalctl -u eskvisor-task-manager -n 10"
 
@@ -1072,8 +1017,8 @@ sudo journalctl -u eskvisor-task-manager -n 5 --no-pager | grep -E "(Starting|St
 
 echo ""
 echo "6. Быстрый тест доступа:"
-echo -n "  HTTP запрос к /health: "
-if curl -s -f http://localhost/health > /dev/null; then
+echo -n "  HTTP запрос к /api/system/health: "
+if curl -s -f http://localhost/api/system/health > /dev/null; then
     echo -e "\033[0;32mуспех\033[0m"
 else
     echo -e "\033[0;31mошибка\033[0m"

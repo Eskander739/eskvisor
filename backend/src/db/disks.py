@@ -1,6 +1,8 @@
 from sqlalchemy import select, update, delete, and_, func
 from datetime import datetime
 
+from sqlalchemy.orm import joinedload
+
 from src.db.models.disks import DiskModel
 from src.models.disk import DiskFormat, DiskStatus, DiskType, DiskUpdate
 from src.services.pool.db_pool import DBPool
@@ -20,27 +22,32 @@ class DisksDB:
     async def get_disk(self, disk_id: int):
         async with self.db_pool.get_connection() as session:
             result = await session.execute(
-                select(DiskModel).where(DiskModel.id == disk_id)
+                select(DiskModel)
+                .where(DiskModel.id == disk_id)
+                .options(joinedload(DiskModel.virtual_machine))
             )
             return result.scalar_one_or_none()
 
     async def get_disk_by_name(self, name: str):
         async with self.db_pool.get_connection() as session:
             result = await session.execute(
-                select(DiskModel).where(DiskModel.name == name)
+                select(DiskModel)
+                .where(DiskModel.name == name)
+                .options(joinedload(DiskModel.virtual_machine))
             )
             return result.scalar_one_or_none()
 
     async def get_disk_by_id(self, disk_id: int):
         async with self.db_pool.get_connection() as session:
             result = await session.execute(
-                select(DiskModel).where(DiskModel.id == disk_id)
+                select(DiskModel)
+                .where(DiskModel.id == disk_id)
+                .options(joinedload(DiskModel.virtual_machine))
             )
             return result.scalar_one_or_none()
 
     async def get_disks_list(
         self,
-        vm_name: str | None = None,
         pool: str | None = None,
         resource_pool: str | None = None,
         disk_type: DiskType | None = None,
@@ -57,18 +64,16 @@ class DisksDB:
             query = select(DiskModel)
 
             conditions = []
-            if vm_name is not None:
-                conditions.append(DiskModel.vm_name == vm_name)
             if pool is not None:
                 conditions.append(DiskModel.pool == pool)
             if resource_pool is not None:
                 conditions.append(DiskModel.resource_pool == resource_pool)
             if disk_type is not None:
-                conditions.append(DiskModel.type == disk_type)
+                conditions.append(DiskModel.type == disk_type.value)
             if disk_format is not None:
-                conditions.append(DiskModel.format == disk_format)
+                conditions.append(DiskModel.format == disk_format.value)
             if status is not None:
-                conditions.append(DiskModel.status == status)
+                conditions.append(DiskModel.status == status.value)
             if search_path is not None:
                 conditions.append(DiskModel.search_path.ilike(f"%{search_path}%"))
             if min_size_gb is not None:
@@ -84,7 +89,11 @@ class DisksDB:
             if conditions:
                 query = query.where(and_(*conditions))
 
-            query = query.limit(limit).offset(offset)
+            query = (
+                query.limit(limit)
+                .offset(offset)
+                .options(joinedload(DiskModel.virtual_machine))
+            )
 
             result = await session.execute(query)
             return result.scalars().all()
@@ -99,6 +108,20 @@ class DisksDB:
 
             if data.get("new_size_gb") is None:
                 data.pop("new_size_gb")
+
+            await session.execute(
+                update(DiskModel).where(DiskModel.id == disk_id).values(**data)
+            )
+            await session.commit()
+
+    async def update_disk_state(self, disk_id: int, status: DiskStatus):
+        async with self.db_pool.get_connection() as session:
+            data = {
+                "status": (
+                    DiskStatus(status) if not isinstance(status, DiskStatus) else status
+                )
+            }
+            data["modified"] = datetime.now()
 
             await session.execute(
                 update(DiskModel).where(DiskModel.id == disk_id).values(**data)
@@ -155,6 +178,7 @@ class DisksDB:
             if conditions:
                 query = query.where(and_(*conditions))
 
+            query = query.options(joinedload(DiskModel.virtual_machine))
             result = await session.execute(query)
             return result.first()
 
@@ -163,7 +187,9 @@ class DisksDB:
             result = await session.execute(
                 select(DiskModel).where(
                     DiskModel.type == DiskType.ORPHANED.value,
-                    DiskModel.vm_name.is_(None),
+                    DiskModel.vm_name.is_(None).options(
+                        joinedload(DiskModel.virtual_machine)
+                    ),
                 )
             )
             return result.scalars().all()

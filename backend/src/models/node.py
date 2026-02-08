@@ -39,7 +39,6 @@ class NodeCreateRequest(BaseModel):
 
 
 class NodeSyncStateFromAgent(BaseModel):
-    ip_address: str = Field(..., max_length=45, min_length=7)
     hostname: str | None = Field(default=None, max_length=255, min_length=1)
     cpu_cores: int = Field(default=0)
     cpu_model: str | None = Field(default=None, max_length=255)

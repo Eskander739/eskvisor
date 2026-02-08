@@ -5,6 +5,51 @@ from pydantic import BaseModel, IPvAnyNetwork, model_validator, Field
 from agent.client.hypervisor.libvirt.models.msg import DefaultMessage
 
 
+class TaskAction:
+
+    # Общие манипуляции
+    CREATE = "create"
+    EDIT = "edit"
+    DELETE = "delete"
+    DELETE_ALL = "delete_all"
+    LIST = "list"
+    INFO = "info"
+    CLONE = "CLONE"
+    DETACH = "detach"
+    ATTACH = "attach"
+    START = "start"
+    SHUTOFF = "shutoff"
+    RESTART = "restart"
+
+    # Манипуляции для ВМ
+    STATE = "state"
+    SUSPEND = "suspend"
+    RESUME = "resume"
+    MIGRATE = "migrate"
+
+    # Манипуляции для хранилищ
+    VM_DISKS_INFO = "vm_disks_info"
+    VM_DISKS_USED_INFO = "vm_disks_used_info"
+    EXTEND = "EXTEND"
+
+    # Манипуляции для снапшотов
+    REVERT = "revert"
+
+    # Манипуляции для виртуальных сетей
+    BACKUP = "backup"
+    VM_NETWORK_INFO = "vm_network_info"
+    AUTOSTART = "autostart"
+
+    # Манипуляции для ресурс пулов(Балансиръ)
+
+    DELETE_VMS = "delete_vms"
+    SYNC = "sync"
+
+    # Манипуляции для задач
+    VM_STATS = "vm_stats"
+    MONITOR = "monitor"
+
+
 class NFSStorageModel(BaseModel):
     source: str  # ip:dir на стороне NFS сервера
     mount: str  # точка монтирования на стороне агента(dir)
@@ -72,7 +117,6 @@ class HealthState(BaseModel):
 
 
 class NodeSyncStateFromAgent(BaseModel):
-    ip_address: str = Field(..., max_length=45, min_length=7)
     hostname: str | None = Field(default=None, max_length=255, min_length=1)
     cpu_cores: int = Field(default=0)
     cpu_model: str | None = Field(default=None, max_length=255)

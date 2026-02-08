@@ -16,3 +16,4 @@ passlib==1.7.4
 sqlalchemy==2.0.45
 psycopg2==2.9.11
 asyncpg==0.31.0
+aiohttp==3.13.3

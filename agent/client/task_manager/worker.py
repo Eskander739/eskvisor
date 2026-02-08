@@ -33,6 +33,7 @@ from agent.client.hypervisor.libvirt.models.volume.disk import (
     Disk,
     DiskQuery,
 )
+from agent.client.models.general import TaskAction
 from agent.client.task_manager.ctl_queue import RedisTaskManager
 from agent.client.task_manager.models import (
     TaskType,
@@ -138,7 +139,7 @@ class TaskHandler:
         """Обработка задач ВМ"""
 
         self.vm_manager.logger.info(f"Параметры: {params}")
-        if action == "create":
+        if action == TaskAction.CREATE:
             # Создание ВМ
             vm_config = VMCreateRequest(**params)
             result = self.vm_manager.create_vm(vm_config)
@@ -146,60 +147,60 @@ class TaskHandler:
                 return result
             return result
 
-        elif action == "start":
+        elif action == TaskAction.START:
             # Запуск ВМ
             vm_name = params.get("vm_name")
             return self.vm_manager.start_vm(vm_name)
 
-        elif action == "state":
-            # Запуск ВМ
+        elif action == TaskAction.STATE:
+            # Получение состояния ВМ
             vm_name = params.get("vm_name")
             state = self.vm_manager.get_vm_state_with_msg(vm_name)
             return state
 
-        elif action == "reboot":
-            # Запуск ВМ
+        elif action == TaskAction.RESTART:
+            # Перезагрузка ВМ
             vm_name = params.get("vm_name")
             hard_reset = params.get("hard_reset")
             return self.vm_manager.reboot_vm(vm_name, hard_reset)
 
-        elif action == "suspend":
-            # Запуск ВМ
+        elif action == TaskAction.SUSPEND:
+            # Пауза ВМ
             vm_name = params.get("vm_name")
             return self.vm_manager.suspend_vm(vm_name)
 
-        elif action == "resume":
-            # Запуск ВМ
+        elif action == TaskAction.RESUME:
+            # Возобновление работы ВМ
             vm_name = params.get("vm_name")
             return self.vm_manager.resume_vm(vm_name)
 
-        elif action == "shutoff":
+        elif action == TaskAction.SHUTOFF:
             # Остановка ВМ
             vm_name = params.get("vm_name")
             force = params.get("force", False)
             return self.vm_manager.shutoff_vm(vm_name, force)
 
-        elif action == "delete":
+        elif action == TaskAction.DELETE:
             # Удаление ВМ
             vm_name = params.get("vm_name")
             delete_disks = params.get("delete_disks", False)
             delete_nvram = params.get("delete_nvram", True)
             return self.vm_manager.delete_vm(vm_name, delete_disks, delete_nvram)
 
-        elif action == "edit":
+        elif action == TaskAction.EDIT:
             # Редактирование ВМ
             vm_name = params.get("vm_name")
             vm_update = VmUpdateRequest(**params.get("update_params"))
             return self.vm_manager.edit_vm(vm_name, vm_update)
 
-        elif action == "clone":
+        elif action == TaskAction.CLONE:
             # Клонирование ВМ
             source_name = params.get("source_vm")
             new_name = params.get("new_name")
             result = self.vm_manager.clone_vm(source_name, new_name)
             return result
 
-        elif action == "migrate":
+        elif action == TaskAction.MIGRATE:
             # Миграция ВМ без дисков(ожидаем что используется HA с NFS хранилищем)
             vm_name = params.get("vm_name")
             dest_uri = params.get("dest_uri")
@@ -215,13 +216,13 @@ class TaskHandler:
             )
             return result
 
-        elif action == "list":
+        elif action == TaskAction.LIST:
             # Список ВМ
             only_active = params.get("only_active", False)
             vms = self.vm_manager.list_vms(only_active)
             return vms
 
-        elif action == "info":
+        elif action == TaskAction.INFO:
             # Информация о ВМ
             vm_name = params.get("vm_name")
             result = self.vm_manager.get_vm_by_name(vm_name)
@@ -233,69 +234,69 @@ class TaskHandler:
     def _handle_network_task(self, action: str, params: dict) -> NetworkMessage:
         """Обработка сетевых задач"""
         self.net_manager.logger.info(f"Параметры: {params}")
-        if action == "create":
+        if action == TaskAction.CREATE:
             # Создание сети
             params = NetworkParameters(**params)
             return self.net_manager.create_network(params)
 
-        elif action == "delete":
+        elif action == TaskAction.DELETE:
             # Удаление сети
             network_name = params.get("network_name")
             force = params.get("force", False)
             approve_admin = params.get("approve_admin", False)
             return self.net_manager.delete_network(network_name, force, approve_admin)
 
-        elif action == "backup":
+        elif action == TaskAction.BACKUP:
             # Редактирование сети
             network_name = params.get("network_name")
             return self.net_manager.create_backup(network_name)
 
-        elif action == "edit":
+        elif action == TaskAction.EDIT:
             # Редактирование сети
             network_name = params.get("network_name")
             params = NetworkParameters(**params.get("params"))
             return self.net_manager.edit_network(network_name, params)
 
-        elif action == "list":
+        elif action == TaskAction.LIST:
             # Список сетей
             return self.net_manager.list_all_networks()
 
-        elif action == "vm_network_info":
+        elif action == TaskAction.VM_NETWORK_INFO:
             # Информация о сети
             vm_name = params.get("vm_name")
             return self.net_manager.get_vm_network_info(vm_name)
 
-        elif action == "attach":
+        elif action == TaskAction.ATTACH:
             # Добавление сетевого интерфейса к виртуальной машине
             return self.net_manager.attach_vm_network_interface(**params)
 
-        elif action == "detach":
+        elif action == TaskAction.DETACH:
             # Отключение сетевого интерфейса от виртуальной машины
             return self.net_manager.detach_vm_network_interface(**params)
 
-        elif action == "info":
+        elif action == TaskAction.INFO:
             # Информация о сети
             network_name = params.get("network_name")
             return self.net_manager.get_network_info(network_name)
 
-        elif action == "start":
+        elif action == TaskAction.START:
             # Запуск сети
             network_name = params.get("network_name")
             result = self.net_manager.start_network(network_name)
             return result
-        elif action == "autostart":
+        elif action == TaskAction.AUTOSTART:
             # Запуск сети
             network_name = params.get("network_name")
             autostart = params.get("autostart")
             result = self.net_manager.set_network_autostart(network_name, autostart)
             return result
 
-        elif action == "stop":
-            # Остановка сети
+        elif action == TaskAction.SHUTOFF:
+            # Отключение виртуальной сети
             network_name = params["network_name"]
             return self.net_manager.stop_network(network_name)
 
-        elif action == "restart":
+        elif action == TaskAction.RESTART:
             # Перезапуск сети
             network_name = params.get("network_name")
             force = params.get("force", False)
@@ -307,12 +308,12 @@ class TaskHandler:
     def _handle_snapshot_task(self, action: str, params: dict) -> SnapshotMessage:
         """Обработка задач снапшотов"""
         self.snapshot_manager.logger.info(f"Параметры: {params}")
-        if action == "create":
+        if action == TaskAction.CREATE:
             # Создание снапшота
             snapshot_request = SnapshotCreateRequest(**params)
             return self.snapshot_manager.create_snapshot(snapshot_request)
 
-        elif action == "delete":
+        elif action == TaskAction.DELETE:
             # Удаление снапшота
             vm_name = params.get("vm_name")
             snapshot_name = params.get("snapshot_name")
@@ -321,28 +322,28 @@ class TaskHandler:
                 vm_name, snapshot_name, remove_children
             )
 
-        elif action == "delete_all":
+        elif action == TaskAction.DELETE_ALL:
             # Удаление снапшота
             vm_name = params.get("vm_name")
             return self.snapshot_manager.delete_all_snapshots_by_vm_name(vm_name)
 
-        elif action == "revert":
+        elif action == TaskAction.REVERT:
             # Восстановление снапшота
             vm_name = params.get("vm_name")
             snapshot_name = params.get("snapshot_name")
             return self.snapshot_manager.revert_to_snapshot(vm_name, snapshot_name)
 
-        elif action == "list":
+        elif action == TaskAction.LIST:
             # Список снапшотов ВМ
             vm_name = params.get("vm_name")
             return self.snapshot_manager.snapshots_by_vm_name(vm_name)
 
-        elif action == "clone":
+        elif action == TaskAction.CLONE:
             # Клонирование ВМ из снапшота
             clone_request = SnapshotCloneRequest(**params)
             return self.snapshot_manager.clone_vm_from_snapshot(clone_request)
 
-        elif action == "info":
+        elif action == TaskAction.INFO:
             # Информация о снапшоте
             vm_name = params.get("vm_name")
             snapshot_name = params.get("snapshot_name")
@@ -356,13 +357,13 @@ class TaskHandler:
     ) -> Disk | bool | None | list[Disk] | StorageMessage:
         """Обработка задач хранилища"""
         self.storage_manager.logger.info(f"Параметры: {params}")
-        if action == "create":
+        if action == TaskAction.CREATE:
             # Создание диска
             disk_create = DiskCreate(**params)
             result = self.storage_manager.create_disk(disk_create)
             return result
 
-        elif action == "delete":
+        elif action == TaskAction.DELETE:
             # Удаление диска
             disk_name = params.get("disk_name")
             disk_format = params.get("format")
@@ -371,35 +372,35 @@ class TaskHandler:
             )
             return success
 
-        elif action == "attach":
+        elif action == TaskAction.ATTACH:
             # Подключение диска к ВМ
             disk_attach = DiskAttach(**params)
             result = self.storage_manager.attach_disk(disk_attach)
             return result.model_dump()
 
-        elif action == "detach":
+        elif action == TaskAction.DETACH:
             # Отключение диска от ВМ
             disk_detach = DiskDetach(**params)
             success = self.storage_manager.detach_disk(disk_detach)
             return success
 
-        elif action == "list":
+        elif action == TaskAction.LIST:
             # Список дисков
             query = DiskQuery(**params)
             disks = self.storage_manager.list_disks(query)
             return disks
 
-        elif action == "vm_disks_info":
+        elif action == TaskAction.VM_DISKS_INFO:
             # Список дисков
             vm_disks_info = self.storage_manager.get_disks_by_vm(**params)
             return vm_disks_info
 
-        elif action == "vm_disks_used_info":
+        elif action == TaskAction.VM_DISKS_USED_INFO:
             # Список дисков
             vm_disks_used_info = self.storage_manager.get_storage_used(**params)
             return vm_disks_used_info
 
-        elif action == "extend_disk":
+        elif action == TaskAction.EXTEND:
             # Расширение диска
             disk_name = params.get("disk_name")
             path = params.get("path")
@@ -411,7 +412,7 @@ class TaskHandler:
             )
             return disk
 
-        elif action == "clone_disk":
+        elif action == TaskAction.CLONE:
             # Клонирование диска
             disk_name = params["disk_name"]
             path = params["path"]
@@ -430,33 +431,33 @@ class TaskHandler:
     ) -> RpMessage | list[ResourcePoolVirtual]:
         """Обработка задач ресурсных пулов"""
         self.balansir.logger.info(f"Параметры: {params}")
-        if action == "create":
+        if action == TaskAction.CREATE:
             # Создание ресурсного пула
             create_rp = ResourcePoolVirtualCreate(**params)
             result = self.balansir.create_virtual_resource_pool(create_rp)
             return result
 
-        elif action == "edit":
+        elif action == TaskAction.EDIT:
             # Редактирование ресурсного пула
             edit_rp = ResourcePoolVirtualEdit(**params)
             result = self.balansir.edit_virtual_resource_pool(edit_rp)
             return result
 
-        elif action == "delete":
+        elif action == TaskAction.DELETE:
             # Удаление ресурсного пула
             name = params["name"]
             force = params.get("force", False)
             result = self.balansir.delete_virtual_resource_pool(name, force)
             return result
 
-        elif action == "delete_vms":
+        elif action == TaskAction.DELETE_VMS:
             # Удаление виртуальных машин из ресурс пула
             rp_name = params["name"]
             vms = params.get("vms")
             result = self.balansir.delete_vms_from_virtual_resource_pool(rp_name, vms)
             return result
 
-        elif action == "list":
+        elif action == TaskAction.LIST:
             # Список ресурсных пулов
             name_filter = params.get("name")
             cpu_filter = params.get("cpu_core_limit")
@@ -471,11 +472,11 @@ class TaskHandler:
             )
             return pools
 
-        elif action == "sync":
+        elif action == TaskAction.SYNC:
             sync_rps = self.balansir.sync_rps_config_vms()
             return sync_rps
 
-        elif action == "info":
+        elif action == TaskAction.INFO:
             # Информация о ресурсном пуле
             name = params["name"]
             result = self.balansir.get_virtual_resource_pool_by_name(name)
@@ -487,7 +488,7 @@ class TaskHandler:
     @staticmethod
     def _handle_stats_task(action: str, payload: dict) -> dict[str, Any]:
         """Обработка задач статистики"""
-        if action == "vm_stats":
+        if action == TaskAction.VM_STATS:
             # Получение статистики ВМ
             vm_name = payload["vm_name"]
             interval = payload.get("interval", 2)
@@ -499,7 +500,7 @@ class TaskHandler:
                 return stats_data.model_dump()
             return {"error": "Failed to get VM stats"}
 
-        elif action == "monitor":
+        elif action == TaskAction.MONITOR:
             # Мониторинг ВМ в реальном времени
             vm_name = payload["vm_name"]
             duration = payload.get("duration", 60)

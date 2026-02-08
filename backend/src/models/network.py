@@ -360,6 +360,20 @@ class NetworkInfo(BaseModel):
     )
 
 
+class NetworkListRequest(BaseModel):
+    cluster_id: int | None = (None,)
+    node_id: int | None = (None,)
+    name: str | None = (None,)
+    network_type: str | None = (None,)
+    active: bool | None = (None,)
+    persistent: bool | None = (None,)
+    autostart: bool | None = (None,)
+    isolated: bool | None = (None,)
+    bridge_name: str | None = (None,)
+    limit: int = (20,)
+    offset: int = (0,)
+
+
 class NetworkList(BaseModel):
     total: int
     items: list[NetworkInfo]
