@@ -48,9 +48,8 @@ async def sync_network(
 
             network_data = await response.json()
             if network_data.get("code") != Message.virtual_network_found.name:
-                await request.app.state.virtual_networks_db.update_virtual_network_state(
-                    network_id, False
-                )
+                if network_data.get("code") == Message.virtual_network_not_found.name:
+                    await request.app.state.virtual_networks_db.mark_deleted(network_id)
 
                 return JSONResponse(
                     content={
@@ -67,8 +66,21 @@ async def sync_network(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail="Отсутствует информация о виртуальной сети",
                     )
-                await request.app.state.virtual_networks_db.update_virtual_network_state(
-                    network_id, True
+                net_data = {
+                    "active": network_data["active"],
+                    "autostart": network_data["autostart"],
+                    "ipv4_address": network_data["ipv4_address"],
+                    "network_type": network_data["network_type"],
+                    "persistent": network_data["persistent"],
+                    "gateway": network_data["gateway"],
+                    "dhcp_ranges": network_data["dhcp_ranges"],
+                    "dns_forwarders": network_data["dns_forwarders"],
+                    "dns_hosts": network_data["dns_hosts"],
+                    "dns_txts": network_data["dns_txts"],
+                    "bridge_name": network_data["bridge_name"],
+                }
+                await request.app.state.virtual_networks_db.update_virtual_network(
+                    network_id, net_data
                 )
 
                 return JSONResponse(

@@ -55,15 +55,20 @@ async def sync_vm(
                 )
 
             else:
-                vm_data = vm_data["vm_info"]
+                vm_data = vm_data.get("vm_info")
                 if vm_data is None:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail="Отсутствует информация о ВМ",
                     )
                 vm_data = VirtualMachineFromAgent.model_validate(vm_data)
-                await request.app.state.virtual_machines_db.update_state_virtual_machine(
-                    vm_id, convert_vm_state(vm_data.state)
+                data = {
+                    "state": convert_vm_state(vm_data.state),
+                    "vcpus": vm_data.vcpus,
+                    "memory_mb": vm_data.max_memory / 1024,
+                }
+                await request.app.state.virtual_machines_db.update_virtual_machine(
+                    vm_id, data
                 )
 
                 return JSONResponse(

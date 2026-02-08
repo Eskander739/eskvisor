@@ -60,8 +60,9 @@ class VirtualNetworkModel(Base):
     # Metadata
     xml_config = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created = Column(DateTime, default=datetime.now)
+    modified = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted = Column(DateTime, nullable=True)
 
     # Relationships
     cluster = relationship("ClusterModel", backref="virtual_networks", lazy="select")

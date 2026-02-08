@@ -5,7 +5,7 @@ from starlette import status
 
 from api.dependencies import get_logger
 from src.constants import ApiVersion
-from src.models.disk import DiskStatus
+from src.models.disk import DiskStatus, DiskType, DiskFormat
 from src.models.error import Message
 
 router = APIRouter(
@@ -20,6 +20,9 @@ async def sync_disk(
     disk_id: int,
     logger=Depends(get_logger),
 ):
+    def _bytes_to_gb(bytes_data: int):
+        return round(bytes_data / (1024**3), 10)
+
     try:
         disk = await request.app.state.disks_db.get_disk_by_id(disk_id)
         if disk is None:
@@ -60,9 +63,17 @@ async def sync_disk(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail="Отсутствует информация о диске",
                     )
-                await request.app.state.disks_db.update_disk_state(
-                    disk_id, disk_data.get("status")
-                )
+                data = {
+                    "status": DiskStatus(disk_data.get("status")),
+                    "readonly": disk_data.get("readonly"),
+                    "file_path_exists": disk_data.get("file_path_exists"),
+                    "type": DiskType(disk_data.get("type")),
+                    "format": DiskFormat(disk_data.get("format")),
+                    "capacity_bytes": disk_data.get("capacity_bytes"),
+                    "capacity_gb": disk_data.get("capacity_gb"),
+                    "allocation_gb": _bytes_to_gb(disk_data.get("allocation_bytes")),
+                }
+                await request.app.state.disks_db.update_disk_state(disk_id, data)
 
                 return JSONResponse(
                     content={"node_id": node.id, "code": "Disk successfully updated"},

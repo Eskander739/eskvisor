@@ -49,3 +49,4 @@ class Message(Enum):
     vm_found_error = "VM found error"
     disk_founded = "Диск найден"
     virtual_network_found = "Виртуальная сеть найдена"
+    virtual_network_not_found = "Виртуальная сеть не найдена"

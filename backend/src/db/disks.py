@@ -114,14 +114,14 @@ class DisksDB:
             )
             await session.commit()
 
-    async def update_disk_state(self, disk_id: int, status: DiskStatus):
+    async def update_disk_state(self, disk_id: int, data: dict):
         async with self.db_pool.get_connection() as session:
-            data = {
-                "status": (
-                    DiskStatus(status) if not isinstance(status, DiskStatus) else status
-                )
-            }
             data["modified"] = datetime.now()
+            data["status"] = (
+                DiskStatus(data.get("status"))
+                if not isinstance(data.get("status"), DiskStatus)
+                else data.get("status")
+            )
 
             await session.execute(
                 update(DiskModel).where(DiskModel.id == disk_id).values(**data)

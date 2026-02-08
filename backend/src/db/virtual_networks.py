@@ -85,7 +85,7 @@ class VirtualNetworksDB:
 
     async def update_virtual_network(self, network_id: int, data: dict):
         async with self.db_pool.get_connection() as session:
-            data["updated_at"] = datetime.now()
+            data["updated"] = datetime.now()
             await session.execute(
                 update(VirtualNetworkModel)
                 .where(VirtualNetworkModel.id == network_id)
@@ -93,10 +93,9 @@ class VirtualNetworksDB:
             )
             await session.commit()
 
-    async def update_virtual_network_state(self, network_id: int, active: bool):
+    async def mark_deleted(self, network_id: int):
         async with self.db_pool.get_connection() as session:
-            data = {"active": active}
-            data["updated_at"] = datetime.now()
+            data = {"deleted": datetime.now(), "active": False}
             await session.execute(
                 update(VirtualNetworkModel)
                 .where(VirtualNetworkModel.id == network_id)
@@ -109,7 +108,7 @@ class VirtualNetworksDB:
             await session.execute(
                 update(VirtualNetworkModel)
                 .where(VirtualNetworkModel.id == network_id)
-                .values(active=True, updated_at=datetime.now())
+                .values(active=True, updated=datetime.now())
             )
             await session.commit()
 
@@ -118,7 +117,7 @@ class VirtualNetworksDB:
             await session.execute(
                 update(VirtualNetworkModel)
                 .where(VirtualNetworkModel.id == network_id)
-                .values(active=False, updated_at=datetime.now())
+                .values(active=False, updated=datetime.now())
             )
             await session.commit()
 
