@@ -1,155 +1,167 @@
-# Eskvisor - проект управления виртуализацией
+<meta name="description" content="Eskvisor - open source KVM virtualization management platform with cgroups v2 resource pools, real-time WebSocket task notifications, and automated agent deployment. Lightweight Proxmox alternative.">
+<meta name="keywords" content="KVM, libvirt, virtualization, cgroups, resource management, Proxmox alternative, open source, Python, FastAPI, Redis, homelab, self-hosted">
+
+# Eskvisor is a virtualization management project.
 ![Логотип Eskvisor](./logo.jpg)
-## Государственная регистрация №2026612145
-![Логотип Eskvisor](./rospatent.jpg)
 
-**Eskvisor** — проприетарная система управления виртуализацией. Полное название является производным от **"Eska"** (идентификатор разработчика) и **"hypervisor"**, что отражает основную цель проекта — предоставление детального контроля над виртуальной инфраструктурой.
+Esquisor is a proprietary virtualization management system. The full name is a combination of Esquisor (the developer's identifier) ​​and hypervisor, reflecting the project's primary goal—providing granular control over virtual infrastructure.
+### Eskvisor - lightweight KVM management platform with native cgroups v2 resource control and real-time task notifications
 
-## Структура проекта
+## ✨ Why Eskvisor?
+
+| Feature | Eskvisor | Proxmox | oVirt |
+|---------|----------|---------|-------|
+| cgroups v2 resource pools | ✅ | ❌ | ❌ |
+| WebSocket real-time tasks | ✅ | ❌ | ❌ |
+| Automated agent deployment | ✅ | ❌ | ✅ |
+| Snapshot chains | ✅ | ✅ | ✅ |
+
+## Project structure
 ```yaml
-├── agent # Директория агента для управления гипервизором на стороне хоста подключенного к кластеру
-│   ├───client # Директория клиента для работы с гипервизором, моделями, тестами и т.д
-│   │   ├───hypervisor # Директория с основной кодовой базой гипервизора
-│   │   │   └───libvirt # Директория с менеджерами для взаимодействия с libvirt
-│   │   │       ├───managers # Директория с менеджерами для работы с библиотеками виртуализации
-│   │   │       │   ├───balansir.py # Виртуальный менеджер ресурс пулов для контроля CPU и RAM лимитов
-│   │   │       │   ├───network.py # Файл-менеджер для работы с виртуальными сетями
-│   │   │       │   ├───snapshot.py # Файл-менеджер для работы со снапшотами
-│   │   │       │   ├───storage.py # Файл-менеджер для работы с виртуальными дисками
-│   │   │       │   ├───virsh.py # Файл-менеджер для установки соединения с гостевой OS виртуальной машины
-│   │   │       │   ├───vm.py # айл-менеджер для работы с виртуальными машинами
-│   │   │       │   └───vm_stats.py # Файл-менеджер для live чтения состоянии ВМ
-│   │   │       ├───models # Директория с моделями объектов для работы с виртуализацией
-│   │   │       │   ├───vm_stats # Директория моделей для работы с получением статистики ВМ
-│   │   │       │   │   └───stats.py # Файл с моделями статистики ВМ
-│   │   │       │   ├───volume # Директория моделей для работы с хранилищами
-│   │   │       │   │   ├───balansir.py # Файл с моделями менеджера ресурс пулов <<Балансиръ>>
-│   │   │       │   │   ├───disk.py # Файл с моделями виртуальных дисков
-│   │   │       │   │   ├───grou.py # Файл с моделями Group Volume
-│   │   │       │   │   ├───logic.py # Файл с моделями Logic Volume
-│   │   │       │   │   └───physical.py # Файл с моделями Physical Volume
-│   │   │       │   ├───__init__.py # Файл превращает обычную папку в пакет Python
-│   │   │       │   ├───controller.py # Файл с моделями контроллеров
-│   │   │       │   ├───enum.py # Файл с основными enum параметрами
-│   │   │       │   ├───general.py # Файл с общими моделями
-│   │   │       │   ├───msg.py # Файл с моделями собщений(для ответов менеджеров)
-│   │   │       │   ├───network.py # Файл с моделями виртуальных сетей
-│   │   │       │   ├───node.py # Файл с моделями хостов
-│   │   │       │   ├───snapshots.py # Файл с моделями снапшотов
-│   │   │       │   └───vm.py # Файл с моделями виртуальных машин
-│   │   │       ├───client.py # Файл-клиент с основными настройками для работы с python библиотекой libvirt
-│   │   │       └───config.py # Файл с дополнительными конфигами
-│   │   ├───lvm # Директория с менеджерами для управления Physical Volume, Group Volume, Logic Volume
-│   │   │   ├───logical.py # Файл-менеджер для управления Logic Volume
-│   │   │   ├───physical.py # Файл-менеджер для управления Physical Volume
-│   │   │   ├───group.py # Файл-менеджер для управления Group Volume
-│   │   │   └───README.txt # Файл с коротким описанием работы Physical Volume, Group Volume, Logic Volume
-│   │   ├───models # Директория с общими моделями для всего проекта
-│   │   ├───pycgroup # Директория для работы с системой контроля ресурсов cgroup v2
-│   │   │   ├───ctl #  Директория для управления контроллеров cpu, io, memory, pid
-│   │   │   │   ├───cpu_ctl.py #  Файл-менеджер для управления контроллера cpu
-│   │   │   │   ├───io_ctl.py #  Файл-менеджер для управления контроллера io
-│   │   │   │   ├───memoryo_ctl.py #  Файл-менеджер для управления контроллера memory
-│   │   │   │   └───memoryo_ctl.py #  Файл-менеджер для управления контроллера pid
-│   │   │   ├───state #  Директория с сервисом cgroup-eskvisor для восстановления и сохранения состояния ресурс пулов в системе cgroup v2
-│   │   │   │   ├───cgroup-state.service #  Файл с сервисом cgroup-state.service для systemd службы
-│   │   │   │   ├───cgroup-state-timer.timer #  Файл с сервисом cgroup-state-timer.timer для systemd службы с сохранием ресурс пулов по таймеру
-│   │   │   │   ├───migrate.sh #  Скрипт для миграции ресурс пулов cgroup v2 на целевой хост
-│   │   │   │   ├───README.txt #  Примеры запуска скрипта migrate.sh
-│   │   │   │   ├───restore.sh #  Скрипт для восстановления ресурс пулов в системе cgroup v2
-│   │   │   │   ├───save.sh #  Скрипт для сохранения ресурс пулов из системы cgroup v2
-│   │   │   │   ├───setup.sh #  Скрипт для установки сервиса cgroup-eskvisor
-│   │   │   │   └───verify.sh #  Скрипт для проверки состояния служб и директории сервиса cgroup-eskvisor
-│   │   │   ├───cgroup_cli.py # Файл менеджер для работы с консолью для pycgroup
-│   │   │   ├───pycgroup.py # Файл менеджер для прямого взаимодействия с системой pycgroup
-│   │   │   ├───pycgroup_logger.py  # Файл с основными настройками для логгирования pycgroup
-│   │   │   └───README.txt  # Файл с визуальным описанием работы системы cgroup v2 и заметками
-│   │   ├───stg # Директория с менеджерами управления внешними хранилищами
-│   │   │   ├───controller.py # Файл-менеджер для более широкого спектра работы с NFS хранилищами
-│   │   │   └───nfs.py # Файл-менеджер для работы с NFS хранилищами
-│   │   ├───task_manager # Директория с менеджером очередей с использованием Redis
-│   │   │   ├───ctl_queue.py # Файл-менеджер для управления очередями непосредственно в Redis
-│   │   │   ├───dispatcher.py # Диспетчер задач для управления воркерами и распределения задач
-│   │   │   ├───models.py # Файл с моделями менеджера очередей
-│   │   │   └───worker.py # Файл-менеджер с воркерми(которые берут задачи из пула и выполняют, если там есть задачи)
-│   │   │   └───ws_notification.py # Файл обработчик WebSocket уведомлений
-│   │   ├───tests # Директория с основной кодовой базой автотестов
-│   │   │   ├───networks # Директория с автотестами по виртуальным сетям
-│   │   │   ├───resource_containment # Директория с нагрузочными автотестами
-│   │   │   ├───resource_pool # Директория с автотестами по ресурс пулам
-│   │   │   ├───snapshots # Директория с автотестами по снапшотам
-│   │   │   ├───storage # Директория с автотестами по виртуальным дискам
-│   │   │   ├───system # Директория с автотестами по системным функциям агента
-│   │   │   ├───virtual_machine # Директория с автотестами по виртуальным дискам
-│   │   │   ├───__init__.py # Файл превращает обычную папку в пакет Python
-│   │   │   └───conftest.py # Файл с фикстурами автотестов
-│   │   ├───__init__.py # Файл превращает обычную папку в пакет Python
-│   │   ├───cli.py # Файл для работы с командной строкой
-│   │   ├───constants.py # Файл с основными константами проекта
-│   │   ├───logger_config.py # Файл с основными настройками для логгирования
-│   │   ├───main.py # Файл с backend частью агента для получения статистики, получения и выполнения задач, отправки уведомлении по ходу выполнения задач
-│   │   └───tools.py # Дополнительные инструменты проекта
-│   ├───.env # Файл с конфигурацией проекта
-│   ├───install_agent.sh # Файл установщик агента
-│   ├───nginx.conf # NGINX конфигурация агента
-│   └───requirements.txt # Файл с необходимыми библиотеками для работы агента
-├───backend # Деректория с backend'ом проекта eskvisor
-│   ├───api # Директория со статическими файлами лендинга проекта
-│   │   ├───routers # Директория с api методами
-│   │   │   ├───system.py # API для работы с системными вызовами
-│   │   │   ├───users.py # API для работы с пользователями
-│   │   │   └───vm.py # API для работы с виртуальными машинами
-│   │   └───dependencies.py # Зависимости для API
-│   ├───src # Директория со статическими файлами лендинга проекта
-│   │   ├───db # Директория для работы с базами данных
-│   │   │   └───users.py # Файл-менеджер для управления базой данных пользователей
-│   │   ├───models # Директория с моделями проекта
-│   │   │   ├───agent.py # Файл с моделями агента
-│   │   │   ├───error.py # Файл с моделями и сообещниями ошибок
-│   │   │   ├───general.py # Файл с общими моделями
-│   │   │   └───user.py # Файл с моделями пользователей
-│   │   ├───rbac # Директория с моделями ролевой модели
-│   │   │   ├───example_usage.py # Файл с примерами использования
-│   │   │   ├───permissions.py # Файл с моделями доступов
-│   │   │   └───roles_and_users.py # Файл с моделями ролей и пользователей
-│   │   ├───services # Директория с основными сервисами проекта
-│   │   │   ├───hash.py # Файл-менеджер для работы с хэшем
-│   │   │   ├───jwt.py # Файл-менеджер для работы с JWT токенами
-│   │   │   ├───redis_srv.py # Файл-менеджер для работы с Redis
-│   │   │   └───ssh_keygen.py # Файл-менеджер для генерации SSH ключей
-│   │   ├───tools # Директория с дополнительными инструментами
-│   │   │   └───cli.py # Файл для работы с командной строкой
-│   │   ├───agent_installer.py # Файл-менеджер с методами для установками агентами на хост
-│   │   ├───constants.py # Файл с константами
-│   │   └───logger_config.py # Файл с основными настройками для логгирования
-│   ├───.env # Файл с конфигурацией проекта
-│   ├───main.py # API методы + точка запуска backend'а
-│   └───requirements.txt # Зависимости backend'а
-├───docs # Директория с основными документами
-├───landing # Деректория лендинга проекта
-│   ├───app # Директория со статическими файлами лендинга проекта
-│   │   └───templates # Директория с шаблонами html
-│   │       └───landing.html # Главная и единственная страница лендинга
-│   ├───certificate.crt # Сертификат лендинга с доменом eskvisor.ru
-│   ├───certificate.key # Ключ сертификата
-│   ├───commands.txt # Команды для развертывания лендинга в облаке
-│   ├───main.py # Backend часть лендинга
-│   ├───nginx.conf # NGINX конфигурация лендинга
-│   └───requirements.txt # Python зависимости лендинга
-├───.flake8 # Файл с конфигурацией анализатора кода flake8
-├───.gitconfig # Файл с конфигурацией Git
-├───.gitignore # Файл для игнорирования мусора при работа с Git
-├───build_test_alpine.txt # Инструкция по сборке всех зависимостей для работы агента на тестовом alpine linux
-├───commands.txt # Файл с командами для стартовой настройки проекта
-├───LICENSE.md # Файл-лицензия на проект
-├───logo.jpg # Логотип проекта
-├───py_linter.txt # Файл с инструкцией запуска линтеров
-├───pytest.ini # Файл для доп настройки pytest'а
-└───README.md # Файл для описания структуры проекта, инструкции по запуску автотестов, использованию агента и т.д
+├───agent # Agent directory for managing the hypervisor on the host side connected to the cluster
+│   ├───client # Client directory for working with the hypervisor, models, tests, etc.
+│   │   ├───hypervisor # Directory with the main hypervisor codebase
+│   │   │   └───libvirt # Directory with managers for interacting with libvirt
+│   │   │       ├───managers # Directory with managers for working with virtualization libraries
+│   │   │       │   ├───balansir.py # Virtual resource pool manager for CPU and RAM limit control
+│   │   │       │   ├───network.py # Manager file for working with virtual networks
+│   │   │       │   ├───snapshot.py # Manager file for working with snapshots
+│   │   │       │   ├───storage.py # Manager file for working with virtual disks
+│   │   │       │   ├───virsh.py # Manager file for establishing connection with guest OS of virtual machine
+│   │   │       │   ├───vm.py # Manager file for working with virtual machines
+│   │   │       │   └───vm_stats.py # Manager file for live reading of VM state
+│   │   │       ├───models # Directory with object models for working with virtualization
+│   │   │       │   ├───vm_stats # Directory of models for working with VM statistics retrieval
+│   │   │       │   │   └───stats.py # File with VM statistics models
+│   │   │       │   ├───volume # Directory of models for working with storages
+│   │   │       │   │   ├───balansir.py # File with models of the resource pool manager "Balansir"
+│   │   │       │   │   ├───disk.py # File with virtual disk models
+│   │   │       │   │   ├───group.py # File with Group Volume models
+│   │   │       │   │   ├───logic.py # File with Logic Volume models
+│   │   │       │   │   └───physical.py # File with Physical Volume models
+│   │   │       │   ├───__init__.py # File turns a regular folder into a Python package
+│   │   │       │   ├───controller.py # File with controller models
+│   │   │       │   ├───enum.py # File with main enum parameters
+│   │   │       │   ├───general.py # File with general models
+│   │   │       │   ├───msg.py # File with message models (for manager responses)
+│   │   │       │   ├───network.py # File with virtual network models
+│   │   │       │   ├───node.py # File with host models
+│   │   │       │   ├───snapshots.py # File with snapshot models
+│   │   │       │   └───vm.py # File with virtual machine models
+│   │   │       ├───client.py # Client file with basic settings for working with the python libvirt library
+│   │   │       └───config.py # File with additional configurations
+│   │   ├───lvm # Directory with managers for managing Physical Volume, Group Volume, Logic Volume
+│   │   │   ├───logical.py # Manager file for managing Logic Volume
+│   │   │   ├───physical.py # Manager file for managing Physical Volume
+│   │   │   ├───group.py # Manager file for managing Group Volume
+│   │   │   └───README.txt # File with a brief description of Physical Volume, Group Volume, Logic Volume operation
+│   │   ├───models # Directory with common models for the entire project
+│   │   ├───pycgroup # Directory for working with the cgroup v2 resource control system
+│   │   │   ├───ctl # Directory for managing cpu, io, memory, pid controllers
+│   │   │   │   ├───cpu_ctl.py # Manager file for managing the cpu controller
+│   │   │   │   ├───io_ctl.py # Manager file for managing the io controller
+│   │   │   │   ├───memory_ctl.py # Manager file for managing the memory controller
+│   │   │   │   └───pid_ctl.py # Manager file for managing the pid controller
+│   │   │   ├───state # Directory with the cgroup-eskvisor service for restoring and saving the state of resource pools in the cgroup v2 system
+│   │   │   │   ├───cgroup-state.service # File with cgroup-state.service for systemd service
+│   │   │   │   ├───cgroup-state-timer.timer # File with cgroup-state-timer.timer for systemd service with saving resource pools by timer
+│   │   │   │   ├───migrate.sh # Script for migrating cgroup v2 resource pools to the target host
+│   │   │   │   ├───README.txt # Examples of running the migrate.sh script
+│   │   │   │   ├───restore.sh # Script for restoring resource pools in the cgroup v2 system
+│   │   │   │   ├───save.sh # Script for saving resource pools from the cgroup v2 system
+│   │   │   │   ├───setup.sh # Script for installing the cgroup-eskvisor service
+│   │   │   │   └───verify.sh # Script for checking the status of services and directory of the cgroup-eskvisor service
+│   │   │   ├───cgroup_cli.py # Manager file for working with the console for pycgroup
+│   │   │   ├───pycgroup.py # Manager file for direct interaction with the pycgroup system
+│   │   │   ├───pycgroup_logger.py # File with basic settings for pycgroup logging
+│   │   │   └───README.txt # File with a visual description of the cgroup v2 system operation and notes
+│   │   ├───stg # Directory with managers for managing external storages
+│   │   │   ├───controller.py # Manager file for a broader range of work with NFS storages
+│   │   │   └───nfs.py # Manager file for working with NFS storages
+│   │   ├───task_manager # Directory with queue manager using Redis
+│   │   │   ├───ctl_queue.py # Manager file for managing queues directly in Redis
+│   │   │   ├───dispatcher.py # Task dispatcher for managing workers and distributing tasks
+│   │   │   ├───models.py # File with queue manager models
+│   │   │   ├───worker.py # Manager file with workers (which take tasks from the pool and execute them if there are tasks)
+│   │   │   └───ws_notification.py # WebSocket notification handler file
+│   │   ├───tests # Directory with the main codebase of autotests
+│   │   │   ├───networks # Directory with autotests for virtual networks
+│   │   │   ├───resource_containment # Directory with load autotests
+│   │   │   ├───resource_pool # Directory with autotests for resource pools
+│   │   │   ├───snapshots # Directory with autotests for snapshots
+│   │   │   ├───storage # Directory with autotests for virtual disks
+│   │   │   ├───system # Directory with autotests for system functions of the agent
+│   │   │   ├───virtual_machine # Directory with autotests for virtual machines
+│   │   │   ├───__init__.py # File turns a regular folder into a Python package
+│   │   │   └───conftest.py # File with autotest fixtures
+│   │   ├───__init__.py # File turns a regular folder into a Python package
+│   │   ├───cli.py # File for working with the command line
+│   │   ├───constants.py # File with main project constants
+│   │   ├───logger_config.py # File with basic logging settings
+│   │   ├───main.py # File with the backend part of the agent for receiving statistics, receiving and executing tasks, sending notifications during task execution
+│   │   └───tools.py # Additional project tools
+│   ├───.env # Project configuration file
+│   ├───install_agent.sh # Agent installer file
+│   ├───nginx.conf # NGINX configuration for the agent
+│   └───requirements.txt # File with necessary libraries for agent operation
+├───backend # Directory with the backend of the eskvisor project
+│   ├───api # Directory with static files of the project landing page
+│   │   ├───routers # Directory with API methods
+│   │   │   ├───system.py # API for working with system calls
+│   │   │   ├───users.py # API for working with users
+│   │   │   └───vm.py # API for working with virtual machines
+│   │   └───dependencies.py # Dependencies for API
+│   ├───src # Directory with source code of the project
+│   │   ├───db # Directory for working with databases
+│   │   │   └───users.py # Manager file for managing the user database
+│   │   ├───models # Directory with project models
+│   │   │   ├───agent.py # File with agent models
+│   │   │   ├───error.py # File with error models and messages
+│   │   │   ├───general.py # File with general models
+│   │   │   └───user.py # File with user models
+│   │   ├───rbac # Directory with role-based access control models
+│   │   │   ├───example_usage.py # File with usage examples
+│   │   │   ├───permissions.py # File with permission models
+│   │   │   └───roles_and_users.py # File with role and user models
+│   │   ├───services # Directory with main project services
+│   │   │   ├───hash.py # Manager file for working with hashes
+│   │   │   ├───jwt.py # Manager file for working with JWT tokens
+│   │   │   ├───redis_srv.py # Manager file for working with Redis
+│   │   │   └───ssh_keygen.py # Manager file for generating SSH keys
+│   │   ├───tools # Directory with additional tools
+│   │   │   └───cli.py # File for working with the command line
+│   │   ├───agent_installer.py # Manager file with methods for installing agents on a host
+│   │   ├───constants.py # File with constants
+│   │   └───logger_config.py # File with basic logging settings
+│   ├───.env # Project configuration file
+│   ├───main.py # API methods + backend entry point
+│   └───requirements.txt # Backend dependencies
+├───docs # Directory with main documents
+├───landing # Directory of the project landing page
+│   ├───app # Directory with static files of the project landing page
+│   │   └───templates # Directory with HTML templates
+│   │       └───landing.html # Main and only landing page
+│   ├───certificate.crt # Landing page certificate for the domain eskvisor.ru
+│   ├───certificate.key # Certificate key
+│   ├───commands.txt # Commands for deploying the landing page in the cloud
+│   ├───main.py # Backend part of the landing page
+│   ├───nginx.conf # NGINX configuration for the landing page
+│   └───requirements.txt # Python dependencies for the landing page
+├───.flake8 # File with flake8 code analyzer configuration
+├───.gitconfig # File with Git configuration
+├───.gitignore # File for ignoring garbage when working with Git
+├───build_test_alpine.txt # Instructions for building all dependencies for agent operation on test alpine linux
+├───commands.txt # File with commands for initial project setup
+├───LICENSE.md # Project license file
+├───logo.jpg # Project logo
+├───py_linter.txt # File with linter launch instructions
+├───pytest.ini # File for additional pytest configuration
+└───README.md # File for describing the project structure, instructions for running autotests, using the agent, etc.
 ```
 
-#### Backend единый - WebSocket Handler часть Backend'а, а не отдельный компонент
+#### The backend is unified - the WebSocket Handler is part of the backend, not a separate component.
+#### Workers automatically retrieve tasks from the queue (pull model).
+#### Dual result retrieval mechanism: push via WebSocket + pull via REST API.I
 
-#### Воркеры сами забирают задачи из очереди (pull-модель)
-
-#### Двойной механизм получения результатов: push через WebSocket + pull через REST API
+## RU State registration No. 2026612145
+![Логотип Eskvisor](./rospatent.jpg)
