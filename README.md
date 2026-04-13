@@ -4,7 +4,7 @@
 # Eskvisor is a virtualization management project.
 ![Логотип Eskvisor](./logo.jpg)
 
-Esquisor is a proprietary virtualization management system. The full name is a combination of Esquisor (the developer's identifier) ​​and hypervisor, reflecting the project's primary goal—providing granular control over virtual infrastructure.
+Esquisor is a virtualization management system. The full name is a combination of Esquisor (the developer's identifier) ​​and hypervisor, reflecting the project's primary goal—providing granular control over virtual infrastructure.
 ### Eskvisor - lightweight KVM management platform with native cgroups v2 resource control and real-time task notifications
 
 ## ✨ Why Eskvisor?
